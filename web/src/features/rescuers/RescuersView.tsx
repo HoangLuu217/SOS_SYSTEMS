@@ -58,6 +58,13 @@ import { domainDService } from '@/services/domainDService';
 import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged, onRescueTeamsUpdated } from '@/services/socketService';
+import {
+  SPECIALIZATION_LABELS,
+  OPERATIONAL_STATUS_LABELS,
+  SKILL_LABELS,
+  VEHICLE_LABELS,
+  EQUIPMENT_CATEGORY_LABELS,
+} from './rescuersConstants';
 import '@/features/sos/SosRequestsView.css';
 import './RescuerApprovalView.css';
 import './RescuersView.css';
@@ -164,91 +171,8 @@ export interface EnrichedRescueTeam extends RescueTeamItem {
   readinessScore?: number;
 }
 
-const SPECIALIZATION_LABELS: Record<RescueSpecialization, string> = {
-  WATER_RESCUE: 'Đội cứu hộ đường thủy',
-  EVACUATION: 'Đội sơ tán dân',
-  MEDICAL_RESCUE: 'Đội y tế',
-  LOGISTICS: 'Đội hậu cần',
-  SEARCH_RESCUE: 'Đội tìm kiếm cứu nạn',
-  COMMUNICATION: 'Đội thông tin liên lạc',
-  SECURITY: 'Đội an ninh',
-  // Tương thích ngược với dữ liệu cũ
-  FLOOD_RESCUE: 'Đội cứu hộ đường thủy',
-  FIRE_RESCUE: 'PCCC & CNCH',
-  GENERAL_RESCUE: 'Cứu hộ tổng hợp',
-  OTHER: 'Khác',
-};
-
-const OPERATIONAL_STATUS_LABELS: Record<OperationalStatus, { label: string; color: string; desc: string }> = {
-  READY: {
-    label: 'Sẵn sàng',
-    color: 'ready',
-    desc: 'Đủ điều kiện nhận lệnh tác chiến mới',
-  },
-  ON_MISSION: {
-    label: 'Đang thực hiện nhiệm vụ',
-    color: 'on_mission',
-    desc: 'Đang triển khai cứu hộ tại hiện trường',
-  },
-  LIMITED: {
-    label: 'Hạn chế hoạt động',
-    color: 'limited',
-    desc: 'Thiếu nhân lực hoặc phương tiện bảo dưỡng',
-  },
-  INACTIVE: {
-    label: 'Ngừng hoạt động',
-    color: 'inactive',
-    desc: 'Tạm đình chỉ hoặc giải thể',
-  },
-};
-
-const SKILL_LABELS: Record<string, string> = {
-  first_aid: 'Sơ cứu y tế',
-  water_rescue: 'Cứu hộ vùng nước',
-  search_rescue: 'Tìm kiếm cứu nạn',
-  boat_driver: 'Lái xuồng vượt lũ',
-  rope_climb: 'Leo dây & Độ cao',
-  diving: 'Lặn cứu hộ',
-  logistics: 'Hậu cần & Tiếp tế',
-  evacuation: 'Sơ tán người dân',
-  firefighting: 'PCCC & CNCH',
-  relief_logistics: 'Tiếp tế lương thực',
-  communication: 'Thông tin liên lạc',
-  technical_rescue: 'Cứu hộ kỹ thuật cao',
-};
-
-const VEHICLE_LABELS: Record<string, string> = {
-  BOAT: 'Ca-nô / Xuồng máy',
-  MOTORBIKE: 'Xe máy cơ động',
-  TRUCK: 'Xe bán tải / Tải',
-  AMBULANCE: 'Xe cứu thương',
-  OTHER: 'Phương tiện đặc chủng',
-};
-
-// Nhãn danh mục Trang thiết bị chuẩn từ MongoDB
-const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
-  LIFE_VEST: 'Bảo hộ & Cứu sinh',
-  LIFE_SAVING: 'Cứu sinh vùng nước',
-  MEDICAL_KIT: 'Y tế & Cấp cứu',
-  MEDICAL_DEVICE: 'Thiết bị y tế',
-  COMMUNICATION: 'Thông tin liên lạc',
-  LIGHTING: 'Chiếu sáng dã chiến',
-  ROPE_TOOL: 'Dây & Cứu nạn',
-  TOOL: 'Dụng cụ cứu hộ',
-  VEHICLE_ACCESSORY: 'Phụ kiện phương tiện',
-  SHELTER: 'Lều bạt dã chiến',
-  PPE: 'Bảo hộ cá nhân',
-  FOOD_WATER: 'Lương thực & Nước',
-  WATER_PURIFICATION: 'Lọc nước & Khử khuẩn',
-  MEDICAL_SUPPLY: 'Dược phẩm & Vật tư',
-  FUEL: 'Nhiên liệu',
-  HYGIENE: 'Vệ sinh & Nhu yếu',
-  OTHER: 'Trang thiết bị khác',
-};
-
 export const RescuersView: React.FC<RescuersViewProps> = ({
   mode: initialMode = 'operations',
-  onOpenMap: _onOpenMap,
   user,
 }) => {
   const [currentMode, setCurrentMode] = useState<'operations' | 'admin'>(initialMode);
@@ -262,7 +186,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
-  const [, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [specFilter, setSpecFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -718,6 +641,35 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     return null;
   }, [areas, isAdmin, userAreaId, userAreaName]);
 
+  // Danh sách địa bàn thuộc Đà Nẵng cho dropdown lọc của Admin (loại bỏ các tỉnh/TP khác)
+  const daNangAreas = useMemo(() => {
+    const areaMap = new Map<string, AdministrativeAreaItem>();
+    areas.forEach((a) => {
+      if (a?._id) areaMap.set(String(a._id), a);
+    });
+
+    const isBelongsToDaNang = (area: AdministrativeAreaItem): boolean => {
+      if (area.type === 'PROVINCE') return false;
+      if (area.code?.startsWith('VN48-')) return true;
+      let curr: AdministrativeAreaItem | undefined = area;
+      let depth = 0;
+      while (curr && depth < 5) {
+        if (curr.type === 'PROVINCE') {
+          const norm = curr.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          return norm.includes('da nang');
+        }
+        const pId = typeof curr.parentId === 'object' && curr.parentId ? (curr.parentId as any)._id : curr.parentId;
+        if (!pId) break;
+        curr = areaMap.get(String(pId));
+        depth++;
+      }
+      return false;
+    };
+
+    const filtered = areas.filter(isBelongsToDaNang);
+    return filtered.length > 0 ? filtered : areas.filter((a) => a.type !== 'PROVINCE');
+  }, [areas]);
+
   const effectiveAreaId = !isAdmin
     ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
     : selectedAreaId;
@@ -730,13 +682,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   }, [isAdmin, managedArea, user?.authority?.areaId]);
 
-
-  const refreshData = () => {
-    setLoading(true);
-    setRefreshIndex((p) => p + 1);
-  };
-
-  // Nạp dữ liệu từ backend hoặc fallback
 
   const loadData = useCallback(async () => {
     try {
@@ -770,6 +715,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       setLoading(false);
     }
   }, [effectiveAreaId]);
+
+  const refreshData = useCallback(() => {
+    loadData();
+  }, [loadData]);
 
   useEffect(() => {
     loadData();
@@ -875,7 +824,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       let pendingMembersCount = 0;
       let availableMembersCount = 0;
 
-      const detailedMembers: TeamMemberDetail[] = membersList.map((m: any, mIdx: number) => {
+      const rawDetailedMembers: TeamMemberDetail[] = membersList.map((m: any, mIdx: number) => {
         const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId !== null ? m.rescuerId : null;
         const actualRescuerId = rescuerObj?._id || (typeof m.rescuerId === 'string' ? m.rescuerId : m._id || String(mIdx));
         const name = rescuerObj?.fullName || m.fullName || (mIdx === 0 && leaderName ? leaderName : '');
@@ -896,12 +845,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           availabilityStatus = m.availabilityStatus;
         } else if (rescuerObj?.rescuer?.availabilityStatus) {
           availabilityStatus = rescuerObj.rescuer.availabilityStatus === 'BUSY' ? 'BUSY' : 'AVAILABLE';
-        }
-
-        if (memberStatus === 'PENDING') {
-          pendingMembersCount++;
-        } else if (availabilityStatus === 'AVAILABLE') {
-          availableMembersCount++;
         }
 
         const rawSkills = rescuerObj?.rescuer?.skills || m.skills || [];
@@ -925,6 +868,22 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           joinedAt,
         };
       });
+
+      const detailedMemberMap = new Map<string, TeamMemberDetail>();
+      for (const m of rawDetailedMembers) {
+        const existing = detailedMemberMap.get(m.rescuerId);
+        if (!existing || (m.role === 'LEADER' && existing.role !== 'LEADER')) {
+          detailedMemberMap.set(m.rescuerId, m);
+        }
+      }
+      const detailedMembers = Array.from(detailedMemberMap.values());
+      for (const m of detailedMembers) {
+        if (m.status === 'PENDING') {
+          pendingMembersCount++;
+        } else if (m.availabilityStatus === 'AVAILABLE') {
+          availableMembersCount++;
+        }
+      }
 
       const totalMembersCount = detailedMembers.filter((m) => m.status !== 'PENDING').length;
 
@@ -1556,7 +1515,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <option value="SECURITY">Đội an ninh</option>
                 </select>
 
-                {/* Bộ lọc địa bàn: Chỉ hiển thị khi là Admin quản lý nhiều địa phương */}
+                {/* Bộ lọc địa bàn Đà Nẵng: Chỉ hiển thị cho Admin */}
                 {isAdmin && (
                   <select
                     className="ra-filter-select"
@@ -1566,8 +1525,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       setCurrentPage(1);
                     }}
                   >
-                    <option value="ALL">Tất cả địa bàn</option>
-                    {areas.map((area) => (
+                    <option value="ALL">📍 Tất cả địa bàn Đà Nẵng ({daNangAreas.length})</option>
+                    {daNangAreas.map((area) => (
                       <option key={area._id} value={area._id}>
                         {area.name} ({area.code})
                       </option>
@@ -2213,12 +2172,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                             fontWeight: 700,
                             borderRadius: 6,
                             border: `1px solid ${selectedTeamDetail.operationalStatus === 'READY'
-                                ? '#BBF7D0'
-                                : selectedTeamDetail.operationalStatus === 'ON_MISSION'
-                                  ? '#FED7AA'
-                                  : selectedTeamDetail.operationalStatus === 'LIMITED'
-                                    ? '#FECACA'
-                                    : '#E2E8F0'
+                              ? '#BBF7D0'
+                              : selectedTeamDetail.operationalStatus === 'ON_MISSION'
+                                ? '#FED7AA'
+                                : selectedTeamDetail.operationalStatus === 'LIMITED'
+                                  ? '#FECACA'
+                                  : '#E2E8F0'
                               }`,
                             background:
                               selectedTeamDetail.operationalStatus === 'READY'

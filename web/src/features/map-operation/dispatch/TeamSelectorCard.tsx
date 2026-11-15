@@ -1,12 +1,31 @@
 import React, { useState } from 'react';
-import { Check, Users, AlertTriangle, X } from 'lucide-react';
+import {
+  Check,
+  Users,
+  AlertTriangle,
+  X,
+  Sparkles,
+  Ship,
+  Ambulance,
+  Truck,
+  Ban,
+  Clock,
+  User,
+} from 'lucide-react';
 import type { RescueTeam } from '@/types/domainD';
+
+export type VehicleCategory = 'BOAT' | 'AMBULANCE' | 'TRUCK' | 'NONE';
 
 interface Props {
   team: RescueTeam;
   isSelected: boolean;
   isRecommended: boolean;
+  teamTypeLabel?: string;
+  matchReasons?: string[];
+  warnings?: string[];
   vehicleSpec: string;
+  vehicleCategory?: VehicleCategory;
+  hideWardBadge?: boolean;
   etaText: string;
   teamDisplayName: string;
   isBusy?: boolean;
@@ -19,7 +38,12 @@ export const TeamSelectorCard: React.FC<Props> = ({
   team,
   isSelected,
   isRecommended,
+  teamTypeLabel,
+  matchReasons,
+  warnings,
   vehicleSpec,
+  vehicleCategory = 'BOAT',
+  hideWardBadge = false,
   etaText,
   teamDisplayName,
   isBusy,
@@ -28,7 +52,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
   onViewMembers,
 }) => {
   const leadRescuer = team.rescuers?.[0];
-  const memberCount = team.rescuers?.length || team.availableRescuersCount || 4;
+  const memberCount = team.rescuers?.length ?? team.availableRescuersCount ?? 0;
 
   // Tách mã đội (nếu nằm trong dấu ngoặc) để hiển thị thành tag xám nhỏ gọn, tránh rớt dòng
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
@@ -36,9 +60,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
   const { title: cleanTeamName, codeTag } = (() => {
     const match = teamDisplayName.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
     if (match && match[2]) {
-      return { title: match[1].trim(), codeTag: match[2].trim() };
+      return { title: match[1].trim(), codeTag: team.code || match[2].trim() };
     }
-    return { title: teamDisplayName, codeTag: (team as any).code || '' };
+    return { title: teamDisplayName, codeTag: team.code || '' };
   })();
 
   const handleClick = () => {
@@ -49,27 +73,65 @@ export const TeamSelectorCard: React.FC<Props> = ({
     onToggle();
   };
 
+  const sanitizeReasonText = (raw: string) =>
+    raw
+      .replace(/\(\s*[a-f0-9]{24}\s*\)/gi, '')
+      .replace(/\b[a-f0-9]{24}\b/gi, '')
+      .replace(/\bFLOOD_RESCUE\b/g, 'cứu hộ lũ')
+      .replace(/\bWATER_RESCUE\b/g, 'đường thủy')
+      .replace(/\bMEDICAL_RESCUE\b/g, 'y tế')
+      .replace(/\bEVACUATION\b/g, 'sơ tán')
+      .replace(/\bSEARCH_RESCUE\b/g, 'tìm kiếm CN')
+      .replace(/\bLOGISTICS\b/g, 'hậu cần')
+      .replace(/\bFIRE_RESCUE\b/g, 'PCCC')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+  const hasValidEta = Boolean(etaText && !etaText.toLowerCase().includes('chưa có eta'));
+  const allReasons = Array.from(new Set((matchReasons || []).map(sanitizeReasonText).filter(Boolean)));
+  const allWarnings = Array.from(new Set((warnings || []).map(sanitizeReasonText).filter(Boolean)));
+  const showWardBadge = Boolean(
+    !hideWardBadge &&
+      team.wardName &&
+      !cleanTeamName.toLowerCase().includes(team.wardName.toLowerCase())
+  );
+
+  const renderVehicleIcon = () => {
+    if (vehicleCategory === 'NONE') {
+      return <Ban size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />;
+    }
+    if (vehicleCategory === 'AMBULANCE') {
+      return <Ambulance size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+    }
+    if (vehicleCategory === 'TRUCK') {
+      return <Truck size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+    }
+    return <Ship size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+  };
+
   return (
     <>
     <div
       onClick={handleClick}
       title={isBusy ? `Đội đang thực hiện nhiệm vụ${busyMissionCode ? ` (${busyMissionCode})` : ''}. Vui lòng chờ hoàn thành.` : undefined}
       style={{
-        padding: '9px 12px',
+        padding: '9px 11px',
         borderRadius: 9,
         border: isBusy
           ? '1.5px dashed #cbd5e1'
           : isSelected
           ? '2px solid #0284c7'
+          : isRecommended
+          ? '1.5px solid #a5b4fc'
           : '1.5px solid #e2e8f0',
-        background: isBusy ? '#f8fafc' : isSelected ? '#f0f9ff' : '#ffffff',
+        background: isBusy ? '#f8fafc' : isSelected ? '#f0f9ff' : isRecommended ? '#fafaff' : '#ffffff',
         opacity: isBusy ? 0.65 : 1,
-        boxShadow: isSelected && !isBusy ? '0 3px 12px -2px rgba(2, 132, 199, 0.2)' : '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: isSelected && !isBusy ? '0 2px 8px -2px rgba(2, 132, 199, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
         cursor: isBusy ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s ease',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 8,
+        gap: 10,
       }}
     >
       {/* CỘT TRÁI: Checkbox chọn đội */}
@@ -92,12 +154,20 @@ export const TeamSelectorCard: React.FC<Props> = ({
         {isSelected && !isBusy && <Check size={12} strokeWidth={3} />}
       </div>
 
-      {/* CỘT PHẢI: TOÀN BỘ NỘI DUNG CĂN THẲNG HÀNG BÊN PHẢI CHECKBOX */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {/* HÀNG 1: TÊN ĐỘI + CODE TAG + KHUYẾN NGHỊ + TRẠNG THÁI */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 900, color: '#0f172a', lineHeight: 1.35 }}>
+      {/* CỘT PHẢI: NỘI DUNG RÕ RÀNG 3-4 DÒNG */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* HÀNG 1: TÊN ĐỘI + TRẠNG THÁI */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, rowGap: 3, minWidth: 0, flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 800,
+                color: '#0f172a',
+                lineHeight: 1.3,
+              }}
+              title={cleanTeamName}
+            >
               {cleanTeamName}
             </span>
             {codeTag && (
@@ -105,65 +175,80 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 style={{
                   background: '#f1f5f9',
                   color: '#475569',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 800,
-                  padding: '1px 5px',
+                  padding: '1.5px 6px',
                   borderRadius: 4,
                   border: '1px solid #e2e8f0',
                   whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {codeTag}
               </span>
             )}
-            {isRecommended && (
+            {showWardBadge && (
               <span
                 style={{
-                  background: '#fef3c7',
-                  color: '#b45309',
-                  border: '1px solid #fde68a',
-                  fontSize: 9.5,
-                  fontWeight: 800,
-                  padding: '1px 5px',
+                  background: '#f0f9ff',
+                  color: '#0369a1',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '1.5px 6px',
                   borderRadius: 4,
-                  letterSpacing: '0.2px',
+                  border: '1px solid #bae6fd',
                   whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
-                ★ KHUYẾN NGHỊ
+                {team.wardName}
               </span>
             )}
           </div>
 
-          {/* Trạng thái sẵn sàng hoặc đang bận nhiệm vụ */}
           {isBusy ? (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 800,
                 background: '#fee2e2',
                 color: '#dc2626',
                 border: '1px solid #fca5a5',
-                padding: '2px 6px',
+                padding: '2px 7px',
+                borderRadius: 4,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {busyMissionCode ? `BẬN (${busyMissionCode})` : 'BẬN'}
+            </span>
+          ) : team.status === 'Off-duty' ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                background: '#f1f5f9',
+                color: '#64748b',
+                border: '1px solid #cbd5e1',
+                padding: '2px 7px',
                 borderRadius: 4,
                 letterSpacing: '0.2px',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
             >
-              {busyMissionCode ? `BẬN (${busyMissionCode})` : 'BẬN NHIỆM VỤ'}
+              NGỪNG TRỰC
             </span>
           ) : (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 800,
                 background: '#dcfce7',
                 color: '#15803d',
                 border: '1px solid #86efac',
-                padding: '2px 6px',
+                padding: '2px 7px',
                 borderRadius: 4,
-                letterSpacing: '0.2px',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
@@ -173,55 +258,94 @@ export const TeamSelectorCard: React.FC<Props> = ({
           )}
         </div>
 
-        {/* HÀNG 2: THÔNG SỐ TÁC CHIẾN - KHOẢNG CÁCH (ETA) & PHƯƠNG TIỆN */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexWrap: 'wrap',
-            rowGap: 4,
-          }}
-        >
-          {/* Hộp chỉ số thời gian & khoảng cách nổi bật */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              background: '#eff6ff',
-              border: '1px solid #bfdbfe',
-              padding: '2px 7px',
-              borderRadius: 5,
-              color: '#0369a1',
-              fontSize: 11,
-              fontWeight: 800,
-              flexShrink: 0,
-            }}
-          >
-            <span>⏱</span>
-            <span>{etaText}</span>
-          </div>
-
-          {/* Phương tiện & Biển số xe - Hiển thị toàn bộ, căn trái liền mạch */}
-          <div
-            style={{
-              fontSize: 11.5,
-              color: '#334155',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              flexWrap: 'wrap',
-              lineHeight: 1.35,
-            }}
+        {/* HÀNG 2: METADATA GỌN (AI ĐỀ XUẤT + CHUYÊN MÔN • PHƯƠNG TIỆN • ETA) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12.5, color: '#334155', lineHeight: 1.35 }}>
+          {isRecommended && (
+            <span
+              style={{
+                background: '#eef2ff',
+                color: '#3730a3',
+                border: '1px solid #c7d2fe',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '1px 6px',
+                borderRadius: 4,
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              <Sparkles size={11} style={{ color: '#4f46e5', flexShrink: 0 }} />
+              <span>AI đề xuất</span>
+            </span>
+          )}
+          {teamTypeLabel && (
+            <span style={{ color: '#475569', fontWeight: 700, fontSize: 12 }}>
+              {teamTypeLabel} •
+            </span>
+          )}
+          <span
+            style={{ color: '#0f172a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             title={vehicleSpec}
           >
-            <span style={{ color: '#64748b' }}>Phương tiện:</span>
-            <strong style={{ color: '#0f172a', fontWeight: 700 }}>{vehicleSpec}</strong>
-          </div>
+            {renderVehicleIcon()}
+            <span>{vehicleSpec}</span>
+          </span>
+          {hasValidEta && (
+            <span
+              style={{ color: '#0369a1', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            >
+              <span style={{ color: '#cbd5e1' }}>•</span>
+              <Clock size={12} style={{ flexShrink: 0 }} />
+              <span>{etaText}</span>
+            </span>
+          )}
         </div>
 
-        {/* HÀNG 3: CHỈ HUY & LINK XEM THÀNH VIÊN GỌN GÀNG */}
+        {/* HÀNG 3: LÝ DO & CẢNH BÁO CHI TIẾT ĐẦY ĐỦ */}
+        {(allReasons.length > 0 || allWarnings.length > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {allReasons.map((reason, idx) => (
+              <div
+                key={`reason-${idx}`}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#0369a1',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <Check size={12.5} style={{ color: '#0284c7', flexShrink: 0, marginTop: 2 }} />
+                <span style={{ wordBreak: 'break-word' }}>{reason}</span>
+              </div>
+            ))}
+            {allWarnings.map((warning, idx) => (
+              <div
+                key={`warn-${idx}`}
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: '#b45309',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <AlertTriangle size={12} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
+                <span style={{ wordBreak: 'break-word' }}>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* HÀNG 4: CHỈ HUY & XEM ĐỘI */}
         <div
           style={{
             display: 'flex',
@@ -229,15 +353,18 @@ export const TeamSelectorCard: React.FC<Props> = ({
             justifyContent: 'space-between',
             borderTop: '1px dashed #e2e8f0',
             paddingTop: 5,
-            fontSize: 11,
+            fontSize: 12,
             color: '#64748b',
-            gap: 6,
+            gap: 8,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            <User size={12.5} style={{ color: '#64748b', flexShrink: 0 }} />
             <span>Chỉ huy:</span>
-            <strong style={{ color: '#1e293b', fontWeight: 700 }}>{leadRescuer?.name || 'Trưởng đội'}</strong>
-            <span style={{ color: '#64748b' }}>• {memberCount} chiến sĩ</span>
+            <strong style={{ color: '#1e293b', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {leadRescuer?.name || 'Trưởng đội'}
+            </strong>
+            <span>({memberCount} người)</span>
           </div>
 
           <button
@@ -248,24 +375,21 @@ export const TeamSelectorCard: React.FC<Props> = ({
             }}
             style={{
               background: 'rgba(2, 132, 199, 0.08)',
-              border: '1px solid rgba(2, 132, 199, 0.25)',
+              border: '1px solid rgba(2, 132, 199, 0.22)',
               borderRadius: 5,
-              padding: '2px 7px',
+              padding: '2px 8px',
               color: '#0284c7',
-              fontSize: 10.5,
+              fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 3,
+              gap: 4,
               flexShrink: 0,
-              transition: 'all 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.18)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.08)')}
           >
-            <Users size={11} />
-            <span>Thành viên ({memberCount})</span>
+            <Users size={12.5} />
+            <span>Xem đội →</span>
           </button>
         </div>
       </div>

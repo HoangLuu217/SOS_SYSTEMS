@@ -101,9 +101,9 @@ export const MissionDispatch = ({
     }
   }, [selectedSos?.id, assignment?.rescueTeamId]);
 
-  // Right Panel Slide & Collapsible state (Cố định 420px chuẩn UX, không cho kéo dãn tự do)
+  // Right Panel Slide & Collapsible state (480px để hiển thị đầy đủ tên đội, lý do AI & cỡ chữ dễ đọc)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const RIGHT_PANEL_WIDTH = 420;
+  const RIGHT_PANEL_WIDTH = 480;
 
   const toggleRightPanel = () => {
     setIsRightPanelOpen((prev) => !prev);
@@ -172,11 +172,11 @@ export const MissionDispatch = ({
             className="floating-incident-overlay-card"
             style={{
               position: 'absolute',
-              top: 14,
-              left: 14,
-              maxHeight: 'calc(100% - 28px)',
-              width: 365,
-              maxWidth: 'calc(100% - 28px)',
+              top: 10,
+              left: 10,
+              maxHeight: 'calc(100% - 20px)',
+              width: 392,
+              maxWidth: 'calc(100% - 20px)',
               zIndex: 450,
               display: 'flex',
               flexDirection: 'column',

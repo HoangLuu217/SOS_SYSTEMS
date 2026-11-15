@@ -241,13 +241,36 @@ class ChatService {
       targetChannel = channel;
     }
 
+    let channelQuery = { channel: targetChannel };
+    if (targetChannel.startsWith('area_')) {
+      const parts = targetChannel.split('_');
+      const uId = parts[parts.length - 1];
+      if (mongoose.isValidObjectId(uId)) {
+        const slugWithoutAreaAndUser = parts.slice(1, -1).join('_');
+        const wardKw = slugWithoutAreaAndUser.split('_')[0];
+        if (wardKw && wardKw.length >= 2) {
+          channelQuery = {
+            $or: [
+              { channel: targetChannel },
+              { channel: new RegExp(`area_.*${wardKw}.*_${uId}$`, 'i') },
+            ],
+          };
+        }
+      }
+    }
+
     // Lấy tin nhắn theo đúng kênh riêng biệt của từng tài khoản
-    const messages = await ChatMessage.find({ channel: targetChannel })
+    const messages = await ChatMessage.find(channelQuery)
       .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('sosRequestId')
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
+
+    // Tự động chuẩn hóa các tin nhắn cũ về targetChannel nếu cần
+    if (targetChannel.startsWith('area_') && messages.some((m) => m.channel !== targetChannel)) {
+      ChatMessage.updateMany(channelQuery, { $set: { channel: targetChannel } }).catch(() => {});
+    }
 
     // Tự động kiểm tra và đồng bộ trạng thái thực tế mới nhất của các ca SOS vào tin nhắn
     const sosIdsToFetch = [];
@@ -317,22 +340,137 @@ class ChatService {
   }
 
   /**
-   * Lấy danh sách cuộc hội thoại cho Admin hoặc Cán bộ Authority
+   * Lấy danh sách cuộc hội thoại cho Admin hoặc Cán bộ Authority (Siêu tối ưu bằng Batch & Aggregation)
    */
   async getConversations(currentUser) {
     const isUserAdmin = (currentUser.roles || []).includes('ADMIN');
     const isAuthority = (currentUser.roles || []).includes('LOCAL_AUTHORITY');
 
-    // 1. Kênh tác chiến chung COMMAND_GENERAL
-    const generalLatest = await ChatMessage.findOne({ channel: 'COMMAND_GENERAL' })
-      .sort({ createdAt: -1 })
-      .populate('senderId', 'fullName roles');
+    // 1. Thu thập danh sách kênh địa phương (area_) nếu là LOCAL_AUTHORITY
+    const areaChannelsSet = new Set();
+    const possibleUserIdsFromArea = [];
 
-    const generalUnread = await ChatMessage.countDocuments({
-      channel: 'COMMAND_GENERAL',
-      senderId: { $ne: currentUser._id },
-      readBy: { $ne: currentUser._id },
+    if (isAuthority && !isUserAdmin) {
+      const distinctAreaChannels = await ChatMessage.distinct('channel', {
+        channel: { $regex: '^area_' },
+      });
+
+      const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
+
+      for (const ch of distinctAreaChannels) {
+        const chClean = ch.replace(/^area_/, '');
+
+        let isMatched = false;
+        if (specificSlug) {
+          isMatched = chClean.includes(specificSlug);
+        } else if (broadSlug) {
+          isMatched = chClean.includes(broadSlug);
+        }
+
+        if (isMatched) {
+          areaChannelsSet.add(ch);
+          const parts = chClean.split('_');
+          const possibleUserId = parts[parts.length - 1];
+          if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
+            possibleUserIdsFromArea.push(new mongoose.Types.ObjectId(possibleUserId));
+          }
+        }
+      }
+    }
+
+    // 2. Lấy danh sách đối tác chat trực tiếp (Admin hoặc đồng nghiệp)
+    const userFilter = {
+      _id: { $ne: currentUser._id },
+      status: { $ne: 'SUSPENDED' },
+      roles: { $in: ['ADMIN', 'LOCAL_AUTHORITY'] },
+    };
+
+    const potentialPartners = await User.find(userFilter)
+      .select('fullName phone email roles authority avatarUrl status createdAt')
+      .sort({ 'roles.0': 1, fullName: 1 })
+      .limit(60);
+
+    const partnerChannelMap = new Map();
+    potentialPartners.forEach((p) => {
+      const ch = this.getDirectChannelId(currentUser._id, p._id);
+      partnerChannelMap.set(String(p._id), ch);
     });
+
+    const allDirectChannels = Array.from(partnerChannelMap.values());
+    const activeDirectChannels = await ChatMessage.distinct('channel', {
+      channel: { $in: allDirectChannels },
+    });
+    const activeDirectSet = new Set(activeDirectChannels);
+
+    // 3. Tập hợp TẤT CẢ các kênh cần truy vấn tin nhắn mới nhất và số chưa đọc
+    const allChannelsToFetch = [
+      'COMMAND_GENERAL',
+      ...Array.from(areaChannelsSet),
+      ...activeDirectChannels,
+    ];
+
+    // 4. Thực thi 2 truy vấn Aggregation song song cực nhanh
+    const [latestAgg, unreadAgg] = await Promise.all([
+      ChatMessage.aggregate([
+        { $match: { channel: { $in: allChannelsToFetch } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$channel',
+            content: { $first: '$content' },
+            senderName: { $first: '$senderName' },
+            createdAt: { $first: '$createdAt' },
+            senderId: { $first: '$senderId' },
+          },
+        },
+      ]),
+      ChatMessage.aggregate([
+        {
+          $match: {
+            channel: { $in: allChannelsToFetch },
+            senderId: { $ne: currentUser._id },
+            readBy: { $ne: currentUser._id },
+          },
+        },
+        {
+          $group: {
+            _id: '$channel',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const latestMap = new Map();
+    latestAgg.forEach((item) => {
+      latestMap.set(item._id, item);
+    });
+
+    const unreadMap = new Map();
+    unreadAgg.forEach((item) => {
+      unreadMap.set(item._id, item.count);
+    });
+
+    // 5. Tải trước thông tin đối tác người dùng cho các kênh area_ trong 1 truy vấn duy nhất
+    const userIdsToFetch = new Set(possibleUserIdsFromArea.map((id) => String(id)));
+    latestAgg.forEach((item) => {
+      if (item.senderId && mongoose.Types.ObjectId.isValid(item.senderId)) {
+        userIdsToFetch.add(String(item.senderId));
+      }
+    });
+
+    const fetchedUsers = userIdsToFetch.size > 0
+      ? await User.find({ _id: { $in: Array.from(userIdsToFetch) } }).select('fullName phone email roles avatarUrl authority address citizen')
+      : [];
+
+    const userMap = new Map();
+    fetchedUsers.forEach((u) => {
+      userMap.set(String(u._id), u);
+    });
+
+    // 6. Xây dựng kết quả: Kênh tác chiến chung COMMAND_GENERAL
+    const generalLatest = latestMap.get('COMMAND_GENERAL');
+    const generalUnread = unreadMap.get('COMMAND_GENERAL') || 0;
 
     const conversations = [
       {
@@ -352,72 +490,50 @@ class ChatService {
       },
     ];
 
-    // 2. Kênh Địa Bàn Quản Lý (Người dân liên hệ cứu hộ địa phương)
-    // CHỈ CÁN BỘ ĐỊA PHƯƠNG (LOCAL_AUTHORITY) MỚI TIẾP NHẬN KÊNH AREA_ CỨU NẠN CỦA NGƯỜI DÂN
-    // Tài khoản Ban chỉ huy (ADMIN) không hiển thị kênh chat riêng giữa người dân và địa phương
-    const areaChannelsSet = new Set();
-
-    if (isAuthority && !isUserAdmin) {
-      // Tìm tất cả các kênh area_ có tin nhắn trong database
-      const distinctAreaChannels = await ChatMessage.distinct('channel', {
-        channel: { $regex: '^area_' },
-      });
-
-      // Lấy phạm vi quản lý của cán bộ hiện tại
-      const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
-
-      for (const ch of distinctAreaChannels) {
-        const chClean = ch.replace(/^area_/, '');
-
-        let isMatched = false;
-        // Nếu cán bộ phụ trách một PHƯỜNG / XÃ / QUẬN cụ thể (vd: "lien_chieu", "thanh_khe", "hai_chau"):
-        // Kênh BẮT BUỘC phải thuộc đúng PHƯỜNG / XÃ / QUẬN đó!
-        if (specificSlug) {
-          isMatched = chClean.includes(specificSlug);
-        } else if (broadSlug) {
-          // Nếu cán bộ là cấp TỈNH / THÀNH PHỐ (vd: "da_nang", "quang_nam"):
-          // Kênh phải thuộc Tỉnh / Thành phố đó
-          isMatched = chClean.includes(broadSlug);
-        }
-
-        if (isMatched) {
-          areaChannelsSet.add(ch);
-        }
-      }
-    }
-
+    // 7. Xây dựng kết quả: Các kênh địa bàn (area_)
     for (const ch of areaChannelsSet) {
-      // Tìm tin nhắn mới nhất trong kênh của tài khoản này
-      const areaLatest = await ChatMessage.findOne({ channel: ch })
-        .sort({ createdAt: -1 })
-        .populate('senderId', 'fullName phone email roles avatarUrl address');
-
-      // Nếu kênh không có bất kỳ tin nhắn nào thì bỏ qua
+      const areaLatest = latestMap.get(ch);
       if (!areaLatest) continue;
 
-      const areaUnread = await ChatMessage.countDocuments({
-        channel: ch,
-        senderId: { $ne: currentUser._id },
-        readBy: { $ne: currentUser._id },
-      });
-
-      // Xác định đối tượng người dân / cứu hộ viên trong kênh
+      const areaUnread = unreadMap.get(ch) || 0;
       const cleanSlugParts = ch.replace(/^area_/, '').split('_');
       const possibleUserId = cleanSlugParts[cleanSlugParts.length - 1];
+
       let partnerUser = null;
-
-      if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
-        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address citizen');
-      }
-
-      if (!partnerUser && areaLatest && areaLatest.senderId) {
-        const senderRoles = areaLatest.senderId.roles || [];
+      if (possibleUserId && userMap.has(possibleUserId)) {
+        partnerUser = userMap.get(possibleUserId);
+      } else if (areaLatest.senderId && userMap.has(String(areaLatest.senderId))) {
+        const candidate = userMap.get(String(areaLatest.senderId));
+        const senderRoles = candidate.roles || [];
         if (!senderRoles.includes('LOCAL_AUTHORITY') && !senderRoles.includes('ADMIN')) {
-          partnerUser = areaLatest.senderId;
+          partnerUser = candidate;
         }
       }
 
-      // Xác định tên địa bàn thực tế của người dân
+      // Tránh trùng lặp cuộc hội thoại của cùng 1 người dân (gộp tin nhắn từ các kênh legacy cũ)
+      const partnerKey = partnerUser?._id ? String(partnerUser._id) : (possibleUserId || null);
+      if (partnerKey) {
+        const existingIdx = conversations.findIndex(
+          (c) => c.type === 'CHANNEL' && (String(c.partnerId) === partnerKey || c.channel.endsWith(`_${partnerKey}`))
+        );
+        if (existingIdx !== -1) {
+          const existingTime = conversations[existingIdx].latestMessage
+            ? new Date(conversations[existingIdx].latestMessage.createdAt).getTime()
+            : 0;
+          const newTime = areaLatest ? new Date(areaLatest.createdAt).getTime() : 0;
+          if (newTime > existingTime) {
+            conversations[existingIdx].channel = ch;
+            conversations[existingIdx].latestMessage = {
+              content: areaLatest.content,
+              senderName: areaLatest.senderName,
+              createdAt: areaLatest.createdAt,
+            };
+          }
+          conversations[existingIdx].unreadCount = (conversations[existingIdx].unreadCount || 0) + areaUnread;
+          continue;
+        }
+      }
+
       let channelAreaName = partnerUser?.address || '';
       if (!channelAreaName) {
         const words = cleanSlugParts.filter((p) => !/^[0-9a-fA-F]{24}$/.test(p));
@@ -454,6 +570,7 @@ class ChatService {
               phone: partnerUser.phone,
               email: partnerUser.email,
               address: partnerUser.address,
+              avatarUrl: partnerUser.avatarUrl || null,
               roles: partnerUser.roles,
               emergencyContact: partnerUser.citizen?.emergencyContact || null,
               emergencyContacts: partnerUser.citizen?.emergencyContacts || [],
@@ -468,47 +585,22 @@ class ChatService {
       });
     }
 
-    // 3. Lấy danh sách đối tác chat trực tiếp (Admin hoặc đồng nghiệp có tin nhắn)
-    let userFilter = {
-      _id: { $ne: currentUser._id },
-      status: { $ne: 'SUSPENDED' },
-      roles: { $in: ['ADMIN', 'LOCAL_AUTHORITY'] },
-    };
-
-    const potentialPartners = await User.find(userFilter)
-      .select('fullName phone email roles authority avatarUrl status createdAt')
-      .sort({ 'roles.0': 1, fullName: 1 })
-      .limit(100);
-
+    // 8. Xây dựng kết quả: Các kênh trò chuyện 1-1 (DIRECT)
     for (const partner of potentialPartners) {
-      const channel = this.getDirectChannelId(currentUser._id, partner._id);
-
-      const latestMsg = await ChatMessage.findOne({ channel })
-        .sort({ createdAt: -1 })
-        .populate('senderId', 'fullName roles');
-
+      const channel = partnerChannelMap.get(String(partner._id));
+      const hasMessages = activeDirectSet.has(channel);
       const partnerRole = partner.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY';
 
-      // Điều kiện hiển thị cuộc trò chuyện 1-1 (Direct):
-      // 1. Đã từng có trao đổi tin nhắn (latestMsg !== null)
-      // 2. HOẶC đối tác là Quản trị viên hệ thống (ADMIN) để tiện liên hệ chỉ đạo
-      // 3. HOẶC người xem là ADMIN và đối tác là LOCAL_AUTHORITY (để Admin luôn có thể chủ động nhắn tin chỉ đạo các cán bộ địa phương)
-      // 4. HOẶC người xem là LOCAL_AUTHORITY và đối tác là LOCAL_AUTHORITY (để các cán bộ địa phương có thể chủ động nhắn tin phối hợp liên phường/xã)
       const isVisible =
-        Boolean(latestMsg) ||
+        hasMessages ||
         partnerRole === 'ADMIN' ||
         (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') ||
         (isAuthority && partnerRole === 'LOCAL_AUTHORITY');
 
-      if (!isVisible) {
-        continue;
-      }
+      if (!isVisible) continue;
 
-      const unreadCount = await ChatMessage.countDocuments({
-        channel,
-        senderId: partner._id,
-        readBy: { $ne: currentUser._id },
-      });
+      const latestMsg = latestMap.get(channel) || null;
+      const unreadCount = unreadMap.get(channel) || 0;
 
       conversations.push({
         type: 'DIRECT',
@@ -518,6 +610,7 @@ class ChatService {
         phone: partner.phone,
         email: partner.email,
         role: partnerRole,
+        avatarUrl: partner.avatarUrl || null,
         areaName: partner.authority?.areaName || (partnerRole === 'ADMIN' ? 'Toàn quốc (Trung ương)' : 'Địa phương'),
         position: partner.authority?.position || (partnerRole === 'ADMIN' ? 'Quản trị viên hệ thống' : 'Cán bộ điều hành'),
         unreadCount,
@@ -531,7 +624,7 @@ class ChatService {
       });
     }
 
-    // 4. Sắp xếp: Kênh tác chiến chung và kênh địa bàn ưu tiên trước, sau đó theo thời gian tin nhắn mới nhất
+    // 9. Sắp xếp: Kênh tác chiến chung và kênh địa bàn ưu tiên trước, sau đó theo thời gian tin nhắn mới nhất
     const channels = conversations.filter((c) => c.type === 'CHANNEL');
     const directs = conversations.filter((c) => c.type === 'DIRECT');
 
@@ -634,15 +727,6 @@ class ChatService {
       resolvedAreaName = `${ward}, ${province}`;
     }
 
-    // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
-    const officialAreaName = resolvedAreaName;
-    const safeSlug = this.toAreaSlug(officialAreaName);
-
-    // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
-    const targetUserId = currentUser?._id || userId;
-    const userSuffix = targetUserId ? `_${targetUserId}` : '';
-    const channel = `area_${safeSlug || 'local'}${userSuffix}`;
-
     let cleanWard = '';
     let cleanDistrict = '';
     let cleanProvince = '';
@@ -687,6 +771,35 @@ class ChatService {
     }
     if (areaName) {
       cleanArea = areaName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố|tp\.)\s+/i, '').trim();
+    }
+
+    // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
+    const officialAreaName = resolvedAreaName;
+
+    // Định danh kênh chat chuẩn hóa theo Cấp Phường / Xã và Tỉnh / TP
+    // Đảm bảo cùng 1 Phường / Xã luôn dùng chung 1 kênh duy nhất cho mỗi người dùng (tránh tạo nhiều kênh theo từng tên đường)
+    const wardSlug = cleanWard ? this.toAreaSlug(cleanWard) : this.toAreaSlug(cleanArea || 'local');
+    const provSlug = cleanProvince ? this.toAreaSlug(cleanProvince) : 'thanh_pho_da_nang';
+    const safeSlug = `${wardSlug}_${provSlug}`;
+
+    // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
+    const targetUserId = currentUser?._id || userId;
+    const userSuffix = targetUserId ? `_${targetUserId}` : '';
+    const channel = `area_${safeSlug}${userSuffix}`;
+
+    // Tự động gộp / đồng bộ tất cả tin nhắn cũ của user này thuộc phường này về kênh chuẩn channel
+    if (targetUserId && wardSlug && wardSlug.length >= 2) {
+      try {
+        const legacyPattern = new RegExp(`area_.*${wardSlug}.*_${targetUserId}$`, 'i');
+        await ChatMessage.updateMany(
+          {
+            channel: { $regex: legacyPattern, $ne: channel },
+          },
+          { $set: { channel } }
+        );
+      } catch (err) {
+        console.warn('[Sync legacy chat channel error]:', err.message);
+      }
     }
 
     let manager = null;

@@ -389,7 +389,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [isWaterwayMode, setIsWaterwayMode] = useState<boolean>(false);
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets');
   const [showFloodZones, setShowFloodZones] = useState<boolean>(true);
-  const [showSafeShelters] = useState<boolean>(false);
+  const [showSafeShelters, setShowSafeShelters] = useState<boolean>(false);
   const [isSheetCollapsed, setIsSheetCollapsed] = useState<boolean>(false); // Cho phép kéo gọn xuống để xem map
   const [isNavigating, setIsNavigating] = useState<boolean>(false); // Dẫn đường trực tiếp trong App chuẩn Grab
   const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true); // Ghim theo dõi vị trí và hướng xe chuẩn Grab
@@ -455,16 +455,46 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   });
 
   // State 4 Completion Modal
+  const DEFAULT_RESCUE_SUMMARY = 'Đã tiếp cận thành công, đưa toàn bộ nạn nhân về trạm an toàn.';
+  const DEFAULT_RELIEF_SUMMARY = 'Đã bàn giao đầy đủ hàng cứu trợ / thiết bị tiếp tế tới điểm tiếp nhận đúng số lượng, đảm bảo nguyên vẹn.';
+  const DEFAULT_SHORE_HANDOFF_SUMMARY = 'Đã bàn giao nạn nhân an toàn tại điểm đón bờ cho lực lượng tiếp nhận.';
+  const MAX_PROOF_PHOTOS = 5;
   const [completionModalVisible, setCompletionModalVisible] = useState<boolean>(false);
-  const [fieldReportNotes, setFieldReportNotes] = useState<string>('Đã tiếp cận thành công, đưa toàn bộ nạn nhân về trạm an toàn.');
-  const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
-  const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null);
+  const [fieldReportNotes, setFieldReportNotes] = useState<string>(DEFAULT_RESCUE_SUMMARY);
+  const [capturedPhotos, setCapturedPhotos] = useState<Array<{
+    uri: string;
+    base64?: string | null;
+    fileName?: string | null;
+    mimeType?: string | null;
+  }>>([]);
   const completedProofImagesRef = useRef<string[]>([]);
   const [missionDurationText, setMissionDurationText] = useState<string>('Vừa tiếp nhận');
 
   // Tính toán thời gian thực hiện thực tế (từ khi nhận/bắt đầu nhiệm vụ đến khi hoàn thành)
   useEffect(() => {
     if (completionModalVisible) {
+      const isRelief =
+        assignment?.missionType === 'RELIEF_DISPATCH' ||
+        sos?.emergencyType === 'RELIEF' ||
+        (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
+        (typeof assignment?.note === 'string' && assignment.note.includes('xuất cấp cứu trợ'));
+      const isShore =
+        assignment?.missionType === 'SHORE_HANDOFF' ||
+        Boolean(shoreHandoffData && shoreHandoffData.status === 'ASSIGNED');
+
+      setFieldReportNotes((prev) => {
+        const trimmed = prev.trim();
+        const isPresetOrEmpty =
+          !trimmed ||
+          trimmed === DEFAULT_RESCUE_SUMMARY ||
+          trimmed === DEFAULT_RELIEF_SUMMARY ||
+          trimmed === DEFAULT_SHORE_HANDOFF_SUMMARY;
+        if (!isPresetOrEmpty) return prev;
+        if (isRelief) return DEFAULT_RELIEF_SUMMARY;
+        if (isShore) return DEFAULT_SHORE_HANDOFF_SUMMARY;
+        return DEFAULT_RESCUE_SUMMARY;
+      });
+
       const rawStart =
         assignment?.acceptedAt ||
         assignment?.startedAt ||
@@ -560,6 +590,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
 
       if (targetAssign) {
+        setCapturedPhotos([]);
         setAssignment(targetAssign);
         syncStateFromStatus(targetAssign.status);
         if (Array.isArray(targetAssign.requestedSupplies)) {
@@ -574,7 +605,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           });
         }
 
-        // Lấy chi tiết SOS
+        // Lấy chi tiết SOS nếu lệnh có gắn với ca SOS (Lệnh tiếp tế xuất kho độc lập sẽ có sosRequestId = null)
         const sId = targetAssign.sosRequestId?._id || targetAssign.sosRequestId || targetAssign.sosId?._id || targetAssign.sosId;
         if (sId) {
           const sosRes = await backendApi.get(`/sos/${sId}`);
@@ -588,6 +619,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               setShoreHandoffData(sosRes.data.shoreHandoff);
             }
           }
+        } else {
+          setSos(null);
+          setShoreHandoffData(null);
         }
       } else if (initialSosData) {
         setSos(initialSosData);
@@ -829,10 +863,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   }, [visible, loadWorkspaceData]);
 
-  // Tọa độ người dân gặp nạn
+  // Tọa độ điểm đến (ưu tiên từ SOS nếu là ca cứu nạn, hoặc từ SosAssignment nếu là Lệnh tiếp tế xuất kho độc lập)
   const victimCoords = useMemo(() => {
     let rawLng = 108.1400;
     let rawLat = 16.0800;
+
+    const assignCoords =
+      assignment?.location?.coordinates ||
+      initialAssignmentData?.location?.coordinates;
 
     if (sos?.location?.coordinates && Array.isArray(sos.location.coordinates)) {
       rawLng = sos.location.coordinates[0];
@@ -840,6 +878,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     } else if (sos?.coordinates?.lat && sos?.coordinates?.lng) {
       rawLat = sos.coordinates.lat;
       rawLng = sos.coordinates.lng;
+    } else if (Array.isArray(assignCoords) && assignCoords.length >= 2) {
+      rawLng = assignCoords[0];
+      rawLat = assignCoords[1];
     }
 
     // Tự động đảo tọa độ nếu bị ngược
@@ -847,7 +888,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       return { lat: rawLng, lng: rawLat };
     }
     return { lat: rawLat, lng: rawLng };
-  }, [sos]);
+  }, [sos, assignment?.location, initialAssignmentData?.location]);
 
   // 6. Tính toán tuyến đường thực tế qua OSRM API (Lái xe ô tô theo Google Maps) & Tạo Turn-by-Turn chuẩn
   const fetchOsrmRoute = useCallback(async () => {
@@ -934,9 +975,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(teamLocation.lat * (Math.PI / 180)) *
-        Math.cos(victimCoords.lat * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(victimCoords.lat * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const directKm = 6371 * c;
     const carKm = directKm * 1.35;
@@ -1109,8 +1150,17 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   };
 
-  // 10. Xử lý Chụp ảnh hiện trường báo cáo
+  // 10. Xử lý Chụp / chọn nhiều ảnh hiện trường báo cáo & xóa ảnh chọn nhầm
   const handleCaptureFieldPhoto = async () => {
+    if (capturedPhotos.length >= MAX_PROOF_PHOTOS) {
+      setCustomNotice({
+        visible: true,
+        type: 'warning',
+        title: 'Đã đạt giới hạn ảnh',
+        message: `Chỉ có thể đính kèm tối đa ${MAX_PROOF_PHOTOS} ảnh xác thực. Hãy xóa bớt ảnh cũ trước khi chụp thêm.`,
+      });
+      return;
+    }
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
@@ -1124,12 +1174,23 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.5,
+        quality: 0.4,
         base64: true,
       });
       if (!res.canceled && res.assets && res.assets[0]) {
-        setCapturedPhotoUri(res.assets[0].uri);
-        setCapturedPhotoBase64(res.assets[0].base64 || null);
+        const asset = res.assets[0];
+        setCapturedPhotos((prev) => {
+          if (prev.length >= MAX_PROOF_PHOTOS) return prev;
+          return [
+            ...prev,
+            {
+              uri: asset.uri,
+              base64: asset.base64 || null,
+              fileName: asset.fileName || null,
+              mimeType: asset.mimeType || null,
+            },
+          ];
+        });
       }
     } catch {
       setCustomNotice({
@@ -1139,6 +1200,62 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         message: 'Không thể khởi động máy ảnh trên thiết bị.',
       });
     }
+  };
+
+  const handlePickFieldPhotoFromLibrary = async () => {
+    const remainingSlots = MAX_PROOF_PHOTOS - capturedPhotos.length;
+    if (remainingSlots <= 0) {
+      setCustomNotice({
+        visible: true,
+        type: 'warning',
+        title: 'Đã đạt giới hạn ảnh',
+        message: `Chỉ có thể đính kèm tối đa ${MAX_PROOF_PHOTOS} ảnh xác thực. Hãy xóa bớt ảnh cũ trước khi chọn thêm.`,
+      });
+      return;
+    }
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setCustomNotice({
+          visible: true,
+          type: 'warning',
+          title: 'Quyền thư viện ảnh',
+          message: 'Vui lòng cấp quyền truy cập thư viện ảnh để chọn hình ảnh xác thực bàn giao.',
+        });
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remainingSlots,
+        quality: 0.4,
+        base64: true,
+      });
+      if (!res.canceled && Array.isArray(res.assets) && res.assets.length > 0) {
+        const picked = res.assets.map((asset) => ({
+          uri: asset.uri,
+          base64: asset.base64 || null,
+          fileName: asset.fileName || null,
+          mimeType: asset.mimeType || null,
+        }));
+        setCapturedPhotos((prev) => {
+          const existingUris = new Set(prev.map((item) => item.uri));
+          const uniqueNew = picked.filter((item) => item.uri && !existingUris.has(item.uri));
+          return [...prev, ...uniqueNew].slice(0, MAX_PROOF_PHOTOS);
+        });
+      }
+    } catch {
+      setCustomNotice({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi',
+        message: 'Không thể mở thư viện ảnh trên thiết bị.',
+      });
+    }
+  };
+
+  const handleRemoveFieldPhoto = (index: number) => {
+    setCapturedPhotos((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   // 11. Xử lý Hoàn Tất Cứu Hộ & Báo Cáo Kết Thúc (State 3 -> State 4)
@@ -1155,43 +1272,120 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   };
 
   const handleFinalSubmitCompletion = async () => {
+    const isRelief =
+      assignment?.missionType === 'RELIEF_DISPATCH' ||
+      sos?.emergencyType === 'RELIEF' ||
+      (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
+      (typeof assignment?.note === 'string' && assignment.note.includes('xuất cấp cứu trợ'));
+    const isShore =
+      assignment?.missionType === 'SHORE_HANDOFF' ||
+      Boolean(shoreHandoffData && shoreHandoffData.status === 'ASSIGNED');
+
+    if ((isRelief || isShore) && capturedPhotos.length === 0) {
+      setCustomNotice({
+        visible: true,
+        type: 'warning',
+        title: 'Thiếu ảnh xác thực bàn giao',
+        message: 'Vui lòng chụp hoặc chọn ít nhất 1 hình ảnh xác thực đã bàn giao trước khi bấm Bàn giao.',
+      });
+      return;
+    }
+
     try {
       setActionLoading(true);
-      const notePayload = `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người | Thời gian hoàn thành: ${missionDurationText}`;
+      const suppliesArr = Array.isArray(assignment?.supplies) && assignment.supplies.length > 0
+        ? assignment.supplies
+        : Array.isArray(sos?.supplies)
+          ? sos.supplies
+          : [];
+      const totalReliefQty = suppliesArr.reduce((sum: number, s: any) => sum + (Number(s?.quantity) || 0), 0);
+      const notePayload = isRelief
+        ? `${fieldReportNotes.trim()} | Tổng hàng bàn giao: ${totalReliefQty} món/kiện (${suppliesArr.length} mặt hàng) | Thời gian hoàn thành: ${missionDurationText}`
+        : isShore
+          ? `${fieldReportNotes.trim()} | Thời gian hoàn thành: ${missionDurationText}`
+          : `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người | Thời gian hoàn thành: ${missionDurationText}`;
 
       const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
 
-      // 1. Tải ảnh thực tế chụp tại hiện trường lên máy chủ Cloudinary trước để có URL
-      let uploadedUrls: string[] = [];
-      if (capturedPhotoBase64) {
-        try {
-          const fileRes = await backendApi.post('/files', {
-            base64Files: [capturedPhotoBase64],
-            sosId: targetSosId,
-            purpose: 'PROOF',
-          });
-          if (fileRes?.urls && fileRes.urls.length > 0) {
-            uploadedUrls = fileRes.urls;
-          } else if (fileRes?.url) {
-            uploadedUrls = [fileRes.url];
-          } else if (fileRes?.data?.url) {
-            uploadedUrls = [fileRes.data.url];
-          }
-        } catch (uploadErr) {
-          console.warn('Lỗi tải ảnh hiện trường lên máy chủ:', uploadErr);
-        }
-      }
+      // 1. Tải toàn bộ ảnh thực tế tại hiện trường lên máy chủ Cloudinary để lấy URL công khai (tuyệt đối không lưu URI file:// nội bộ)
+      const extractUploadedUrl = (fileRes: any): string | null => {
+        if (!fileRes || fileRes.success === false) return null;
+        const candidate =
+          fileRes?.url ||
+          fileRes?.data?.url ||
+          (Array.isArray(fileRes?.urls) ? fileRes.urls[0] : null) ||
+          (Array.isArray(fileRes?.data) ? fileRes.data[0]?.url : null);
+        return typeof candidate === 'string' && /^https?:\/\//i.test(candidate) ? candidate : null;
+      };
 
-      const proofImages = uploadedUrls.length > 0
-        ? uploadedUrls
-        : capturedPhotoUri
-          ? [capturedPhotoUri]
-          : [];
+      const uploadedResults = await Promise.all(
+        capturedPhotos.map(async (photo, idx) => {
+          const fallbackExt = photo.uri?.split('.').pop()?.toLowerCase() === 'png' ? 'png' : 'jpg';
+          const safeFileName = photo.fileName || `proof_${Date.now()}_${idx + 1}.${fallbackExt}`;
+          const safeMime =
+            photo.mimeType ||
+            (fallbackExt === 'png' ? 'image/png' : 'image/jpeg');
+
+          try {
+            const formData = new FormData();
+            formData.append('file', {
+              uri: photo.uri,
+              name: safeFileName,
+              type: safeMime,
+            } as any);
+            if (targetSosId) formData.append('sosId', String(targetSosId));
+            formData.append('purpose', 'PROOF');
+
+            const formRes = await backendApi.postFormData('/files', formData);
+            const formUrl = extractUploadedUrl(formRes);
+            if (formUrl) return formUrl;
+          } catch (formErr) {
+            console.warn(`Lỗi upload FormData ảnh ${idx + 1}:`, formErr);
+          }
+
+          if (photo.base64) {
+            try {
+              const b64Res = await backendApi.post(
+                '/files',
+                {
+                  base64File: photo.base64,
+                  fileName: safeFileName,
+                  sosId: targetSosId,
+                  purpose: 'PROOF',
+                },
+                { timeout: 60000 } as any
+              );
+              const b64Url = extractUploadedUrl(b64Res);
+              if (b64Url) return b64Url;
+            } catch (b64Err) {
+              console.warn(`Lỗi upload base64 ảnh ${idx + 1}:`, b64Err);
+            }
+          }
+
+          return null;
+        })
+      );
+
+      const proofImages = uploadedResults.filter((u): u is string => Boolean(u));
+
+      if (capturedPhotos.length > 0 && proofImages.length < capturedPhotos.length) {
+        setCustomNotice({
+          visible: true,
+          type: 'error',
+          title: 'Tải ảnh xác thực thất bại',
+          message:
+            proofImages.length === 0
+              ? 'Không thể tải ảnh xác thực lên máy chủ. Vui lòng kiểm tra kết nối mạng và thử bấm Bàn giao lại.'
+              : `Chỉ tải lên được ${proofImages.length}/${capturedPhotos.length} ảnh. Vui lòng kiểm tra mạng hoặc xóa bớt ảnh lỗi rồi thử lại.`,
+        });
+        return;
+      }
 
       completedProofImagesRef.current = proofImages;
 
-      // 2. Hoàn tất đón bờ với bằng chứng hình ảnh thực tế
-      if (targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
+      // 2. Chỉ đội xe tiếp vận đón bờ (isShoreHandoffMission) mới hoàn tất trạng thái đón bờ.
+      // Đội đi cứu chính không được tự động đóng thay nhiệm vụ xe tiếp vận.
+      if (isShoreHandoffMission && targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
         try {
           await backendApi.completeShoreHandoff(targetSosId, { proofImages });
           setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
@@ -1202,16 +1396,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       const recipientName = citizenName || 'Người nhận tại hiện trường';
       if (assignment?._id) {
-        try {
-          await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
-            proofImages,
-            actualRecipient: recipientName,
-          });
-        } catch (assignErr) {
-          console.warn('Cập nhật trạng thái phân công thất bại, tiếp tục hoàn tất ca SOS:', assignErr);
-        }
-      }
-      if (sos?._id) {
+        await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
+          proofImages,
+          actualRecipient: recipientName,
+        });
+      } else if (sos?._id) {
         await backendApi.post(`/sos/${sos._id}/complete`, {
           note: notePayload,
           notes: notePayload,
@@ -1221,6 +1410,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
 
       setCompletionModalVisible(false);
+      setCapturedPhotos([]);
       setMissionState('COMPLETED');
       setAssignment((prev: any) => (prev ? {
         ...prev,
@@ -1310,14 +1500,33 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         address: landingAddress.trim() || `Tọa độ: ${landingCoords.lat.toFixed(5)}, ${landingCoords.lng.toFixed(5)}`,
         coordinates: [landingCoords.lng, landingCoords.lat] as [number, number],
       };
+      const resolvedRescueTeamId =
+        typeof assignment?.rescueTeamId === 'object' && assignment?.rescueTeamId
+          ? String(assignment.rescueTeamId._id || assignment.rescueTeamId.id || '') || undefined
+          : assignment?.rescueTeamId
+            ? String(assignment.rescueTeamId)
+            : undefined;
+      const resolvedRescueTeamName =
+        (typeof assignment?.rescueTeamId === 'object' && assignment?.rescueTeamId?.name) ||
+        assignment?.rescueTeamName ||
+        'Đội Cứu Hộ';
+
       const payload = {
         landingPoint: landing,
         vehicleTypeNeeded: selectedRelayVehicleType,
         peopleCount: relayVictimCount,
         notes: relayNotes,
-        rescueTeamName: assignment?.rescueTeamName || 'Đội Cứu Hộ',
-        rescueTeamId: assignment?.rescueTeamId || null,
+        rescueTeamName: resolvedRescueTeamName,
+        rescueTeamId: resolvedRescueTeamId,
       };
+
+      if (targetSosId) {
+        try {
+          await backendApi.requestShoreHandoff(targetSosId, payload);
+        } catch (err) {
+          console.warn('Backend requestShoreHandoff error:', err);
+        }
+      }
 
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('rescuer:request_shore_handoff', {
@@ -1328,14 +1537,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             ...payload,
           },
         });
-      }
-
-      if (targetSosId) {
-        try {
-          await backendApi.requestShoreHandoff(targetSosId, payload);
-        } catch (err) {
-          console.warn('Backend requestShoreHandoff error:', err);
-        }
       }
 
       setShoreHandoffData({
@@ -1366,10 +1567,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   const isShoreHandoffMission =
     assignment?.missionType === 'SHORE_HANDOFF' ||
-    (typeof assignment?.note === 'string' && assignment.note.toLowerCase().includes('đón bờ')) ||
-    (assignment?.vehicleId?.type === 'AMBULANCE' && Boolean(sos?.shoreHandoff?.status && sos.shoreHandoff.status !== 'NONE'));
+    (!assignment?.missionType &&
+      typeof assignment?.note === 'string' &&
+      assignment.note.toLowerCase().includes('đón bờ'));
 
-  const sosCode = sos?.sosCode || 'SOS';
+  const sosCode =
+    assignment?.dispatchCode ||
+    sos?.sosCode ||
+    (assignment?._id ? `LP-${String(assignment._id).slice(-4).toUpperCase()}` : 'SOS');
   const recipientName =
     assignment?.recipientName ||
     (typeof assignment?.note === 'string' && assignment.note.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
@@ -1384,6 +1589,59 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     (typeof assignment?.note === 'string' && assignment.note.match(/(\b0\d{9,10}\b)/)?.[1]) ||
     (typeof sos?.description === 'string' && sos.description.match(/(\b0\d{9,10}\b)/)?.[1]) ||
     '';
+
+  const reliefSupplies = useMemo<any[]>(() => {
+    const rawList =
+      assignment?.supplies ||
+      (assignment as any)?.reliefItems ||
+      sos?.supplies ||
+      [];
+    return Array.isArray(rawList) ? rawList : [];
+  }, [assignment, sos]);
+
+  const reliefRecipientName = useMemo(() => {
+    if (!recipientName) return '';
+    return String(recipientName).replace(/\s*[-•]\s*0\d{9,10}\b/g, '').trim() || String(recipientName).trim();
+  }, [recipientName]);
+
+  const reliefRecipientPhone = useMemo(() => {
+    if (recipientName) {
+      const match = String(recipientName).match(/(\b0\d{9,10}\b)/);
+      if (match?.[1]) return match[1];
+    }
+    if (typeof assignment?.note === 'string') {
+      const recipSection = assignment.note.match(/Người nhận:\s*([^|\n-]*0\d{9,10}[^|\n]*)/);
+      const phoneMatch = recipSection?.[1]?.match(/(\b0\d{9,10}\b)/);
+      if (phoneMatch?.[1]) return phoneMatch[1];
+    }
+    return '';
+  }, [recipientName, assignment?.note]);
+
+  const reliefCoordinatorName =
+    assignment?.assignedBy?.fullName ||
+    sos?.citizenId?.fullName ||
+    assignment?.authorityOrganizationId?.name ||
+    'Cán bộ điều phối';
+
+  const reliefCoordinatorPhone =
+    assignment?.assignedBy?.phone ||
+    sos?.citizenId?.phone ||
+    sos?.contactPhone ||
+    '';
+
+  const reliefPriorityMeta = useMemo(() => {
+    const prio = String(assignment?.priority || sos?.priority || 'HIGH').toUpperCase();
+    if (prio === 'CRITICAL') {
+      return { label: 'HỎA TỐC', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' };
+    }
+    if (prio === 'LOW') {
+      return { label: 'TIÊU CHUẨN', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' };
+    }
+    if (prio === 'MEDIUM') {
+      return { label: 'BÌNH THƯỜNG', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' };
+    }
+    return { label: 'ƯU TIÊN CAO', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' };
+  }, [assignment?.priority, sos?.priority]);
 
   // Tính toán chỉ dẫn ngã rẽ gần nhất hiển thị trên Top HUD (Chuẩn Google Maps & Grab):
   // Ưu tiên hiển thị ngã rẽ gần nhất (sau 50m, 100m rẽ...) hoặc đi thẳng tiếp tục trên đường hiện tại
@@ -1454,6 +1712,31 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     const clean = parts.join(' • ');
     return clean || (rawDescription.split('|')[0] || '').trim();
   }, [rawDescription]);
+
+  const reliefDisplayNote = useMemo(() => {
+    if (!displayNote) return '';
+    const explicitNoteMatch = displayNote.match(/Ghi chú:\s*(.+)$/i);
+    if (explicitNoteMatch?.[1]) {
+      return explicitNoteMatch[1].trim();
+    }
+    if (
+      displayNote.startsWith('[Lệnh xuất cấp cứu trợ]') ||
+      displayNote.startsWith('[Nhiệm vụ xuất cấp cứu trợ]')
+    ) {
+      return '';
+    }
+    return displayNote;
+  }, [displayNote]);
+
+  const reliefAddressDisplay = useMemo(() => {
+    const raw = (incidentAddress || '').trim();
+    if (!raw) return 'Chưa cập nhật địa chỉ tiếp nhận';
+    // Gọn các cụm tỉnh/thành lặp liên tiếp kiểu "Thành phố Đà Nẵng, TP Đà Nẵng"
+    return raw.replace(
+      /,\s*(?:Thành phố|TP\.?)\s+([^,)]+),\s*(?:Thành phố|TP\.?)\s+\1(?=\s*(?:\)|$))/gi,
+      ', TP. $1'
+    );
+  }, [incidentAddress]);
   const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
   const vehiclePlate = assignment?.vehicleId?.plateNumber || assignment?.vehicleName || '';
   const vehicleName = vehiclePlate ? `Phương tiện: ${vehiclePlate}` : '';
@@ -1736,6 +2019,17 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             white-space: nowrap;
             box-shadow: 0 2px 6px rgba(0,0,0,0.5);
           }
+          .sos-beacon-wave.relief {
+            background: rgba(5, 150, 105, 0.35);
+          }
+          .sos-beacon-core.relief {
+            background: #059669;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, 0.75);
+          }
+          .sos-floating-pill.relief {
+            background: #064e3b;
+            border-color: #10b981;
+          }
 
           /* Grab / Google Maps Navigation Puck & Radar Beam */
           .grab-puck-wrap {
@@ -1865,10 +2159,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           }
           setTileLayer('${mapLayer}');
 
-          // 1. SOS Incident Marker
+          // 1. SOS Incident / Relief Dispatch Marker
           var sosIcon = L.divIcon({
             className: 'sos-marker-div',
-            html: '<div class="sos-beacon-container"><div class="sos-floating-pill">📍 ${sosCode} • Điểm cứu hộ</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>',
+            html: ${JSON.stringify(
+      isReliefMission
+        ? `<div class="sos-beacon-container"><div class="sos-floating-pill relief">📦 ${sosCode} • Điểm tiếp tế</div><div class="sos-beacon-wave relief"></div><div class="sos-beacon-core relief">📦</div></div>`
+        : `<div class="sos-beacon-container"><div class="sos-floating-pill">📍 ${sosCode} • Điểm cứu hộ</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>`
+    )},
             iconSize: [50, 50],
             iconAnchor: [25, 25]
           });
@@ -2328,7 +2626,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       </body>
       </html>
     `;
-  }, [victimCoords, mapLayer, showSafeShelters, isWaterwayMode, roadMetrics.roadCoordinates, sosCode]);
+  }, [victimCoords, mapLayer, showSafeShelters, isWaterwayMode, roadMetrics.roadCoordinates, sosCode, isReliefMission]);
 
   if (!visible) return null;
 
@@ -2364,7 +2662,40 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 <Feather name="x" size={20} color="#0F172A" />
               </TouchableOpacity>
 
-              {!isTopHudHidden ? (
+              {isReliefMission && missionState === 'ASSIGNED_PENDING_ACCEPTANCE' ? (
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={[styles.grabManeuverCard, { borderColor: '#A7F3D0', backgroundColor: '#FFFFFF' }]}>
+                    <View style={[styles.grabTurnIconBox, { backgroundColor: '#059669' }]}>
+                      <MaterialCommunityIcons name="package-variant-closed" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.grabDistanceText, { fontSize: 13.5, color: '#065F46' }]} numberOfLines={1}>
+                          LỆNH TIẾP TẾ MỚI
+                        </Text>
+                        <View
+                          style={{
+                            backgroundColor: reliefPriorityMeta.bg,
+                            borderWidth: 1,
+                            borderColor: reliefPriorityMeta.border,
+                            paddingHorizontal: 6,
+                            paddingVertical: 1.5,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 9.5, fontWeight: '900', color: reliefPriorityMeta.color }}>
+                            {reliefPriorityMeta.label}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.grabRoadText} numberOfLines={1} ellipsizeMode="tail">
+                        {reliefSupplies.length > 0 ? `${reliefSupplies.length} mặt hàng • ` : ''}
+                        {roadMetrics.distanceKm} • Dự kiến {roadMetrics.durationMin}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : !isTopHudHidden ? (
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
                     {/* Maneuver Turn Icon (Tự động cập nhật ngã rẽ gần nhất: Rẽ trái/phải, Đi thẳng, Về đích) */}
@@ -2443,7 +2774,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 />
                 {isHeadingLocked && <View style={styles.mapToolActiveDot} />}
               </TouchableOpacity>
-
               {/* Nút 2: Xem toàn cảnh lộ trình (Fit Route Overview) */}
               <TouchableOpacity
                 style={styles.mapToolBtn}
@@ -2507,14 +2837,25 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               {/* Grab Sub-Header: Tiêu đề điểm đến & Thời gian tiếp cận */}
               <View style={styles.grabDeckSubHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
-                  <View style={styles.grabOrderBadge}>
-                    <Text style={styles.grabOrderBadgeText}>1</Text>
+                  <View style={[styles.grabOrderBadge, isReliefMission && { backgroundColor: '#059669' }]}>
+                    {isReliefMission ? (
+                      <MaterialCommunityIcons name="package-variant-closed" size={13} color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.grabOrderBadgeText}>1</Text>
+                    )}
                   </View>
-                  <Text style={styles.grabOrderTitle} numberOfLines={1}>Điểm cứu hộ • #{sosCode}</Text>
+                  <Text
+                    style={[styles.grabOrderTitle, isReliefMission && { color: '#047857', fontWeight: '700' }]}
+                    numberOfLines={1}
+                  >
+                    {isReliefMission ? `Lệnh tiếp tế • #${sosCode}` : `Điểm cứu hộ • #${sosCode}`}
+                  </Text>
                 </View>
 
                 <View style={styles.grabEtaChip}>
-                  <Text style={styles.grabEtaChipText}>{roadMetrics.durationMin} ({roadMetrics.distanceKm})</Text>
+                  <Text style={[styles.grabEtaChipText, isReliefMission && { fontWeight: '700', fontVariant: ['tabular-nums'] }]}>
+                    {roadMetrics.durationMin} ({roadMetrics.distanceKm})
+                  </Text>
                 </View>
               </View>
 
@@ -2531,21 +2872,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   activeOpacity={0.8}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.collapsedCitizenName} numberOfLines={1}>
-                      {citizenName}{citizenPhone ? ` • ${citizenPhone}` : ''}{' '}
-                      {isReliefMission ? (
-                        <Text style={[styles.collapsedVictimCount, { color: '#059669' }]}>
-                          (Điểm tiếp nhận cứu trợ)
+                    {isReliefMission ? (
+                      <>
+                        <Text style={styles.collapsedCitizenName} numberOfLines={1}>
+                          {reliefAddressDisplay}
                         </Text>
-                      ) : (
-                        <Text style={styles.collapsedVictimCount}>
-                          ({victimHeadcount} người cần cứu)
+                        <Text style={styles.collapsedAddressText} numberOfLines={1}>
+                          {reliefSupplies.length > 0 ? `${reliefSupplies.length} mặt hàng xuất kho • ` : ''}
+                          {reliefRecipientName || reliefCoordinatorName}
                         </Text>
-                      )}
-                    </Text>
-                    <Text style={styles.collapsedAddressText} numberOfLines={1}>
-                      {incidentAddress}
-                    </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.collapsedCitizenName} numberOfLines={1}>
+                          {citizenName}{citizenPhone ? ` • ${citizenPhone}` : ''}{' '}
+                          <Text style={styles.collapsedVictimCount}>
+                            ({victimHeadcount} người cần cứu)
+                          </Text>
+                        </Text>
+                        <Text style={styles.collapsedAddressText} numberOfLines={1}>
+                          {incidentAddress}
+                        </Text>
+                      </>
+                    )}
                   </View>
                   <View style={styles.collapsedExpandHint}>
                     <Text style={styles.collapsedExpandHintText}>Chi tiết</Text>
@@ -2560,170 +2909,127 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   nestedScrollEnabled={true}
                   bounces={false}
                 >
-                  {/* Khi mở rộng: Hiển thị đầy đủ thông tin */}
+                  {/* Khi mở rộng: Tách riêng giao diện Lệnh Tiếp Tế và Ca Cứu Nạn SOS */}
                   <View style={styles.grabCitizenSection}>
-                    {/* Tên người dân & SĐT người gặp nạn - To, đậm, có nút gọi nhanh */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
-                      <Text style={[styles.grabCitizenName, { marginBottom: 0 }]}>{citizenName}</Text>
-                      {citizenPhone ? (
-                        <TouchableOpacity
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 4,
-                            backgroundColor: '#EFF6FF',
-                            borderWidth: 1,
-                            borderColor: '#BFDBFE',
-                            paddingHorizontal: 8,
-                            paddingVertical: 2.5,
-                            borderRadius: 6,
-                          }}
-                          onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="call" size={12} color="#0284C7" />
-                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0284C7' }}>
-                            {citizenPhone}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-
-                    {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
-                    <Text style={styles.grabAddressText}>{incidentAddress}</Text>
-
-                    {/* Số người & Đối tượng cần cứu / Thông tin cứu trợ - Ngắn gọn không tràn viền */}
                     {isReliefMission ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                        <MaterialCommunityIcons name="package-variant-closed" size={15} color="#059669" />
-                        <Text
-                          style={[styles.grabVictimMeta, { color: '#059669', fontWeight: '800', marginTop: 0, flex: 1 }]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          Tiếp tế nhu yếu phẩm cứu trợ
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.grabVictimMeta} numberOfLines={1} ellipsizeMode="tail">
-                        {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
-                      </Text>
-                    )}
-
-                    {/* Hộp ghi chú điều phối / hiện trường - Hiển thị đầy đủ nội dung hoặc xem chi tiết */}
-                    {displayNote ? (
-                      <View style={styles.grabNoteBox}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <Text style={styles.grabNoteLabel}>
-                            {isReliefMission ? 'Ghi chú điều phối:' : 'Ghi chú hiện trường:'}
+                      <>
+                        {/* 1. Điểm tiếp nhận cứu trợ nổi bật, gọn tối đa 2 dòng */}
+                        <View style={{ marginBottom: 8 }}>
+                          <Text style={styles.reliefSectionEyebrow}>📍 ĐIỂM TIẾP NHẬN CỨU TRỢ</Text>
+                          <Text style={styles.reliefDestinationTitle} numberOfLines={2}>
+                            {reliefAddressDisplay}
                           </Text>
-                          {displayNote.length > 60 && (
-                            <TouchableOpacity
-                              onPress={() => setNoteExpanded((prev) => !prev)}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700' }}>
-                                {noteExpanded ? 'Thu gọn' : 'Xem chi tiết'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
                         </View>
-                        <Text
-                          style={styles.grabNoteText}
-                          numberOfLines={noteExpanded ? undefined : 2}
-                          ellipsizeMode="tail"
-                        >
-                          {displayNote}
-                        </Text>
-                      </View>
-                    ) : null}
 
-                    {/* Hộp vật tư & hàng tiếp tế cấp theo xe (Chỉ hiển thị khi đã tiếp nhận nhiệm vụ) */}
-                    {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (() => {
-                      const missionSupplies =
-                        assignment?.supplies ||
-                        (assignment as any)?.reliefItems ||
-                        sos?.supplies ||
-                        (isReliefMission
-                          ? []
-                          : [
-                            { name: 'Áo phao cứu sinh tiêu chuẩn SOLAS', quantity: Math.max(2, victimHeadcount), unit: 'Chiếc' },
-                            { name: 'Túi thuốc & Sơ cấp cứu dã chiến', quantity: 1, unit: 'Bộ' },
-                            { name: 'Nước uống đóng chai tiệt trùng (Thùng 24 chai)', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
-                          ]);
-
-                      return (
-                        <View style={styles.grabSuppliesBox}>
-                          {/* Hàng 1: Tiêu đề + Huy hiệu số lượng bên trái, Nút Yêu cầu thêm bên phải */}
-                          <View style={styles.suppliesHeaderRow}>
+                        {/* 2. Danh mục hàng cần xuất kho tối giản kiểu Phiếu giao hàng (Phương án 1) */}
+                        <View style={styles.reliefSuppliesBox}>
+                          <View style={styles.reliefReceiptHeader}>
                             <View style={styles.suppliesHeaderTitleWrap}>
-                              <MaterialCommunityIcons name="package-variant-closed" size={17} color="#15803D" />
-                              <Text style={styles.grabSuppliesLabel} numberOfLines={1}>
-                                {isReliefMission ? 'Vật tư xuất kho' : 'Vật tư theo xe'}
+                              <MaterialCommunityIcons name="package-variant-closed" size={15} color="#0F172A" />
+                              <Text style={styles.reliefSuppliesLabel} numberOfLines={1}>
+                                Hàng cần xuất kho ({reliefSupplies.length})
                               </Text>
-                              <View style={styles.suppliesCountBadge}>
-                                <Text style={styles.suppliesCountBadgeText}>
-                                  {missionSupplies.length} loại
-                                </Text>
-                              </View>
                             </View>
 
-                            <TouchableOpacity
-                              style={styles.requestSuppliesBtn}
-                              onPress={handleOpenSupplyRequestModal}
-                              activeOpacity={0.8}
-                            >
-                              <Feather name="plus-circle" size={13} color="#0284C7" />
-                              <Text style={styles.requestSuppliesBtnText}>+ Yêu cầu thêm</Text>
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                              {reliefSupplies.length > 3 && (
+                                <TouchableOpacity
+                                  style={styles.reliefHeaderToggleBtn}
+                                  onPress={() => setSuppliesExpanded((prev) => !prev)}
+                                  activeOpacity={0.75}
+                                >
+                                  <Text style={styles.reliefHeaderToggleText}>
+                                    {suppliesExpanded ? 'Thu gọn' : 'Xem đủ'}
+                                  </Text>
+                                  <Feather
+                                    name={suppliesExpanded ? 'chevron-up' : 'chevron-down'}
+                                    size={12}
+                                    color="#0F172A"
+                                  />
+                                </TouchableOpacity>
+                              )}
+
+                              {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
+                                <TouchableOpacity
+                                  style={styles.requestSuppliesBtn}
+                                  onPress={handleOpenSupplyRequestModal}
+                                  activeOpacity={0.8}
+                                >
+                                  <Feather name="plus-circle" size={12} color="#0284C7" />
+                                  <Text style={[styles.requestSuppliesBtnText, { fontSize: 11 }]}>Yêu cầu thêm</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
 
-                          {/* Hàng 2: Danh sách vật tư (Thu gọn vs Mở rộng toàn bộ) */}
-                          {suppliesExpanded ? (
-                            <View style={{ gap: 6, marginTop: 4 }}>
-                              {missionSupplies.map((s: any, idx: number) => (
-                                <View key={idx} style={styles.grabSupplyChip}>
-                                  <Text style={styles.grabSupplyChipText} numberOfLines={1}>
-                                    {s.name}
-                                  </Text>
-                                  <View style={styles.grabSupplyQtyBadge}>
-                                    <Text style={styles.grabSupplyQtyText}>
+                          {reliefSupplies.length > 0 ? (() => {
+                            const visibleItems = suppliesExpanded ? reliefSupplies : reliefSupplies.slice(0, 3);
+                            const remainingCount = Math.max(0, reliefSupplies.length - 3);
+                            const previewOthers = reliefSupplies
+                              .slice(3, 5)
+                              .map((item: any) => item.name)
+                              .join(', ');
+
+                            const renderReceiptRows = () =>
+                              visibleItems.map((s: any, idx: number) => {
+                                const isLast = idx === visibleItems.length - 1;
+                                return (
+                                  <View
+                                    key={idx}
+                                    style={[
+                                      styles.reliefReceiptRow,
+                                      !isLast && styles.reliefReceiptRowDivider,
+                                    ]}
+                                  >
+                                    <Text style={styles.reliefReceiptIdx}>{idx + 1}.</Text>
+                                    <Text style={styles.reliefReceiptName} numberOfLines={1}>
+                                      {s.name}
+                                    </Text>
+                                    <Text style={styles.reliefReceiptQty}>
                                       {s.quantity} {s.unit || 'món'}
                                     </Text>
                                   </View>
-                                </View>
-                              ))}
+                                );
+                              });
 
-                              <TouchableOpacity
-                                style={styles.collapseDetailFooterBtn}
-                                onPress={() => setSuppliesExpanded(false)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.collapseDetailFooterText}>Thu gọn danh sách</Text>
-                                <Feather name="chevron-up" size={13} color="#166534" />
-                              </TouchableOpacity>
-                            </View>
-                          ) : (
-                            <TouchableOpacity
-                              style={styles.suppliesSummaryTouchWrap}
-                              onPress={() => setSuppliesExpanded(true)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.suppliesCollapsedSummaryText} numberOfLines={1}>
-                                {missionSupplies.map((s: any) => `${s.name} (${s.quantity})`).join(' • ')}
-                              </Text>
-                              <View style={styles.viewDetailBadge}>
-                                <Text style={styles.viewDetailBadgeText}>Xem chi tiết</Text>
-                                <Feather name="chevron-down" size={12} color="#166534" />
-                              </View>
-                            </TouchableOpacity>
+                            return (
+                              <>
+                                {suppliesExpanded && reliefSupplies.length > 3 ? (
+                                  <ScrollView
+                                    style={{ maxHeight: 176 }}
+                                    nestedScrollEnabled={true}
+                                    showsVerticalScrollIndicator={true}
+                                  >
+                                    {renderReceiptRows()}
+                                  </ScrollView>
+                                ) : (
+                                  <View>{renderReceiptRows()}</View>
+                                )}
+
+                                {!suppliesExpanded && remainingCount > 0 && (
+                                  <TouchableOpacity
+                                    style={styles.reliefReceiptMoreFooter}
+                                    onPress={() => setSuppliesExpanded(true)}
+                                    activeOpacity={0.75}
+                                  >
+                                    <Text style={styles.reliefReceiptMoreText} numberOfLines={1}>
+                                      + {remainingCount} mặt hàng khác{previewOthers ? ` (${previewOthers}...)` : ''}
+                                    </Text>
+                                    <Text style={styles.reliefReceiptMoreAction}>Xem đủ ›</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </>
+                            );
+                          })() : (
+                            <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600', paddingHorizontal: 12, paddingVertical: 10 }}>
+                              Theo lệnh xuất kho đính kèm từ Ban Chỉ Huy.
+                            </Text>
                           )}
 
-                          {/* Danh sách vật tư đã yêu cầu bổ sung nếu có */}
-                          {requestedSuppliesList.length > 0 && (
-                            <View style={{ gap: 6, marginTop: 6 }}>
+                          {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && requestedSuppliesList.length > 0 && (
+                            <View style={{ gap: 6, paddingHorizontal: 10, paddingBottom: 8, paddingTop: 4 }}>
                               {requestedSuppliesList.some((s: any) => s.status === 'APPROVED') && (
-                                <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                                <View style={[styles.requestedSuppliesNotice, { marginTop: 0, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
                                   <Ionicons name="checkmark-circle" size={15} color="#16A34A" />
                                   <Text style={[styles.requestedSuppliesNoticeText, { color: '#166534' }]}>
                                     ✓ Địa phương đã xuất cấp: {requestedSuppliesList.filter((s: any) => s.status === 'APPROVED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
@@ -2731,7 +3037,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                                 </View>
                               )}
                               {requestedSuppliesList.some((s: any) => s.status === 'PENDING' || !s.status) && (
-                                <View style={styles.requestedSuppliesNotice}>
+                                <View style={[styles.requestedSuppliesNotice, { marginTop: 0 }]}>
                                   <Ionicons name="information-circle" size={15} color="#D97706" />
                                   <Text style={styles.requestedSuppliesNoticeText}>
                                     ⏳ Đã yêu cầu chi viện: {requestedSuppliesList.filter((s: any) => s.status === 'PENDING' || !s.status).map((item: any) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương duyệt)
@@ -2739,7 +3045,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                                 </View>
                               )}
                               {requestedSuppliesList.some((s: any) => s.status === 'REJECTED') && (
-                                <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                                <View style={[styles.requestedSuppliesNotice, { marginTop: 0, backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
                                   <Ionicons name="close-circle" size={15} color="#DC2626" />
                                   <Text style={[styles.requestedSuppliesNoticeText, { color: '#991B1B' }]}>
                                     ✕ Địa phương từ chối cấp: {requestedSuppliesList.filter((s: any) => s.status === 'REJECTED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
@@ -2749,12 +3055,367 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                             </View>
                           )}
                         </View>
-                      );
-                    })()}
+
+                        {/* 3. Đầu mối liên hệ gọn 2 dòng: Luôn nhìn thấy ngay bên dưới bảng hàng */}
+                        <View style={styles.reliefContactCard}>
+                          <View style={styles.reliefContactRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={styles.reliefContactInlineText} numberOfLines={1} ellipsizeMode="tail">
+                                <Text style={styles.reliefContactRoleLabel}>👤 Người nhận: </Text>
+                                <Text
+                                  style={[
+                                    styles.reliefContactName,
+                                    !reliefRecipientName && { color: '#64748B', fontWeight: '500', fontStyle: 'italic' },
+                                  ]}
+                                >
+                                  {reliefRecipientName || 'Chưa chỉ định'}
+                                </Text>
+                              </Text>
+                            </View>
+                            {reliefRecipientPhone ? (
+                              <TouchableOpacity
+                                style={styles.reliefInlineCallBtn}
+                                onPress={() => Linking.openURL(`tel:${reliefRecipientPhone}`)}
+                                activeOpacity={0.75}
+                              >
+                                <Ionicons name="call" size={11} color="#059669" />
+                                <Text style={styles.reliefInlineCallText} numberOfLines={1}>{reliefRecipientPhone}</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+
+                          <View style={styles.reliefContactDivider} />
+
+                          <View style={styles.reliefContactRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={styles.reliefContactInlineText} numberOfLines={1} ellipsizeMode="tail">
+                                <Text style={styles.reliefContactRoleLabel}>🏛️ Điều phối: </Text>
+                                <Text style={styles.reliefContactName}>{reliefCoordinatorName}</Text>
+                              </Text>
+                            </View>
+                            {reliefCoordinatorPhone ? (
+                              <TouchableOpacity
+                                style={[styles.reliefInlineCallBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                                onPress={() => Linking.openURL(`tel:${reliefCoordinatorPhone}`)}
+                                activeOpacity={0.75}
+                              >
+                                <Ionicons name="call" size={11} color="#0284C7" />
+                                <Text style={[styles.reliefInlineCallText, { color: '#0284C7' }]} numberOfLines={1}>
+                                  {reliefCoordinatorPhone}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        {/* 4. Ghi chú chỉ huy (Chỉ hiển thị khi có ghi chú thực sự, bỏ chuỗi lặp địa chỉ) */}
+                        {reliefDisplayNote ? (
+                          <View style={[styles.grabNoteBox, { marginTop: 8 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                              <Text style={styles.grabNoteLabel}>Ghi chú chỉ huy:</Text>
+                              {reliefDisplayNote.length > 60 && (
+                                <TouchableOpacity
+                                  onPress={() => setNoteExpanded((prev) => !prev)}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700' }}>
+                                    {noteExpanded ? 'Thu gọn' : 'Xem chi tiết'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                            <Text
+                              style={styles.grabNoteText}
+                              numberOfLines={noteExpanded ? undefined : 2}
+                              ellipsizeMode="tail"
+                            >
+                              {reliefDisplayNote}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        {/* Tên người dân & SĐT người gặp nạn - To, đậm, có nút gọi nhanh */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                          <Text style={[styles.grabCitizenName, { marginBottom: 0 }]}>{citizenName}</Text>
+                          {citizenPhone ? (
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: '#EFF6FF',
+                                borderWidth: 1,
+                                borderColor: '#BFDBFE',
+                                paddingHorizontal: 8,
+                                paddingVertical: 2.5,
+                                borderRadius: 6,
+                              }}
+                              onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="call" size={12} color="#0284C7" />
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0284C7' }}>
+                                {citizenPhone}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+
+                        {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
+                        <Text style={styles.grabAddressText}>{incidentAddress}</Text>
+
+                        {/* Số người & Đối tượng cần cứu - Ngắn gọn không tràn viền */}
+                        <Text style={styles.grabVictimMeta} numberOfLines={1} ellipsizeMode="tail">
+                          {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
+                        </Text>
+
+                        {/* Mức SOS do AI đề xuất và nhu cầu tác chiến */}
+                        {(sos?.priority || typeof sos?.riskScore === 'number') ? (() => {
+                          const p = sos?.priority || 'UNASSESSED';
+                          const triageReasons: string[] = Array.isArray(sos?.riskAssessment?.reasons)
+                            ? sos.riskAssessment.reasons
+                            : [];
+                          const equipLabelMap: Record<string, string> = {
+                            LIFE_VEST: 'Áo phao',
+                            MEDICAL_KIT: 'Túi y tế',
+                            MEDICAL_DEVICE: 'Thiết bị y tế',
+                            ROPE_TOOL: 'Dây cứu hộ',
+                            FOOD_WATER: 'Lương thực & nước',
+                            WATER_PURIFICATION: 'Viên lọc nước',
+                            LIGHTING: 'Đèn chiếu sáng',
+                            TOOL: 'Dụng cụ cứu hộ',
+                            COMMUNICATION: 'Bộ đàm',
+                          };
+                          const rawEquipCodes: string[] = Array.isArray(sos?.riskAssessment?.operationalNeeds?.recommendedEquipments)
+                            ? sos.riskAssessment.operationalNeeds.recommendedEquipments
+                            : [];
+                          const mappedEquipLabels = rawEquipCodes.map((c) => equipLabelMap[c] || c).filter(Boolean);
+                          const urgentNotesText = '';
+                          const legacyUrgentNeeds: string[] = Array.isArray(sos?.aiAssessment?.urgentNeeds)
+                            ? sos.aiAssessment.urgentNeeds
+                            : [];
+                          const urgentNeeds = mappedEquipLabels.length > 0 ? mappedEquipLabels : legacyUrgentNeeds;
+                          const prioLabel =
+                            p === 'CRITICAL'
+                              ? 'NGUY CẤP'
+                              : p === 'HIGH'
+                                ? 'KHẨN CẤP'
+                                : p === 'LOW'
+                                  ? 'MỨC THẤP'
+                                  : p === 'UNASSESSED'
+                                    ? 'CHƯA PHÂN LOẠI'
+                                    : 'TRUNG BÌNH';
+                          const prioColor =
+                            p === 'CRITICAL'
+                              ? '#DC2626'
+                              : p === 'HIGH'
+                                ? '#EA580C'
+                                : p === 'LOW'
+                                  ? '#0284C7'
+                                  : '#CA8A04';
+                          const prioBg =
+                            p === 'CRITICAL'
+                              ? '#FEF2F2'
+                              : p === 'HIGH'
+                                ? '#FFF7ED'
+                                : p === 'LOW'
+                                  ? '#F0F9FF'
+                                  : '#FEFCE8';
+
+                          return (
+                            <View
+                              style={{
+                                marginTop: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 8,
+                                borderRadius: 10,
+                                backgroundColor: prioBg,
+                                borderWidth: 1,
+                                borderColor: prioColor + '33',
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: prioColor }}>
+                                  Mức SOS: {prioLabel}
+                                  {!sos?.priorityLockedByAuthority && p !== 'UNASSESSED' ? ' (AI đề xuất)' : ''}
+                                </Text>
+                                {sos?.priorityLockedByAuthority && (
+                                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#475569' }}>
+                                    Cán bộ đã xác minh
+                                  </Text>
+                                )}
+                              </View>
+                              {triageReasons.length > 0 && (
+                                <Text style={{ fontSize: 11.5, color: '#334155', marginTop: 3, lineHeight: 16 }}>
+                                  • {triageReasons.slice(0, 2).join(' • ')}
+                                </Text>
+                              )}
+                              {sos?.aiAssessment?.status === 'PENDING' && (
+                                <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>AI đang phân tích SOS.</Text>
+                              )}
+                              {urgentNotesText ? (
+                                <Text style={{ fontSize: 11, color: '#9A3412', fontWeight: '700', marginTop: 3 }}>
+                                  Lưu ý tác chiến: {urgentNotesText}
+                                </Text>
+                              ) : null}
+                              {urgentNeeds.length > 0 && (
+                                <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: '700', marginTop: 3 }}>
+                                  Cần mang theo: {urgentNeeds.slice(0, 4).join(', ')}
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })() : null}
+
+                        {/* Hộp ghi chú điều phối / hiện trường - Hiển thị đầy đủ nội dung hoặc xem chi tiết */}
+                        {displayNote ? (
+                          <View style={styles.grabNoteBox}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                              <Text style={styles.grabNoteLabel}>
+                                {isReliefMission ? 'Ghi chú điều phối:' : 'Ghi chú hiện trường:'}
+                              </Text>
+                              {displayNote.length > 60 && (
+                                <TouchableOpacity
+                                  onPress={() => setNoteExpanded((prev) => !prev)}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700' }}>
+                                    {noteExpanded ? 'Thu gọn' : 'Xem chi tiết'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                            <Text
+                              style={styles.grabNoteText}
+                              numberOfLines={noteExpanded ? undefined : 2}
+                              ellipsizeMode="tail"
+                            >
+                              {displayNote}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {/* Hộp vật tư & hàng tiếp tế cấp theo xe (Chỉ hiển thị khi đã tiếp nhận nhiệm vụ) */}
+                        {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (() => {
+                          const missionSupplies =
+                            assignment?.supplies ||
+                            (assignment as any)?.reliefItems ||
+                            sos?.supplies ||
+                            (isReliefMission
+                              ? []
+                              : [
+                                { name: 'Áo phao cứu sinh tiêu chuẩn SOLAS', quantity: Math.max(2, victimHeadcount), unit: 'Chiếc' },
+                                { name: 'Túi thuốc & Sơ cấp cứu dã chiến', quantity: 1, unit: 'Bộ' },
+                                { name: 'Nước uống đóng chai tiệt trùng (Thùng 24 chai)', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
+                              ]);
+
+                          return (
+                            <View style={styles.grabSuppliesBox}>
+                              {/* Hàng 1: Tiêu đề + Huy hiệu số lượng bên trái, Nút Yêu cầu thêm bên phải */}
+                              <View style={styles.suppliesHeaderRow}>
+                                <View style={styles.suppliesHeaderTitleWrap}>
+                                  <MaterialCommunityIcons name="package-variant-closed" size={17} color="#15803D" />
+                                  <Text style={styles.grabSuppliesLabel} numberOfLines={1}>
+                                    {isReliefMission ? 'Vật tư xuất kho' : 'Vật tư theo xe'}
+                                  </Text>
+                                  <View style={styles.suppliesCountBadge}>
+                                    <Text style={styles.suppliesCountBadgeText}>
+                                      {missionSupplies.length} loại
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <TouchableOpacity
+                                  style={styles.requestSuppliesBtn}
+                                  onPress={handleOpenSupplyRequestModal}
+                                  activeOpacity={0.8}
+                                >
+                                  <Feather name="plus-circle" size={13} color="#0284C7" />
+                                  <Text style={styles.requestSuppliesBtnText}>+ Yêu cầu thêm</Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {/* Hàng 2: Danh sách vật tư (Thu gọn vs Mở rộng toàn bộ) */}
+                              {suppliesExpanded ? (
+                                <View style={{ gap: 6, marginTop: 4 }}>
+                                  {missionSupplies.map((s: any, idx: number) => (
+                                    <View key={idx} style={styles.grabSupplyChip}>
+                                      <Text style={styles.grabSupplyChipText} numberOfLines={1}>
+                                        {s.name}
+                                      </Text>
+                                      <View style={styles.grabSupplyQtyBadge}>
+                                        <Text style={styles.grabSupplyQtyText}>
+                                          {s.quantity} {s.unit || 'món'}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  ))}
+
+                                  <TouchableOpacity
+                                    style={styles.collapseDetailFooterBtn}
+                                    onPress={() => setSuppliesExpanded(false)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.collapseDetailFooterText}>Thu gọn danh sách</Text>
+                                    <Feather name="chevron-up" size={13} color="#166534" />
+                                  </TouchableOpacity>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.suppliesSummaryTouchWrap}
+                                  onPress={() => setSuppliesExpanded(true)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.suppliesCollapsedSummaryText} numberOfLines={1}>
+                                    {missionSupplies.map((s: any) => `${s.name} (${s.quantity})`).join(' • ')}
+                                  </Text>
+                                  <View style={styles.viewDetailBadge}>
+                                    <Text style={styles.viewDetailBadgeText}>Xem chi tiết</Text>
+                                    <Feather name="chevron-down" size={12} color="#166534" />
+                                  </View>
+                                </TouchableOpacity>
+                              )}
+
+                              {/* Danh sách vật tư đã yêu cầu bổ sung nếu có */}
+                              {requestedSuppliesList.length > 0 && (
+                                <View style={{ gap: 6, marginTop: 6 }}>
+                                  {requestedSuppliesList.some((s: any) => s.status === 'APPROVED') && (
+                                    <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                                      <Ionicons name="checkmark-circle" size={15} color="#16A34A" />
+                                      <Text style={[styles.requestedSuppliesNoticeText, { color: '#166534' }]}>
+                                        ✓ Địa phương đã xuất cấp: {requestedSuppliesList.filter((s: any) => s.status === 'APPROVED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
+                                      </Text>
+                                    </View>
+                                  )}
+                                  {requestedSuppliesList.some((s: any) => s.status === 'PENDING' || !s.status) && (
+                                    <View style={styles.requestedSuppliesNotice}>
+                                      <Ionicons name="information-circle" size={15} color="#D97706" />
+                                      <Text style={styles.requestedSuppliesNoticeText}>
+                                        ⏳ Đã yêu cầu chi viện: {requestedSuppliesList.filter((s: any) => s.status === 'PENDING' || !s.status).map((item: any) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương duyệt)
+                                      </Text>
+                                    </View>
+                                  )}
+                                  {requestedSuppliesList.some((s: any) => s.status === 'REJECTED') && (
+                                    <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                                      <Ionicons name="close-circle" size={15} color="#DC2626" />
+                                      <Text style={[styles.requestedSuppliesNoticeText, { color: '#991B1B' }]}>
+                                        ✕ Địa phương từ chối cấp: {requestedSuppliesList.filter((s: any) => s.status === 'REJECTED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })()}
+                      </>
+                    )}
                   </View>
 
-                  {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - CHỈ DÀNH CHO ĐỘI TRÊN NƯỚC, KHÔNG HIỂN THỊ CHO CHÍNH XE ĐI ĐÓN */}
-                  {!isShoreHandoffMission && missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
+                  {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - CHỈ DÀNH CHO ĐỘI TRÊN NƯỚC, KHÔNG HIỂN THỊ CHO CHÍNH XE ĐI ĐÓN HOẶC LỆNH TIẾP TẾ */}
+                  {!isShoreHandoffMission && !isReliefMission && missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
                     shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' ? (
                       <View
                         style={{
@@ -2940,34 +3601,75 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                       </TouchableOpacity>
                     ))}
 
-                  {/* Hàng nút thao tác nhanh (Gọi điện, Từ chối) */}
-                  <View style={styles.grabActionRow}>
-                    {/* Nút 1: Gọi điện */}
-                    <TouchableOpacity
-                      style={styles.grabActionCol}
-                      onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.grabActionIconWrap}>
-                        <Feather name="phone" size={20} color="#059669" />
-                      </View>
-                      <Text style={styles.grabActionLabel}>Gọi điện</Text>
-                    </TouchableOpacity>
-
-                    {/* Nút 2: Từ chối - Chỉ hiển thị cho Đội trưởng */}
-                    {isLeader && (
+                  {/* Hàng nút thao tác nhanh (Khi Tiếp tế + Chờ nhận lệnh: gộp Từ chối xuống thanh CTA chính để gọn; khi Tiếp tế sau nhận lệnh: ẩn Trạm trú ẩn) */}
+                  {!(isReliefMission && missionState === 'ASSIGNED_PENDING_ACCEPTANCE') && (
+                    <View style={styles.grabActionRow}>
+                      {/* Nút 1: Gọi điện */}
                       <TouchableOpacity
                         style={styles.grabActionCol}
-                        onPress={() => setRejectModalVisible(true)}
+                        onPress={() =>
+                          Linking.openURL(
+                            `tel:${isReliefMission
+                              ? (reliefRecipientPhone || reliefCoordinatorPhone || citizenPhone)
+                              : citizenPhone
+                            }`
+                          )
+                        }
                         activeOpacity={0.8}
                       >
-                        <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                          <Feather name="x-circle" size={20} color="#DC2626" />
+                        <View style={styles.grabActionIconWrap}>
+                          <Feather name="phone" size={20} color="#059669" />
                         </View>
-                        <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
+                        <Text style={styles.grabActionLabel}>
+                          {isReliefMission
+                            ? (reliefRecipientPhone ? 'Gọi người nhận' : 'Gọi điều phối')
+                            : 'Gọi điện'}
+                        </Text>
                       </TouchableOpacity>
-                    )}
-                  </View>
+
+                      {/* Nút 2: Từ chối - Chỉ hiển thị cho Đội trưởng khi lệnh đang chờ tiếp nhận */}
+                      {isLeader && missionState === 'ASSIGNED_PENDING_ACCEPTANCE' && (
+                        <TouchableOpacity
+                          style={styles.grabActionCol}
+                          onPress={() => {
+                            setRejectReason(
+                              isReliefMission
+                                ? 'Phương tiện không đủ tải trọng / thể tích chở lô hàng'
+                                : 'Phương tiện gặp sự cố kỹ thuật đột xuất'
+                            );
+                            setRejectModalVisible(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                            <Feather name="x-circle" size={20} color="#DC2626" />
+                          </View>
+                          <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Nút 3: Trạm trú ẩn (Chỉ hiện cho nhiệm vụ cứu nạn / đón bờ, ẩn với Tiếp tế hàng) */}
+                      {!isReliefMission && (
+                        <TouchableOpacity
+                          style={styles.grabActionCol}
+                          onPress={() => {
+                            setShowSafeShelters((prev) => !prev);
+                            if (webViewRef.current) {
+                              webViewRef.current.postMessage(
+                                JSON.stringify({ type: 'TOGGLE_SHELTERS', show: !showSafeShelters })
+                              );
+                            }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[styles.grabActionIconWrap, showSafeShelters && { backgroundColor: '#E0F2FE' }]}>
+                            <Feather name="shield" size={20} color={showSafeShelters ? '#0284C7' : '#475569'} />
+                          </View>
+                          <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
                 </ScrollView>
               )}
 
@@ -2982,20 +3684,47 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <>
                     {missionState === 'ASSIGNED_PENDING_ACCEPTANCE' && (
                       isLeader ? (
-                        <TouchableOpacity
-                          style={[styles.grabBigGreenBtn, isReliefMission && { backgroundColor: '#059669' }]}
-                          onPress={handleAcceptMission}
-                          activeOpacity={0.88}
-                        >
-                          <Ionicons name="flash" size={20} color="#FFFFFF" />
-                          <Text style={styles.grabBigBtnText}>
-                            {isShoreHandoffMission
-                              ? 'NHẬN LỆNH & XUẤT PHÁT ĐÓN'
-                              : isReliefMission
-                                ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ'
+                        isReliefMission ? (
+                          <View style={styles.reliefPendingActionRow}>
+                            <TouchableOpacity
+                              style={styles.reliefRejectSideBtn}
+                              onPress={() => {
+                                setRejectReason('Phương tiện không đủ tải trọng / thể tích chở lô hàng');
+                                setRejectModalVisible(true);
+                              }}
+                              activeOpacity={0.82}
+                            >
+                              <Feather name="x-circle" size={16} color="#DC2626" />
+                              <Text style={styles.reliefRejectSideBtnText}>Từ chối</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.grabBigGreenBtn, { flex: 1, backgroundColor: '#059669' }]}
+                              onPress={handleAcceptMission}
+                              activeOpacity={0.88}
+                            >
+                              <Ionicons name="flash" size={18} color="#FFFFFF" />
+                              <Text style={[styles.grabBigBtnText, { fontSize: 13.5, fontWeight: '700', letterSpacing: 0.3 }]} numberOfLines={1}>
+                                {reliefSupplies.length > 0
+                                  ? `NHẬN LỆNH & XUẤT KHO (${reliefSupplies.length} MÓN)`
+                                  : 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.grabBigGreenBtn}
+                            onPress={handleAcceptMission}
+                            activeOpacity={0.88}
+                          >
+                            <Ionicons name="flash" size={20} color="#FFFFFF" />
+                            <Text style={styles.grabBigBtnText}>
+                              {isShoreHandoffMission
+                                ? 'NHẬN LỆNH & XUẤT PHÁT ĐÓN'
                                 : 'NHẬN LỆNH & XUẤT KÍCH'}
-                          </Text>
-                        </TouchableOpacity>
+                            </Text>
+                          </TouchableOpacity>
+                        )
                       ) : (
                         <TouchableOpacity
                           style={[styles.grabBigGreenBtn, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1', borderWidth: 1 }]}
@@ -3286,29 +4015,35 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     width: 62,
                     height: 62,
                     borderRadius: 31,
-                    backgroundColor: '#EFF6FF',
+                    backgroundColor: isReliefMission ? '#ECFDF5' : '#EFF6FF',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: 12,
                     borderWidth: 1,
-                    borderColor: '#BFDBFE',
+                    borderColor: isReliefMission ? '#A7F3D0' : '#BFDBFE',
                   }}
                 >
-                  <Ionicons name="rocket-outline" size={34} color="#2563EB" />
+                  <Ionicons
+                    name={isReliefMission ? 'cube-outline' : 'rocket-outline'}
+                    size={34}
+                    color={isReliefMission ? '#059669' : '#2563EB'}
+                  />
                 </View>
                 <Text style={styles.centeredModalTitle}>
-                  Đã Nhận Lệnh Xuất Kích! 🚀
+                  {isReliefMission ? 'Đã Nhận Lệnh Xuất Kho Tiếp Tế!' : 'Đã Nhận Lệnh Xuất Kích! 🚀'}
                 </Text>
                 <Text style={styles.centeredModalDesc}>
-                  Lộ trình dẫn đường tự động đã được kích hoạt. Di chuyển an toàn đến hiện trường!
+                  {isReliefMission
+                    ? 'Lộ trình vận chuyển đến điểm tiếp nhận cứu trợ đã được kích hoạt. Chúc đội vận chuyển an toàn!'
+                    : 'Lộ trình dẫn đường tự động đã được kích hoạt. Di chuyển an toàn đến hiện trường!'}
                 </Text>
 
                 <TouchableOpacity
                   style={[
                     styles.modalPrimaryFullBtn,
                     {
-                      backgroundColor: '#2563EB',
-                      shadowColor: '#2563EB',
+                      backgroundColor: isReliefMission ? '#059669' : '#2563EB',
+                      shadowColor: isReliefMission ? '#059669' : '#2563EB',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.3,
                       shadowRadius: 8,
@@ -3318,7 +4053,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   onPress={() => setLaunchSuccessModalVisible(false)}
                 >
                   <Text style={styles.modalPrimaryFullBtnText}>
-                    BẮT ĐẦU DẪN ĐƯỜNG
+                    {isReliefMission ? 'BẮT ĐẦU VẬN CHUYỂN' : 'BẮT ĐẦU DẪN ĐƯỜNG'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -3466,22 +4201,34 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <View style={styles.modalCard}>
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="close-circle-outline" size={24} color="#DC2626" />
-                <Text style={styles.modalTitle}>Từ Chối Nhận Nhiệm Vụ</Text>
+                <Text style={styles.modalTitle}>
+                  {isReliefMission ? 'Từ Chối Lệnh Tiếp Tế' : 'Từ Chối Nhận Nhiệm Vụ'}
+                </Text>
                 <TouchableOpacity onPress={() => setRejectModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.modalDesc}>
-                Vui lòng chọn lý do nghiệp vụ để Ban Chỉ Huy PCTT điều chuyển ngay lực lượng cứu hộ dự phòng hỗ trợ nạn nhân:
+                {isReliefMission
+                  ? 'Vui lòng chọn lý do để Ban Chỉ Huy điều chuyển lệnh xuất kho & vận chuyển sang đội dự phòng phù hợp:'
+                  : 'Vui lòng chọn lý do nghiệp vụ để Ban Chỉ Huy PCTT điều chuyển ngay lực lượng cứu hộ dự phòng hỗ trợ nạn nhân:'}
               </Text>
 
-              {[
-                'Phương tiện gặp sự cố kỹ thuật đột xuất',
-                'Tuyến đường thủy bị cô lập, dòng nước chảy xiết quá tải',
-                'Vượt quá tải trọng / thiếu trang thiết bị cứu hộ chuyên dụng',
-                'Đang phụ trách cứu nạn một ca nguy kịch khác',
-              ].map((reasonItem) => (
+              {(isReliefMission
+                ? [
+                  'Phương tiện không đủ tải trọng / thể tích chở lô hàng',
+                  'Tuyến đường vận chuyển bị ngập sâu, chia cắt',
+                  'Phương tiện gặp sự cố kỹ thuật đột xuất',
+                  'Đội đang thực hiện nhiệm vụ khác chưa thể cơ động',
+                ]
+                : [
+                  'Phương tiện gặp sự cố kỹ thuật đột xuất',
+                  'Tuyến đường thủy bị cô lập, dòng nước chảy xiết quá tải',
+                  'Vượt quá tải trọng / thiếu trang thiết bị cứu hộ chuyên dụng',
+                  'Đang phụ trách cứu nạn một ca nguy kịch khác',
+                ]
+              ).map((reasonItem) => (
                 <TouchableOpacity
                   key={reasonItem}
                   style={[styles.radioItemRow, rejectReason === reasonItem && styles.radioItemRowActive]}
@@ -4022,54 +4769,130 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 />
 
                 {/* Chụp ảnh nghiệm thu hiện trường / bàn giao hàng */}
-                <View style={styles.photoUploadRow}>
-                  {capturedPhotoUri ? (
-                    <View style={styles.capturedPhotoWrap}>
-                      <Image source={{ uri: capturedPhotoUri }} style={styles.capturedPhotoImg} />
-                      <TouchableOpacity style={styles.retakePhotoBtn} onPress={handleCaptureFieldPhoto}>
-                        <Text style={styles.retakePhotoText}>Chụp lại</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity style={styles.takePhotoBtn} onPress={handleCaptureFieldPhoto}>
-                      <Ionicons name="camera-outline" size={20} color="#0284C7" />
-                      <Text style={styles.takePhotoBtnText}>
-                        {isShoreHandoffMission
-                          ? 'Chụp ảnh đón nạn nhân tại bến'
-                          : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
-                            ? 'Chụp ảnh bàn giao lên xe đón bờ'
-                            : isReliefMission
-                              ? 'Chụp ảnh biên bản / cấp phát cứu trợ'
-                              : 'Chụp ảnh xác nhận hiện trường'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {(() => {
+                  const requiresProofPhoto =
+                    isReliefMission ||
+                    isShoreHandoffMission ||
+                    Boolean(shoreHandoffData && shoreHandoffData.status === 'ASSIGNED');
+                  const hasPhotos = capturedPhotos.length > 0;
+                  const canAddMore = capturedPhotos.length < MAX_PROOF_PHOTOS;
+                  const isSubmitDisabled = actionLoading || (requiresProofPhoto && !hasPhotos);
 
-                <View style={styles.modalActionButtons}>
-                  <TouchableOpacity
-                    style={styles.modalCancelBtn}
-                    onPress={() => setCompletionModalVisible(false)}
-                  >
-                    <Text style={styles.modalCancelBtnText}>Quay lại</Text>
-                  </TouchableOpacity>
+                  return (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 6 }}>
+                        <Text style={[styles.inputSectionLabel, { marginTop: 0, marginBottom: 0 }]}>
+                          {requiresProofPhoto ? `Ảnh xác thực bàn giao (tối đa ${MAX_PROOF_PHOTOS}):` : `Ảnh hiện trường (tối đa ${MAX_PROOF_PHOTOS}):`}
+                        </Text>
+                        {requiresProofPhoto ? (
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: hasPhotos ? '#16A34A' : '#DC2626' }}>
+                            {hasPhotos ? `✓ Đã chọn ${capturedPhotos.length}/${MAX_PROOF_PHOTOS} ảnh` : '* Bắt buộc'}
+                          </Text>
+                        ) : hasPhotos ? (
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0284C7' }}>
+                            {`${capturedPhotos.length}/${MAX_PROOF_PHOTOS} ảnh`}
+                          </Text>
+                        ) : null}
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.modalRejectConfirmBtn, { backgroundColor: '#16A34A' }]}
-                    onPress={handleFinalSubmitCompletion}
-                    disabled={actionLoading}
-                  >
-                    <Text style={styles.modalRejectConfirmBtnText} numberOfLines={1}>
-                      {isShoreHandoffMission
-                        ? 'Đã đón'
-                        : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
-                          ? 'Bàn giao'
-                          : isReliefMission
-                            ? 'Bàn giao'
-                            : 'Hoàn thành'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                      <View style={styles.photoUploadRow}>
+                        {hasPhotos ? (
+                          <View style={{ gap: 10 }}>
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              contentContainerStyle={styles.capturedPhotosList}
+                            >
+                              {capturedPhotos.map((photo, idx) => (
+                                <View key={`${photo.uri}-${idx}`} style={styles.capturedPhotoThumbWrap}>
+                                  <Image source={{ uri: photo.uri }} style={styles.capturedPhotoImg} />
+                                  <TouchableOpacity
+                                    style={styles.capturedPhotoRemoveBtn}
+                                    onPress={() => handleRemoveFieldPhoto(idx)}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Ionicons name="close" size={12} color="#FFFFFF" />
+                                  </TouchableOpacity>
+                                </View>
+                              ))}
+                            </ScrollView>
+                            {canAddMore && (
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TouchableOpacity style={styles.retakePhotoBtn} onPress={handleCaptureFieldPhoto}>
+                                  <Ionicons name="camera-outline" size={14} color="#0284C7" />
+                                  <Text style={styles.retakePhotoText}>Chụp thêm</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.retakePhotoBtn} onPress={handlePickFieldPhotoFromLibrary}>
+                                  <Ionicons name="images-outline" size={14} color="#475569" />
+                                  <Text style={styles.retakePhotoText}>Chọn thêm ảnh</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
+                          </View>
+                        ) : (
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity style={[styles.takePhotoBtn, { flex: 1 }]} onPress={handleCaptureFieldPhoto}>
+                              <Ionicons name="camera-outline" size={19} color="#0284C7" />
+                              <Text style={styles.takePhotoBtnText}>Chụp ảnh xác thực</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.takePhotoBtn,
+                                { paddingHorizontal: 14, backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' },
+                              ]}
+                              onPress={handlePickFieldPhotoFromLibrary}
+                            >
+                              <Ionicons name="images-outline" size={18} color="#334155" />
+                              <Text style={[styles.takePhotoBtnText, { color: '#334155' }]}>Thư viện</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+
+                      {requiresProofPhoto && !hasPhotos && (
+                        <Text style={{ fontSize: 11.5, color: '#B45309', marginTop: -6, marginBottom: 10 }}>
+                          Cần chụp hoặc chọn ít nhất 1 ảnh xác nhận đã trao hàng/bàn giao trước khi bấm Bàn giao.
+                        </Text>
+                      )}
+
+                      <View style={styles.modalActionButtons}>
+                        <TouchableOpacity
+                          style={styles.modalCancelBtn}
+                          onPress={() => setCompletionModalVisible(false)}
+                        >
+                          <Text style={styles.modalCancelBtnText}>Quay lại</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.modalRejectConfirmBtn,
+                            {
+                              backgroundColor: isSubmitDisabled ? '#CBD5E1' : '#16A34A',
+                            },
+                          ]}
+                          onPress={handleFinalSubmitCompletion}
+                          disabled={isSubmitDisabled}
+                        >
+                          <Text
+                            style={[
+                              styles.modalRejectConfirmBtnText,
+                              isSubmitDisabled && { color: '#64748B' },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {isShoreHandoffMission
+                              ? 'Đã đón'
+                              : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                                ? 'Bàn giao'
+                                : isReliefMission
+                                  ? 'Bàn giao'
+                                  : 'Hoàn thành'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  );
+                })()}
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
@@ -4095,10 +4918,22 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <Ionicons name="checkmark-circle" size={42} color="#16A34A" />
                 </View>
                 <Text style={[styles.centeredModalTitle, { color: '#16A34A', fontSize: 19 }]}>
-                  Hoàn Tất Cứu Hộ Xuất Sắc! 🎉
+                  {isReliefMission
+                    ? 'Hoàn Tất Bàn Giao Tiếp Tế! 🎉'
+                    : !isShoreHandoffMission &&
+                      shoreHandoffData &&
+                      ['REQUESTED', 'ASSIGNED'].includes(String(shoreHandoffData.status || '').toUpperCase())
+                      ? 'Hoàn Thành Phần Giải Cứu! 🛟'
+                      : 'Hoàn Tất Cứu Hộ Xuất Sắc! 🎉'}
                 </Text>
                 <Text style={styles.centeredModalDesc}>
-                  Toàn bộ {rescuedHeadcount} người dân đã được đưa về nơi an toàn. Trạng thái đội đã tự động chuyển về SẴN SÀNG tác chiến.
+                  {isReliefMission
+                    ? 'Lô hàng cứu trợ đã được bàn giao minh bạch tại điểm tiếp nhận. Trạng thái đội đã chuyển về SẴN SÀNG.'
+                    : !isShoreHandoffMission &&
+                      shoreHandoffData &&
+                      ['REQUESTED', 'ASSIGNED'].includes(String(shoreHandoffData.status || '').toUpperCase())
+                      ? `Đã giải cứu ${rescuedHeadcount} người dân đến điểm hẹn bờ. Đội của bạn đã chuyển sang SẴN SÀNG nhận ca mới; ca SOS sẽ hoàn tất hoàn toàn khi xe tiếp vận đưa nạn nhân tới nơi an toàn.`
+                      : `Toàn bộ ${rescuedHeadcount} người dân đã được đưa về nơi an toàn. Trạng thái đội đã tự động chuyển về SẴN SÀNG tác chiến.`}
                 </Text>
 
                 <TouchableOpacity
@@ -4757,6 +5592,188 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.4,
+  },
+  reliefSectionEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  reliefDestinationTitle: {
+    fontSize: 16.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 22,
+    letterSpacing: -0.2,
+  },
+  reliefSuppliesBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  reliefReceiptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 8,
+  },
+  reliefSuppliesLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    flexShrink: 1,
+  },
+  reliefHeaderToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    backgroundColor: '#E2E8F0',
+  },
+  reliefHeaderToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  reliefReceiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 7.5,
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  reliefReceiptRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  reliefReceiptIdx: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    width: 18,
+    fontVariant: ['tabular-nums'],
+  },
+  reliefReceiptName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1E293B',
+  },
+  reliefReceiptQty: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'right',
+    flexShrink: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  reliefReceiptMoreFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 11,
+    paddingVertical: 7.5,
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    gap: 8,
+  },
+  reliefReceiptMoreText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  reliefReceiptMoreAction: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+    flexShrink: 0,
+  },
+  reliefContactCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7.5,
+    marginTop: 8,
+    gap: 6.5,
+  },
+  reliefContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  reliefContactInlineText: {
+    flexShrink: 1,
+  },
+  reliefContactRoleLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  reliefContactName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  reliefContactDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  reliefInlineCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  reliefInlineCallText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+    fontVariant: ['tabular-nums'],
+  },
+  reliefPendingActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reliefRejectSideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 28,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+  },
+  reliefRejectSideBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 
   /* TOP FLOATING HUD */
@@ -5811,21 +6828,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
-  capturedPhotoWrap: {
+  capturedPhotosList: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingTop: 6,
+    paddingRight: 6,
+  },
+  capturedPhotoThumbWrap: {
+    position: 'relative',
   },
   capturedPhotoImg: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  capturedPhotoRemoveBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    elevation: 2,
   },
   retakePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     backgroundColor: '#F1F5F9',
-    borderRadius: 6,
+    borderRadius: 8,
   },
   retakePhotoText: {
     fontSize: 12,

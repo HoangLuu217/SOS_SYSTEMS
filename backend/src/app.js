@@ -10,8 +10,10 @@ const app = express();
 // Tin tưởng proxy đầu tiên (Hỗ trợ devtunnels, ngrok, reverse proxy cho express-rate-limit)
 app.set('trust proxy', 1);
 
-// Phục vụ file tĩnh (logo, assets)
+// Phục vụ file tĩnh (logo, assets & uploads cục bộ khi chưa cấu hình Cloudinary)
 app.use('/assets', express.static(path.join(__dirname, '../assets')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
 // Middlewares
 const allowedOrigins = [
   process.env.CLIENT_URL,

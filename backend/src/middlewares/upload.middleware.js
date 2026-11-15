@@ -1,16 +1,31 @@
+const fs = require('fs');
+const path = require('path');
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../config/cloudinary');
 
-// Cấu hình kho lưu trữ (Storage) cho Multer
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'sos_systems', // Tên thư mục sẽ tạo trên Cloudinary
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'mp4'], // Chỉ cho phép ảnh và video
-    resource_type: 'auto', // Tự động nhận diện (ảnh hay video)
-  },
-});
+const localUploadsDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(localUploadsDir)) {
+  fs.mkdirSync(localUploadsDir, { recursive: true });
+}
+
+// Cấu hình kho lưu trữ (Storage) cho Multer: ưu tiên Cloudinary nếu có API key, ngược lại lưu trên máy chủ backend
+const storage = cloudinary.isConfigured()
+  ? new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'sos_systems', // Tên thư mục sẽ tạo trên Cloudinary
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'mp4'], // Hỗ trợ ảnh di động & video
+        resource_type: 'auto', // Tự động nhận diện (ảnh hay video)
+      },
+    })
+  : multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, localUploadsDir),
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname || '') || '.jpg';
+        cb(null, `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
+      },
+    });
 
 // Khởi tạo Middleware Multer
 // Giới hạn file tối đa 10MB

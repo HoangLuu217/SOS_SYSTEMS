@@ -43,31 +43,6 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   const activeSupplies = Object.entries(allocatedSupplies || {}).filter(([_, qty]) => qty > 0);
   const totalSupplyUnits = activeSupplies.reduce((acc, [_, qty]) => acc + qty, 0);
 
-  // Tính ETA tiếp cận dự kiến thực tế
-  const estimatedEtaText = (() => {
-    const sosLat = selectedSos?.coordinates?.lat ?? (selectedSos as any)?.location?.coordinates?.[1];
-    const sosLng = selectedSos?.coordinates?.lng ?? (selectedSos as any)?.location?.coordinates?.[0];
-    if (typeof sosLat === 'number' && typeof sosLng === 'number') {
-      const firstTeam = selectedTeams[0];
-      const lead = firstTeam?.rescuers?.find((r) => r.coordinates?.lat && r.coordinates?.lng);
-      if (lead?.coordinates) {
-        const R = 6371;
-        const dLat = ((sosLat - lead.coordinates.lat) * Math.PI) / 180;
-        const dLon = ((sosLng - lead.coordinates.lng) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((lead.coordinates.lat * Math.PI) / 180) *
-            Math.cos((sosLat * Math.PI) / 180) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const min = Math.max(3, Math.round((distKm / 25) * 60 + 2));
-        return `~${min} phút (${distKm < 1 ? Math.round(distKm * 1000) + ' m' : distKm.toFixed(1) + ' km'})`;
-      }
-    }
-    return '~5-7 phút';
-  })();
-
   return (
     <div
       className="sos-modal-overlay"
@@ -326,8 +301,29 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 180, overflowY: 'auto' }}>
               {selectedTeams.map((team, idx) => {
                 const lead = team.rescuers?.[0];
-                const veh = vehicles.find((v) => v.teamId === team.id || v.id === (team as any).vehicleId) || vehicles[0];
-                const vehName = veh ? `${veh.name}${veh.plate ? ` (${veh.plate})` : ''}` : 'Phương tiện chuyên dụng';
+                const teamVehs = (() => {
+                  const matched = vehicles.filter((v) => v.teamId === team.id || v.id === (team as any).vehicleId);
+                  const fromTeam = Array.isArray(team.vehicles) ? team.vehicles : [];
+                  if (matched.length === 0) return fromTeam;
+                  const byId = new Map<string, Vehicle>();
+                  for (const v of [...matched, ...fromTeam]) {
+                    if (v?.id && !byId.has(v.id)) byId.set(v.id, v);
+                  }
+                  return Array.from(byId.values());
+                })();
+                const vehName =
+                  teamVehs.length > 0
+                    ? teamVehs
+                        .map((v) => {
+                          const rawName = (v.name || 'Phương tiện').trim();
+                          const plate = (v.plate || '').trim();
+                          return plate && !rawName.toUpperCase().includes(plate.toUpperCase())
+                            ? `${rawName} (${plate})`
+                            : rawName;
+                        })
+                        .join(', ')
+                    : 'Chưa gán phương tiện';
+                const memberCount = team.rescuers?.length ?? team.availableRescuersCount ?? 0;
 
                 return (
                   <div
@@ -343,9 +339,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                       <span style={{ color: '#0f172a', fontWeight: 800, fontSize: 13 }}>
                         {selectedTeams.length > 1 ? `${idx + 1}. ` : ''}{team.name}
                       </span>
-                      {(team as any).code && (
+                      {team.code && (
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '1px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
-                          {(team as any).code}
+                          {team.code}
                         </span>
                       )}
                     </div>
@@ -354,7 +350,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Users size={12} style={{ color: '#0f172a' }} />
                         <span>
-                          Chỉ huy: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || team.rescuers?.length || 4} chiến sĩ)
+                          Chỉ huy: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({memberCount} chiến sĩ)
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

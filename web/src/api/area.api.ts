@@ -65,6 +65,44 @@ export async function fetchAreaBoundary(params: {
   }
 }
 
+export interface ProvinceMapBundleArea {
+  _id: string;
+  name: string;
+  code: string;
+  type: 'PROVINCE' | 'DISTRICT' | 'WARD';
+  parentId?: string | null;
+  status?: string;
+  boundary?: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: any;
+  };
+}
+
+export async function fetchProvinceMapBundle(
+  provinceName: string = 'Thành phố Đà Nẵng'
+): Promise<{
+  success: boolean;
+  data: {
+    province: ProvinceMapBundleArea | null;
+    wards: ProvinceMapBundleArea[];
+    source?: string;
+  } | null;
+}> {
+  try {
+    const q = new URLSearchParams({ province: provinceName });
+    const res = await fetchWithAuth<any>(`/administrative-areas/map-bundle?${q.toString()}`, {
+      method: 'GET',
+    });
+    if (res && res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return { success: false, data: null };
+  } catch (e) {
+    console.warn('Lỗi tải map-bundle từ Backend DB:', e);
+    return { success: false, data: null };
+  }
+}
+
 export interface AreaManagerInfo {
   hasManager: boolean;
   managerName?: string;

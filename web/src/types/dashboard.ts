@@ -28,7 +28,58 @@ export interface SosRequestItem {
   } | string;
   address: string;
   emergencyType: string;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  emergencyTypes?: string[];
+  priority: 'UNASSESSED' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  priorityLockedByAuthority?: boolean;
+  riskScore?: number | null;
+  effectiveRiskScore?: number | null;
+  waitEscalationBonus?: number;
+  riskBreakdown?: any;
+  riskAssessment?: {
+    status?: 'PENDING' | 'COMPLETED' | 'VERIFIED' | 'NEEDS_HUMAN_REVIEW';
+    source?: 'AI' | 'AUTHORITY';
+    modelVersion?: string;
+    inputHash?: string;
+    evaluatedAt?: string;
+    deterministicScore?: number;
+    suggestedPriority?: string;
+    reasons?: string[];
+    extractedSignals?: string[];
+    operationalNeeds?: {
+      requiredCapabilities?: string[];
+      recommendedVehicles?: string[];
+      recommendedEquipments?: string[];
+      estimatedWaterDepth?: string;
+      urgentNotes?: string | null;
+    };
+    needsHumanReview?: boolean;
+    verifiedPriority?: string;
+    verifiedAt?: string;
+    verificationNote?: string | null;
+    priorityOutdatedByNewInfo?: boolean;
+  } | null;
+  aiAssessment?: {
+    status?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'SKIPPED' | 'UNAVAILABLE';
+    model?: string;
+    analyzedAt?: string;
+    aiScore?: number;
+    deterministicScore?: number;
+    recommendedPriority?: string;
+    confidence?: 'LOW' | 'MEDIUM' | 'HIGH';
+    reasons?: string[];
+    extractedSignals?: string[];
+    evidence?: string[];
+    unknowns?: string[];
+    priorityMismatch?: boolean;
+    priorityScoreMismatch?: boolean;
+    operationalNeeds?: {
+      requiredCapabilities?: string[];
+      recommendedVehicles?: string[];
+      recommendedEquipments?: string[];
+      estimatedWaterDepth?: string;
+      urgentNotes?: string | null;
+    };
+  } | null;
   people: number;
   description?: string;
   contactPhone?: string;
@@ -55,6 +106,7 @@ export interface SosRequestItem {
   assignmentId?: string;
   assignment?: any;
   shoreHandoff?: any;
+  shoreHandoffAssignment?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,6 +148,8 @@ export type VehicleType =
   | 'OTHER'
   | string;
 
+export type VehicleTerrainCapability = 'ROAD' | 'OFF_ROAD' | 'SHALLOW_FLOOD' | 'DEEP_FLOOD' | 'WATERWAY' | 'AIR';
+
 export interface VehicleItem {
   _id: string;
   teamId?: {
@@ -118,6 +172,7 @@ export interface VehicleItem {
   type: VehicleType;
   plateNumber: string;
   capacity: number;
+  terrainCapabilities?: VehicleTerrainCapability[];
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
   description?: string;
   createdAt?: string;
@@ -183,6 +238,9 @@ export interface RescueTeamItem {
   phone?: string;
   headquartersAddress?: string;
   operationalStatus?: string;
+  hasActiveMission?: boolean;
+  activeMissionCount?: number;
+  activeMissionCode?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

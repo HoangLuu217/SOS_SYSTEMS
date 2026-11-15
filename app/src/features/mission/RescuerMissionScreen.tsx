@@ -1079,11 +1079,17 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
             return (
               <View key={item._id} style={styles.missionCard}>
-                {/* Top Card: SOS Code & Priority */}
+                {/* Top Card: Dispatch / SOS Code & Priority */}
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.codeRow}>
-                    <Text style={styles.codePrefix}>MÃ SOS:</Text>
-                    <Text style={styles.codeText}>{sos?.sosCode || 'SOS-KHẨN'}</Text>
+                    <Text style={styles.codePrefix}>{isReliefMission ? 'MÃ LỆNH:' : 'MÃ SOS:'}</Text>
+                    <Text style={styles.codeText}>
+                      {item.dispatchCode ||
+                        sos?.sosCode ||
+                        (isReliefMission
+                          ? `LP-${String(item._id).slice(-4).toUpperCase()}`
+                          : 'SOS-KHẨN')}
+                    </Text>
                   </View>
                   {['CANCELLED', 'REJECTED'].includes(item.status) ? (
                     <View
@@ -1755,16 +1761,16 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               </Text>
             </View>
             <Text style={styles.queueNoticeDesc}>
-              Đội đang ưu tiên xử lý ca {currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
+              Đội đang ưu tiên xử lý ca {currentActiveMission?.dispatchCode || currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
             </Text>
             {queuedMissions.map((qm: SosAssignmentData) => (
               <View key={qm._id} style={styles.queuedItemRow}>
                 <View style={styles.queuedBullet} />
                 <Text style={styles.queuedCode}>
-                  {qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
+                  {qm.dispatchCode || qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
                 </Text>
                 <Text style={styles.queuedAddr} numberOfLines={1}>
-                  • {qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
+                  • {qm.destination || qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
                 </Text>
                 <View style={styles.queuedLockTag}>
                   <Feather name="lock" size={10} color="#64748B" />
@@ -1819,7 +1825,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           ? 'Xác nhận và lưu vết minh bạch cấp phát cứu trợ cho ca '
                           : 'Xác nhận đã hoàn tất cứu hộ cho ca '}
                         <Text style={{ fontWeight: '700' }}>
-                          {selectedMission?.sosRequestId?.sosCode}
+                          {selectedMission?.dispatchCode ||
+                            selectedMission?.sosRequestId?.sosCode ||
+                            (selectedMission?._id ? `LP-${String(selectedMission._id).slice(-4).toUpperCase()}` : '')}
                         </Text>
                       </Text>
                     </View>

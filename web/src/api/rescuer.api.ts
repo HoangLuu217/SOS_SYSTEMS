@@ -43,6 +43,7 @@ export async function createVehicle(payload: {
   type: string;
   plateNumber: string;
   capacity?: number;
+  terrainCapabilities?: string[];
   status?: string;
   description?: string;
 }): Promise<{ success: boolean; data: VehicleItem; message?: string }> {
@@ -59,6 +60,7 @@ export async function updateVehicle(
     type: string;
     plateNumber: string;
     capacity: number;
+    terrainCapabilities: string[];
     status: string;
     description: string;
   }>

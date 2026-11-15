@@ -34,6 +34,27 @@ const sosAssignmentSchema = new mongoose.Schema(
       enum: ['SOS_RESCUE', 'RELIEF_DISPATCH', 'SHORE_HANDOFF'],
       default: 'SOS_RESCUE',
     },
+    dispatchCode: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+    },
     destination: {
       type: String,
       trim: true,
@@ -153,6 +174,15 @@ const sosAssignmentSchema = new mongoose.Schema(
     actualRecipient: {
       type: String,
       trim: true,
+      default: null,
+    },
+    // Đánh dấu đã hoàn trả vật tư về kho khi lệnh bị từ chối hoặc hủy
+    inventoryRestored: {
+      type: Boolean,
+      default: false,
+    },
+    inventoryRestoredAt: {
+      type: Date,
       default: null,
     },
   },

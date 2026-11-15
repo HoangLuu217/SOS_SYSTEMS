@@ -121,7 +121,11 @@ class RescueTeamService {
     return team.populate([
       { path: 'leaderId', select: 'fullName phone email rescuer' },
       { path: 'authorityId', select: 'name code phone type' },
-      { path: 'areaId', select: 'name code type' },
+      {
+        path: 'areaId',
+        select: 'name code type parentId',
+        populate: { path: 'parentId', select: 'name code type' },
+      },
     ]);
   }
 
@@ -188,7 +192,11 @@ class RescueTeamService {
       RescueTeam.find(filter)
         .populate('leaderId', 'fullName phone email rescuer status currentLocation')
         .populate('authorityId', 'name code phone type')
-        .populate('areaId', 'name code type')
+        .populate({
+          path: 'areaId',
+          select: 'name code type parentId',
+          populate: { path: 'parentId', select: 'name code type' },
+        })
         .populate({
           path: 'members.rescuerId',
           select: 'fullName phone email avatarUrl rescuer status isVerified currentLocation',
@@ -199,12 +207,22 @@ class RescueTeamService {
       RescueTeam.countDocuments(filter),
     ]);
 
-    // Đính kèm các phương tiện & trang thiết bị do từng đội trực tiếp quản lý từ DB MongoDB
+    // Đính kèm các phương tiện, trang thiết bị & trạng thái nhiệm vụ hiện tại của từng đội từ DB MongoDB
     const teamIds = teams.map((t) => t._id);
-    const { Equipment } = require('../models');
-    const [vehicles, equipments] = await Promise.all([
+    const { Equipment, SosAssignment } = require('../models');
+    const [vehicles, equipments, activeAssignments] = await Promise.all([
       Vehicle.find({ teamId: { $in: teamIds } }),
       Equipment.find({ teamId: { $in: teamIds } }),
+      SosAssignment.find({
+        $or: [
+          { rescueTeamId: { $in: teamIds } },
+          { teamId: { $in: teamIds } },
+        ],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      })
+        .populate('sosRequestId', 'sosCode emergencyType')
+        .select('rescueTeamId teamId status missionType sosRequestId')
+        .lean(),
     ]);
 
     const vehicleMap = {};
@@ -223,10 +241,27 @@ class RescueTeamService {
       }
     });
 
+    const activeAssignmentMap = {};
+    activeAssignments.forEach((a) => {
+      const tId = (a.rescueTeamId || a.teamId)?.toString();
+      if (!tId) return;
+      if (!activeAssignmentMap[tId]) activeAssignmentMap[tId] = [];
+      activeAssignmentMap[tId].push(a);
+    });
+
     const enrichedTeams = teams.map((team) => {
       const obj = team.toObject ? team.toObject() : { ...team };
-      obj.vehicles = vehicleMap[team._id.toString()] || [];
-      obj.equipments = equipmentMap[team._id.toString()] || [];
+      const tId = team._id.toString();
+      const teamActiveAssignments = activeAssignmentMap[tId] || [];
+      const firstActive = teamActiveAssignments[0];
+      obj.vehicles = vehicleMap[tId] || [];
+      obj.equipments = equipmentMap[tId] || [];
+      obj.activeMissionCount = teamActiveAssignments.length;
+      obj.hasActiveMission = teamActiveAssignments.length > 0 || obj.operationalStatus === 'ON_MISSION';
+      obj.activeMissionCode =
+        firstActive?.dispatchCode ||
+        firstActive?.sosRequestId?.sosCode ||
+        (firstActive?.missionType === 'RELIEF_DISPATCH' ? 'Điều phối tiếp tế' : null);
       return obj;
     });
 
@@ -248,7 +283,11 @@ class RescueTeamService {
     const team = await RescueTeam.findById(id)
       .populate('leaderId', 'fullName phone email rescuer currentLocation')
       .populate('authorityId', 'name code phone address')
-      .populate('areaId', 'name code type level')
+      .populate({
+        path: 'areaId',
+        select: 'name code type level parentId',
+        populate: { path: 'parentId', select: 'name code type' },
+      })
       .populate({
         path: 'members.rescuerId',
         select: 'fullName phone email avatarUrl rescuer currentLocation',

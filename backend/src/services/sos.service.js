@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment, Vehicle } = require('../models');
 const ApiError = require('../utils/apiError');
+const sosTriageService = require('./sosTriage.service');
+const geminiService = require('./gemini.service');
 
 /**
  * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
@@ -170,28 +172,62 @@ const createSosRequest = async (citizenId, sosData) => {
 
   // Tự động gán đúng khu vực hành chính dựa trên địa chỉ GPS thực tế
   const assignedAreaId = await resolveAdministrativeArea(address, location, areaId);
+  const normalizedAddress = address || 'Khu vực cứu nạn (Định vị GPS)';
+
+  // Lưu SOS trước; AI phân tích bất đồng bộ để không chặn việc gửi tín hiệu.
+  const cleanDescription = description ? description.replace(/⚡\s*/g, '').trim() : null;
+  const normalizedGroups = Array.isArray(priorityGroups) ? priorityGroups : [];
+  const normalizedPeople = people ? Number(people) : 1;
+  const isSecondary = activeSosList.length > 0;
+
+  const triageInput = {
+    location,
+    areaId: assignedAreaId,
+    address: normalizedAddress,
+    emergencyType: primaryEmergencyType,
+    emergencyTypes: normalizedEmergencyTypes,
+    people: normalizedPeople,
+    description: cleanDescription,
+    priorityGroups: normalizedGroups,
+    images: normalizedImages,
+    repeatCount: 1,
+  };
 
   // TRƯỜNG HỢP B: Tạo ca mới bình thường (hoặc ca Báo hộ bạn bè ở địa điểm khác >= 50m)
-  const isSecondary = activeSosList.length > 0;
   const newSos = await SosRequest.create({
     citizenId,
     location,
     areaId: assignedAreaId,
-    address: address || 'Khu vực cứu nạn (Định vị GPS)',
+    address: normalizedAddress,
     emergencyType: primaryEmergencyType,
     emergencyTypes: normalizedEmergencyTypes,
-    priority: priority || 'HIGH',
-    people: people ? Number(people) : 1,
-    description: description ? description.replace(/⚡\s*/g, '').trim() : null,
+    priority: 'UNASSESSED',
+    citizenReportedPriority: priority || null,
+    riskScore: null,
+    riskBreakdown: null,
+    riskAssessment: {
+      status: 'PENDING',
+      modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+      inputHash: sosTriageService.createTriageInputHash(triageInput),
+      needsHumanReview: true,
+    },
+    aiAssessment: {
+      status: geminiService.isConfigured() ? 'PENDING' : 'UNAVAILABLE',
+    },
+    people: normalizedPeople,
+    description: cleanDescription,
     contactPhone: contactPhone || null,
     secondaryPhone: secondaryPhone ? secondaryPhone.trim() : null,
-    priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
+    priorityGroups: normalizedGroups,
     images: normalizedImages,
     status: 'PENDING',
     repeatCount: 1,
     isSecondaryRequest: isSecondary,
     primarySosId: isSecondary ? activeSosList[0]._id : null,
   });
+
+  // Tầng 2: Chạy phân tích Gemini AI bất đồng bộ (text + ảnh) và emit cập nhật qua Socket.IO
+  sosTriageService.scheduleAiTriage(newSos._id);
 
   // Tạo history cho trạng thái khởi tạo
   await SosStatusHistory.create({
@@ -206,7 +242,7 @@ const createSosRequest = async (citizenId, sosData) => {
 
   const populatedSos = await SosRequest.findById(newSos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   return populatedSos || newSos;
 };
@@ -373,7 +409,7 @@ const getSosRequests = async (query = {}, user = null) => {
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
     .sort(query.lng ? {} : { createdAt: -1 })
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code')
+    .populate('areaId', 'name code parentId')
     .lean();
 
   if (sosList.length > 0) {
@@ -392,20 +428,54 @@ const getSosRequests = async (query = {}, user = null) => {
       .lean();
 
     const assignmentMap = new Map();
+    const assignmentsListMap = new Map();
+    const shoreHandoffAssignMap = new Map();
     assignments.forEach(a => {
       const targetId = (a.sosRequestId || a.sosId)?.toString();
       if (targetId) {
-        assignmentMap.set(targetId, a);
+        if (!assignmentsListMap.has(targetId)) assignmentsListMap.set(targetId, []);
+        assignmentsListMap.get(targetId).push(a);
+
+        if (a.missionType === 'SHORE_HANDOFF') {
+          const existingHandoff = shoreHandoffAssignMap.get(targetId);
+          if (!existingHandoff || new Date(a.createdAt || 0) > new Date(existingHandoff.createdAt || 0)) {
+            shoreHandoffAssignMap.set(targetId, a);
+          }
+        }
+        const existing = assignmentMap.get(targetId);
+        // Ưu tiên giữ nhiệm vụ giải cứu chính thay vì bị nhiệm vụ đón bờ (SHORE_HANDOFF) ghi đè
+        if (!existing || (existing.missionType === 'SHORE_HANDOFF' && a.missionType !== 'SHORE_HANDOFF')) {
+          assignmentMap.set(targetId, a);
+        }
       }
     });
 
     sosList.forEach(s => {
-      const a = assignmentMap.get(s._id.toString());
+      const sId = s._id.toString();
+      const a = assignmentMap.get(sId);
+      const aList = assignmentsListMap.get(sId) || [];
       if (a) {
         s.assignmentId = a._id;
         s.assignment = a;
       }
+      if (aList.length > 0) {
+        s.assignments = aList;
+      }
+      const ha = shoreHandoffAssignMap.get(sId);
+      if (ha) {
+        s.shoreHandoffAssignment = ha;
+      }
     });
+
+    if (query.sortBy === 'risk') {
+      // Unassessed cases are surfaced first for human review; this is queue ordering, not a danger score.
+      const priorityOrder = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+      sosList.sort((a, b) => {
+        const diff = (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4);
+        if (diff !== 0) return diff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+    }
   }
 
   return sosList;
@@ -414,14 +484,14 @@ const getSosRequests = async (query = {}, user = null) => {
 const getSosRequestById = async (id) => {
   const sos = await SosRequest.findById(id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code')
+    .populate('areaId', 'name code parentId')
     .lean();
     
   if (!sos) {
     throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
   }
 
-  const assignment = await SosAssignment.findOne({
+  const allAssignments = await SosAssignment.find({
     $or: [{ sosRequestId: id }, { sosId: id }],
     status: { $nin: ['CANCELLED', 'REJECTED'] },
   })
@@ -432,9 +502,17 @@ const getSosRequestById = async (id) => {
     .populate('authorityOrganizationId', 'name code')
     .lean();
 
-  if (assignment) {
-    sos.assignmentId = assignment._id;
-    sos.assignment = assignment;
+  const primaryAssignment =
+    allAssignments.find((a) => a.missionType !== 'SHORE_HANDOFF') || allAssignments[0] || null;
+  const handoffAssignment = allAssignments.find((a) => a.missionType === 'SHORE_HANDOFF') || null;
+
+  if (primaryAssignment) {
+    sos.assignmentId = primaryAssignment._id;
+    sos.assignment = primaryAssignment;
+    sos.assignments = allAssignments;
+  }
+  if (handoffAssignment) {
+    sos.shoreHandoffAssignment = handoffAssignment;
   }
 
   return sos;
@@ -455,10 +533,28 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
     if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
       await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
     }
+    if (
+      ['CANCELLED', 'REJECTED'].includes(newStatus) &&
+      sos.shoreHandoff &&
+      !['NONE', 'COMPLETED'].includes(String(sos.shoreHandoff.status || '').toUpperCase())
+    ) {
+      updateFields['shoreHandoff.status'] = 'CANCELLED';
+      updateFields['shoreHandoff.assignedVehicleId'] = null;
+      updateFields['shoreHandoff.assignedVehiclePlate'] = null;
+    }
 
     // Tự động đóng tất cả các phân công của ca SOS này để giải phóng trạng thái bận cho các đội
     try {
       const targetAssignStatus = newStatus === 'COMPLETED' ? 'COMPLETED' : 'CANCELLED';
+      const openAssigns = await SosAssignment.find({
+        $or: [{ sosRequestId: id }, { sosId: id }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      }).select('vehicleId');
+      for (const oa of openAssigns) {
+        if (oa.vehicleId && mongoose.isValidObjectId(oa.vehicleId)) {
+          await Vehicle.findByIdAndUpdate(oa.vehicleId, { status: 'AVAILABLE' });
+        }
+      }
       await SosAssignment.updateMany(
         {
           $or: [{ sosRequestId: id }, { sosId: id }],
@@ -528,13 +624,46 @@ const verifyAndClassifySos = async (id, verifyData, authorityId) => {
   const { priority, emergencyType, note } = verifyData;
   const oldStatus = sos.status;
 
-  if (oldStatus !== 'PENDING') {
-    throw new ApiError(400, 'Chỉ có thể xác minh SOS đang ở trạng thái PENDING');
+  if (!['PENDING', 'VERIFIED'].includes(oldStatus)) {
+    throw new ApiError(400, 'Chỉ có thể xác minh SOS đang chờ hoặc cần xác minh lại');
+  }
+
+  const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+  const existingPriority = sos.priorityLockedByAuthority && ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(String(sos.priority || '').toUpperCase())
+    ? sos.priority
+    : '';
+  const selectedPriority = String(priority || sos.aiAssessment?.recommendedPriority || existingPriority).toUpperCase();
+  if (!validPriorities.includes(selectedPriority)) {
+    throw new ApiError(400, `Mức ưu tiên không hợp lệ. Cho phép: ${validPriorities.join(', ')}`);
   }
 
   sos.status = 'VERIFIED';
-  if (priority) sos.priority = priority;
-  if (emergencyType) sos.emergencyType = emergencyType;
+  sos.priority = selectedPriority;
+  if (emergencyType) {
+    sos.emergencyType = emergencyType;
+    sos.emergencyTypes = [emergencyType];
+  }
+  sos.priorityLockedByAuthority = true;
+
+  sos.riskAssessment = {
+    status: 'VERIFIED',
+    source: 'AUTHORITY',
+    modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+    inputHash: sosTriageService.createTriageInputHash(sos.toObject()),
+    evaluatedAt: new Date(),
+    needsHumanReview: false,
+    verifiedPriority: sos.priority,
+    suggestedPriority: sos.aiAssessment?.recommendedPriority || null,
+    reasons: sos.aiAssessment?.reasons || [],
+    extractedSignals: sos.aiAssessment?.extractedSignals || [],
+    evidence: sos.aiAssessment?.evidence || [],
+    unknowns: sos.aiAssessment?.unknowns || [],
+    operationalNeeds: sos.aiAssessment?.operationalNeeds || null,
+    verifiedBy: authorityId,
+    verifiedAt: new Date(),
+    verificationNote: note || null,
+    priorityOutdatedByNewInfo: false,
+  };
   
   await sos.save();
 
@@ -556,11 +685,13 @@ const updateSosRequest = async (id, updateData, userId) => {
   if (sos.status === 'COMPLETED' || sos.status === 'CANCELLED') {
     throw new ApiError(400, 'Không thể cập nhật yêu cầu cứu nạn đã kết thúc');
   }
+  if (updateData.priority !== undefined) {
+    throw new ApiError(400, 'Không thể tự sửa mức ưu tiên qua cập nhật SOS; chính quyền cần xác minh mức này');
+  }
 
   const allowedFields = [
     'location',
     'address',
-    'priority',
     'description',
     'people',
     'priorityGroups',
@@ -586,11 +717,51 @@ const updateSosRequest = async (id, updateData, userId) => {
     sos.secondaryPhone = null;
   }
 
+  const contentChanged = ['location', 'address', 'description', 'people', 'priorityGroups', 'emergencyType', 'emergencyTypes', 'images'].some(
+    (f) => updateData[f] !== undefined
+  );
+
+  if (contentChanged) {
+    if (!sos.priorityLockedByAuthority) {
+      sos.priority = 'UNASSESSED';
+    }
+    sos.riskAssessment = {
+      status: 'PENDING',
+      modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+      inputHash: sosTriageService.createTriageInputHash(sos.toObject()),
+      evaluatedAt: new Date(),
+      needsHumanReview: true,
+      verifiedPriority: sos.riskAssessment?.verifiedPriority || null,
+      verifiedBy: sos.riskAssessment?.verifiedBy || null,
+      verifiedAt: sos.riskAssessment?.verifiedAt || null,
+      verificationNote: sos.riskAssessment?.verificationNote || null,
+      priorityOutdatedByNewInfo: Boolean(sos.priorityLockedByAuthority),
+    };
+    sos.aiAssessment = {
+      status: geminiService.isConfigured() ? 'PENDING' : 'UNAVAILABLE',
+      model: null,
+      analyzedAt: null,
+      recommendedPriority: null,
+      confidence: null,
+      reasons: [],
+      extractedSignals: [],
+      evidence: [],
+      unknowns: [],
+      operationalNeeds: null,
+    };
+    sos.riskScore = null;
+    sos.riskBreakdown = null;
+  }
+
   await sos.save();
+
+  if (contentChanged) {
+    sosTriageService.scheduleAiTriage(sos._id);
+  }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   return populated || sos;
 };
@@ -681,12 +852,32 @@ const requestShoreHandoff = async (id, data, user) => {
     sos.resolvedAt = null;
   }
 
+  const rawTeam = data.rescueTeamId;
+  const extractedTeamId =
+    rawTeam && typeof rawTeam === 'object' ? (rawTeam._id || rawTeam.id || null) : rawTeam || null;
+  const validTeamId =
+    extractedTeamId && mongoose.Types.ObjectId.isValid(String(extractedTeamId))
+      ? String(extractedTeamId)
+      : null;
+
+  let resolvedTeamName =
+    (rawTeam && typeof rawTeam === 'object' && rawTeam.name) ||
+    data.rescueTeamName ||
+    null;
+  if ((!resolvedTeamName || resolvedTeamName === 'Đội Cứu Hộ') && validTeamId) {
+    try {
+      const { RescueTeam } = require('../models');
+      const teamDoc = await RescueTeam.findById(validTeamId).select('name').lean();
+      if (teamDoc?.name) resolvedTeamName = teamDoc.name;
+    } catch (_) {}
+  }
+
   sos.shoreHandoff = {
     status: 'REQUESTED',
     requestedAt: new Date(),
     requestedByRescuerName: user?.fullName || data.requestedByRescuerName || null,
-    rescueTeamName: data.rescueTeamName || null,
-    rescueTeamId: data.rescueTeamId || null,
+    rescueTeamName: resolvedTeamName,
+    rescueTeamId: validTeamId,
     landingPoint: {
       name: data.landingPoint?.name || 'Bến Cập Bờ',
       address: data.landingPoint?.address || null,
@@ -709,7 +900,7 @@ const requestShoreHandoff = async (id, data, user) => {
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   return populated || sos;
 };
@@ -749,6 +940,38 @@ const assignShoreHandoff = async (id, data, _user) => {
         { path: 'members.rescuerId', select: 'fullName phone avatarUrl' },
       ],
     });
+  }
+
+  // Kiểm tra xe thuộc đội đang thực hiện nhiệm vụ cứu nạn (đang đi cứu) -> không cho chọn làm xe đón bờ
+  const selectedTeamId = vehicle?.teamId?._id || vehicle?.teamId || null;
+  if (selectedTeamId) {
+    const selectedTeamName = vehicle?.teamId?.name || 'này';
+    const rescuingTeamId = sos.shoreHandoff?.rescueTeamId;
+    if (rescuingTeamId && String(rescuingTeamId) === String(selectedTeamId)) {
+      throw new ApiError(
+        400,
+        `Đội "${selectedTeamName}" hiện đang trực tiếp đi cứu nạn ca #${sos.sosCode || sos._id}, không thể chọn xe của đội đang đi cứu!`
+      );
+    }
+
+    const activeTeamAssign = await SosAssignment.findOne({
+      $or: [{ rescueTeamId: selectedTeamId }, { teamId: selectedTeamId }],
+      missionType: { $ne: 'SHORE_HANDOFF' },
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+    })
+      .populate('sosRequestId', 'sosCode status')
+      .lean();
+
+    if (activeTeamAssign) {
+      const relatedSosStatus = String(activeTeamAssign.sosRequestId?.status || '').toUpperCase();
+      if (!['COMPLETED', 'CANCELLED', 'RESOLVED', 'REJECTED'].includes(relatedSosStatus)) {
+        const busyCode = activeTeamAssign.sosRequestId?.sosCode || activeTeamAssign.sosRequestId?._id || '';
+        throw new ApiError(
+          400,
+          `Đội "${selectedTeamName}" hiện đang đi cứu nạn${busyCode ? ` (#${busyCode})` : ''}, không thể chọn xe của đội đang thực hiện nhiệm vụ!`
+        );
+      }
+    }
   }
 
   // Kiểm tra xem xe này có đang bận đón bờ cho ca SOS khác đang hoạt động hay không
@@ -931,7 +1154,7 @@ const assignShoreHandoff = async (id, data, _user) => {
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   // Phát Realtime sos:updated để các client (kể cả đội cano) cập nhật thông tin xe đón bờ
   try {
@@ -994,7 +1217,7 @@ const cancelShoreHandoff = async (id, _user) => {
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   try {
     const { getIO } = require('../socket');
@@ -1014,10 +1237,12 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
   const sos = await SosRequest.findById(id);
   if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
 
+  const now = new Date();
   if (Array.isArray(proofImages) && proofImages.length > 0) {
     sos.proofImages = [
       ...new Set([...(sos.proofImages || []), ...proofImages]),
     ];
+    sos.images = (sos.images || []).filter((img) => !proofImages.includes(img));
   }
 
   if (sos.shoreHandoff) {
@@ -1026,19 +1251,21 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
       await Vehicle.findByIdAndUpdate(prevVehicleId, { status: 'AVAILABLE' });
     }
     sos.shoreHandoff.status = 'COMPLETED';
-    sos.shoreHandoff.completedAt = new Date();
-    await sos.save();
+    sos.shoreHandoff.completedAt = sos.shoreHandoff.completedAt || now;
 
     // Cập nhật hoàn thành nhiệm vụ đón bờ của xe
     try {
       const handoffAssignment = await SosAssignment.findOne({
         $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
         missionType: 'SHORE_HANDOFF',
-        status: { $nin: ['COMPLETED', 'CANCELLED'] },
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
       });
       if (handoffAssignment) {
         handoffAssignment.status = 'COMPLETED';
-        handoffAssignment.completedAt = new Date();
+        handoffAssignment.completedAt = now;
+        if (handoffAssignment.vehicleId && mongoose.isValidObjectId(handoffAssignment.vehicleId)) {
+          await Vehicle.findByIdAndUpdate(handoffAssignment.vehicleId, { status: 'AVAILABLE' });
+        }
         if (Array.isArray(proofImages) && proofImages.length > 0) {
           handoffAssignment.proofImages = [
             ...new Set([...(handoffAssignment.proofImages || []), ...proofImages]),
@@ -1056,11 +1283,41 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
     } catch (assignErr) {
       console.warn('Error completing handoff assignment:', assignErr?.message);
     }
+
+    // Kiểm tra xem đội đi cứu chính đã hoàn tất phần việc của mình chưa.
+    // Chỉ khi không còn nhiệm vụ chính nào đang mở (đội cứu đã COMPLETED), ca SOS mới chuyển sang COMPLETED hoàn toàn.
+    const remainingActivePrimary = await SosAssignment.countDocuments({
+      $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+      missionType: { $ne: 'SHORE_HANDOFF' },
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+    });
+
+    const oldStatus = sos.status;
+    if (remainingActivePrimary === 0 && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status)) {
+      sos.status = 'COMPLETED';
+      sos.resolvedAt = sos.resolvedAt || now;
+    }
+
+    await sos.save();
+
+    try {
+      await SosStatusHistory.create({
+        sosId: sos._id,
+        oldStatus,
+        newStatus: sos.status,
+        changedBy: _user?._id || null,
+        note:
+          remainingActivePrimary === 0
+            ? 'Đội xe tiếp vận đã đưa nạn nhân tới nơi an toàn — hoàn tất toàn bộ ca SOS'
+            : 'Đội xe tiếp vận đã xác nhận hoàn tất đón bờ, chờ đội cứu hộ hoàn thành phần việc',
+        images: Array.isArray(proofImages) ? proofImages : [],
+      });
+    } catch (_) {}
   }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code parentId');
 
   try {
     const { getIO } = require('../socket');

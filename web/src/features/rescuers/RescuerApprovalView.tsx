@@ -25,6 +25,7 @@ import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
+import { SKILL_LABELS, getApplicantInitials } from './rescuersConstants';
 import './RescuerApprovalView.css';
 
 export interface RescuerApprovalViewProps {
@@ -71,15 +72,15 @@ export interface RescuerApplicant {
   skills: string[];
   experience: string;
   specialization:
-    | 'FLOOD_RESCUE'
-    | 'SEARCH_RESCUE'
-    | 'MEDICAL_RESCUE'
-    | 'FIRE_RESCUE'
-    | 'EVACUATION'
-    | 'COMMUNICATION'
-    | 'LOGISTICS'
-    | 'VEHICLE_OP'
-    | 'OTHER';
+  | 'FLOOD_RESCUE'
+  | 'SEARCH_RESCUE'
+  | 'MEDICAL_RESCUE'
+  | 'FIRE_RESCUE'
+  | 'EVACUATION'
+  | 'COMMUNICATION'
+  | 'LOGISTICS'
+  | 'VEHICLE_OP'
+  | 'OTHER';
   certificates: string[];
   equipment: string[];
   vehicleType?: string;
@@ -93,31 +94,6 @@ export interface RescuerApplicant {
   supplementaryRequest?: string;
   history: ApplicationHistoryItem[];
 }
-
-// Danh mục nhãn kỹ năng chuẩn hóa tiếng Việt đồng bộ với ứng dụng di động
-const SKILL_LABELS: Record<string, string> = {
-  first_aid: 'Sơ cứu y tế',
-  water_rescue: 'Cứu hộ vùng nước',
-  search_rescue: 'Tìm kiếm cứu nạn',
-  boat_driver: 'Lái xuồng cứu sinh',
-  rope_climb: 'Leo dây & Độ cao',
-  diving: 'Lặn cứu hộ',
-  firefighting: 'PCCC & Cứu sập',
-  evacuation: 'Sơ tán người dân',
-  communication: 'Thông tin liên lạc',
-  logistics: 'Hậu cần & Cấp dưỡng',
-  // Tương thích ngược
-  relief_logistics: 'Tiếp tế lương thực',
-  vehicle_op: 'Lái xe tải gầm cao',
-};
-
-const getApplicantInitials = (fullName?: string): string => {
-  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-  }
-  return (fullName || 'CH').slice(0, 2).toUpperCase();
-};
 
 export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }) => {
   // 1. Phân quyền và Địa bàn Local Authority vs Admin
@@ -156,10 +132,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const [refreshSpin, setRefreshSpin] = useState(false);
   // Hook bộ lọc hành chính toàn quốc từ API
   const {
-    provinces,
-    provincesLoading,
-    selectedProvince,
-    setSelectedProvince,
     wards,
     wardsLoading,
     selectedAreaId: areaFilter,
@@ -169,6 +141,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     isAdmin,
     userAreaId,
     userAreaName,
+    wardsScopeProvince: 'Đà Nẵng',
   });
 
   // 3. States bộ lọc
@@ -177,23 +150,19 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const [specFilter, setSpecFilter] = useState<string>('ALL');
 
   const hasActiveFilters = Boolean(
-    (isAdmin && (selectedProvince !== 'ALL' || areaFilter !== 'ALL')) ||
-    (!isAdmin && areaFilter !== 'ALL') ||
+    areaFilter !== 'ALL' ||
     statusFilter !== 'ALL' ||
     specFilter !== 'ALL' ||
     searchQuery.trim() !== ''
   );
 
   const handleClearFilters = useCallback(() => {
-    if (isAdmin) {
-      setSelectedProvince('ALL');
-    }
     setAreaFilter('ALL');
     setStatusFilter('ALL');
     setSpecFilter('ALL');
     setSearchQuery('');
     setCurrentPage(1);
-  }, [isAdmin, setSelectedProvince, setAreaFilter]);
+  }, [setAreaFilter]);
 
   // 4. Phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -256,6 +225,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   }, [
     zoomedImage,
     isApproveModalOpen,
+    isRevokeModalOpen,
     isRejectModalOpen,
     isSupplementModalOpen,
     selectedApplicant,
@@ -821,68 +791,35 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         {/* Toolbar */}
         <div className="ra-toolbar">
           <div className="ra-toolbar-controls">
-            {/* Bộ lọc địa bàn: Dành riêng cho Quản trị viên (Admin) chọn phân cấp Tỉnh/TP -> Xã/Phường */}
+            {/* Bộ lọc địa bàn Đà Nẵng: Dành riêng cho Quản trị viên (Admin) */}
             {isAdmin && (
-              <>
-                {/* 0A. Lọc theo Tỉnh / Thành phố: Dành cho Admin quản lý Toàn quốc */}
-                {/* 0A. Lọc theo Tỉnh / Thành phố: Gọi từ API Open-API Việt Nam */}
-                <select
-                  className="ra-filter-select"
-                  value={selectedProvince}
-                  onChange={(e) => {
-                    setSelectedProvince(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    minWidth: 175,
-                    fontWeight: 700,
-                    borderColor: selectedProvince !== 'ALL' ? '#0284c7' : undefined,
-                    background: selectedProvince !== 'ALL' ? '#f0f9ff' : undefined,
-                    color: selectedProvince !== 'ALL' ? '#0369a1' : undefined,
-                  }}
-                  title="Bước 1: Chọn Tỉnh / Thành phố (API)"
-                >
-                  <option value="ALL">
-                    {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+              <select
+                className="ra-filter-select"
+                value={areaFilter}
+                onChange={(e) => {
+                  setAreaFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  minWidth: 195,
+                  fontWeight: 700,
+                  borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
+                  background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
+                  color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
+                }}
+                title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
+              >
+                <option value="ALL">
+                  {wardsLoading
+                    ? '⏳ Đang tải địa bàn Đà Nẵng...'
+                    : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`}
+                </option>
+                {wards.map((ward) => (
+                  <option key={ward.id} value={ward.id}>
+                    {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
                   </option>
-                  {provinces.map((prov) => (
-                    <option key={prov.id || prov.name} value={prov.name}>
-                      🏙️ {prov.name}
-                    </option>
-                  ))}
-                </select>
-
-                {/* 0B. Lọc theo Quận / Huyện / Xã / Phường: Gọi từ API Wards */}
-                <select
-                  className="ra-filter-select"
-                  value={areaFilter}
-                  onChange={(e) => {
-                    setAreaFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    minWidth: 185,
-                    fontWeight: 700,
-                    borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
-                    background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
-                    color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
-                  }}
-                  title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
-                >
-                  <option value="ALL">
-                    {wardsLoading
-                      ? '⏳ Đang tải xã, phường từ API...'
-                      : selectedProvince === 'ALL'
-                      ? `📍 Tất cả địa bàn (${wards.length})`
-                      : `📍 Tất cả xã / phường (${wards.length})`}
-                  </option>
-                  {wards.map((ward) => (
-                    <option key={ward.id} value={ward.id}>
-                      {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </>
+                ))}
+              </select>
             )}
 
             {/* Bộ lọc trạng thái */}
@@ -1333,12 +1270,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
                         .filter(Boolean)
                         .length > 0 && (
-                        <span>
-                          {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
-                            .filter(Boolean)
-                            .join(' • ')}
-                        </span>
-                      )}
+                          <span>
+                            {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </span>
+                        )}
                       <span>
                         <Phone size={12} /> {selectedApplicant.phone || 'Chưa cập nhật'}
                       </span>
@@ -1406,8 +1343,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                         {selectedApplicant.status === 'VERIFIED' || selectedApplicant.status === 'REJECTED'
                           ? selectedApplicant.reviewerName || 'Ban Chỉ huy địa phương'
                           : localCommuneName
-                          ? `Ban Chỉ huy ${localCommuneName}`
-                          : userAreaName || 'Ban Chỉ huy địa phương'}
+                            ? `Ban Chỉ huy ${localCommuneName}`
+                            : userAreaName || 'Ban Chỉ huy địa phương'}
                       </span>
                     </div>
                   </div>
@@ -1497,32 +1434,32 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
                   {((selectedApplicant.certificates && selectedApplicant.certificates.length > 0) ||
                     (selectedApplicant.equipment && selectedApplicant.equipment.length > 0)) && (
-                    <>
-                      <div className="ra-flat-divider" />
-                      <div className="ra-flat-grid-2">
-                        {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 && (
-                          <div className="ra-kv-item">
-                            <span className="ra-kv-label">Chứng chỉ / Bằng cấp</span>
-                            <ul className="ra-bullet-list">
-                              {selectedApplicant.certificates.map((c, i) => (
-                                <li key={i}>{c}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 && (
-                          <div className="ra-kv-item">
-                            <span className="ra-kv-label">Thiết bị cá nhân</span>
-                            <ul className="ra-bullet-list">
-                              {selectedApplicant.equipment.map((eq, i) => (
-                                <li key={i}>{eq}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
+                      <>
+                        <div className="ra-flat-divider" />
+                        <div className="ra-flat-grid-2">
+                          {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 && (
+                            <div className="ra-kv-item">
+                              <span className="ra-kv-label">Chứng chỉ / Bằng cấp</span>
+                              <ul className="ra-bullet-list">
+                                {selectedApplicant.certificates.map((c, i) => (
+                                  <li key={i}>{c}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 && (
+                            <div className="ra-kv-item">
+                              <span className="ra-kv-label">Thiết bị cá nhân</span>
+                              <ul className="ra-bullet-list">
+                                {selectedApplicant.equipment.map((eq, i) => (
+                                  <li key={i}>{eq}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                 </div>
               </div>
 
@@ -1549,12 +1486,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       <div key={i} className="ra-timeline-item">
                         <div
                           className={`ra-timeline-dot ${h.type === 'verified'
-                              ? 'green'
-                              : h.type === 'rejected'
-                                ? 'red'
-                                : h.type === 'update'
-                                  ? 'orange'
-                                  : ''
+                            ? 'green'
+                            : h.type === 'rejected'
+                              ? 'red'
+                              : h.type === 'update'
+                                ? 'orange'
+                                : ''
                             }`}
                         />
                         <span className="ra-timeline-action">{h.action}</span>

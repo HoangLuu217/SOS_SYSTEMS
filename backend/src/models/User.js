@@ -247,6 +247,24 @@ const authoritySchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    mapUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    latitude: {
+      type: Number,
+      default: null,
+    },
+    longitude: {
+      type: Number,
+      default: null,
+    },
+    officeAddress: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   { _id: false }
 );

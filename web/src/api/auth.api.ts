@@ -149,6 +149,10 @@ export async function updateUserProfile(payload: {
     areaName?: string;
     provinceCode?: number;
     wardCode?: number;
+    mapUrl?: string;
+    latitude?: number;
+    longitude?: number;
+    officeAddress?: string;
   };
 }): Promise<{ success: boolean; data?: User; message?: string }> {
   return fetchWithAuth<{ success: boolean; data?: User; message?: string }>('/users/me', {

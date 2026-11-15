@@ -276,10 +276,18 @@ const seed = async () => {
         {
           teamId: team._id,
           type: 'AMBULANCE',
-          plateNumber: '43A-115.99',
+          plateNumber: '43A-115.68',
           capacity: 4,
           status: 'AVAILABLE',
-          description: 'Xe cấp cứu chuyên dụng dã chiến túc trực bến sông',
+          description: 'Xe cứu thương dã chiến đội Đông Cứu Nạn túc trực ven sông Hàn',
+        },
+        {
+          teamId: team._id,
+          type: 'TRUCK',
+          plateNumber: '43C-668.88',
+          capacity: 6,
+          status: 'AVAILABLE',
+          description: 'Xe bán tải cứu hộ lội nước đội Đông Cứu Nạn',
         },
       ]);
       console.log('✅ Đã tạo 3 phương tiện cứu trợ mẫu');

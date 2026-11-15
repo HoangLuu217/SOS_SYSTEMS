@@ -1217,7 +1217,7 @@ export const TacticalMap = ({
                   👤 {selectedSos.citizenName} ({selectedSos.citizenPhone})
                 </div>
                 <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 700, marginTop: '2px' }}>
-                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority === 'CRITICAL' ? 'Nguy cấp' : selectedSos.priority === 'HIGH' ? 'Khẩn cấp' : selectedSos.priority === 'LOW' ? 'Thấp' : 'Trung bình'}]
+                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority === 'CRITICAL' ? 'Nguy cấp' : selectedSos.priority === 'HIGH' ? 'Khẩn cấp' : selectedSos.priority === 'LOW' ? 'Thấp' : selectedSos.priority === 'UNASSESSED' ? 'Đang chờ phân loại AI' : 'Trung bình'}]
                 </div>
                 {selectedSos.description && (
                   <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', fontStyle: 'italic', lineHeight: '1.3' }}>
@@ -1260,8 +1260,12 @@ export const TacticalMap = ({
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
                     • Cần đón: <span style={{ color: '#ea580c' }}>{selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ'}</span> ({selectedSos.shoreHandoff.peopleCount} người)
                   </div>
-                  <div style={{ fontSize: 11, marginTop: 4, fontWeight: 800, color: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#15803d' : '#d97706' }}>
-                    Trạng thái: {selectedSos.shoreHandoff.status === 'ASSIGNED' ? `✓ ĐÃ ĐIỀU XE (${selectedSos.shoreHandoff.assignedVehiclePlate || selectedSos.shoreHandoff.assignedVehicleName || 'Đã phân bổ'})` : '⏳ ĐANG CHỜ BAN CHỈ HUY ĐIỀU XE'}
+                  <div style={{ fontSize: 11, marginTop: 4, fontWeight: 800, color: (selectedSos.shoreHandoff.status === 'ASSIGNED' || selectedSos.shoreHandoff.status === 'COMPLETED') ? '#15803d' : '#d97706' }}>
+                    Trạng thái: {selectedSos.shoreHandoff.status === 'COMPLETED'
+                      ? `✓ ĐÃ BÀN GIAO (${selectedSos.shoreHandoff.assignedVehiclePlate || selectedSos.shoreHandoff.assignedVehicleName || 'Hoàn thành'})`
+                      : selectedSos.shoreHandoff.status === 'ASSIGNED'
+                      ? `✓ ĐÃ ĐIỀU XE (${selectedSos.shoreHandoff.assignedVehiclePlate || selectedSos.shoreHandoff.assignedVehicleName || 'Đã phân bổ'})`
+                      : '⏳ ĐANG CHỜ BAN CHỈ HUY ĐIỀU XE'}
                   </div>
                 </div>
               </Popup>
@@ -1838,7 +1842,7 @@ export const TacticalMap = ({
         </button>
       </div>
 
-      {/* Floating Tactical Layer Controls (Bật/Tắt Ghim Điểm An Toàn & Điểm Nguy Hiểm) */}
+      {/* Floating Tactical Layer Controls (2 nút icon Bật/Tắt Điểm Trú Ẩn & Điểm Nguy Hiểm bên dưới bộ Zoom) */}
       <div
         style={{
           position: 'absolute',
@@ -1854,50 +1858,46 @@ export const TacticalMap = ({
           type="button"
           onClick={() => setShowShelters((prev) => !prev)}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '5px 10px',
+            width: 32,
+            height: 32,
             borderRadius: 6,
             backgroundColor: showShelters ? '#10b981' : '#ffffff',
             color: showShelters ? '#ffffff' : '#334155',
-            border: `1.5px solid ${showShelters ? '#059669' : '#cbd5e1'}`,
+            border: `1px solid ${showShelters ? '#059669' : '#cbd5e1'}`,
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-            fontSize: '11.5px',
-            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
           }}
-          title={showShelters ? 'Ẩn ghim điểm an toàn' : 'Hiện ghim điểm an toàn'}
+          title={`Trú ẩn (${shelters.length}) — ${showShelters ? 'Bấm để ẩn điểm an toàn' : 'Bấm để hiện điểm an toàn'}`}
+          aria-label={`Trú ẩn (${shelters.length})`}
         >
-          <Shield size={14} />
-          <span>Trú ẩn ({shelters.length})</span>
+          <Shield size={16} />
         </button>
 
         <button
           type="button"
           onClick={() => setShowHazards((prev) => !prev)}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '5px 10px',
+            width: 32,
+            height: 32,
             borderRadius: 6,
             backgroundColor: showHazards ? '#dc2626' : '#ffffff',
             color: showHazards ? '#ffffff' : '#334155',
-            border: `1.5px solid ${showHazards ? '#b91c1c' : '#cbd5e1'}`,
+            border: `1px solid ${showHazards ? '#b91c1c' : '#cbd5e1'}`,
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-            fontSize: '11.5px',
-            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
           }}
-          title={showHazards ? 'Ẩn ghim điểm nguy hiểm' : 'Hiện ghim điểm nguy hiểm'}
+          title={`Nguy hiểm (${hazards.length}) — ${showHazards ? 'Bấm để ẩn điểm nguy hiểm' : 'Bấm để hiện điểm nguy hiểm'}`}
+          aria-label={`Nguy hiểm (${hazards.length})`}
         >
-          <AlertTriangle size={14} />
-          <span>Nguy hiểm ({hazards.length})</span>
+          <AlertTriangle size={16} />
         </button>
       </div>
 
