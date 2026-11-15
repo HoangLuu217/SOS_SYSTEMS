@@ -308,6 +308,8 @@ Frontend được phục vụ ở cổng `5173` trên localhost. Backend đượ
 
 MongoDB lưu dữ liệu trong Docker volume `mongodb_data`, tồn tại qua các lần cập nhật container. Sao lưu volume này định kỳ. Dữ liệu hiện có trên Atlas không tự động được nhập vào MongoDB container.
 
+Để kết nối MongoDB Compass từ Windows, MongoDB chỉ bind vào loopback Linux (`127.0.0.1:27017`). Tạo SSH port forward qua host `myserver` bằng lệnh `ssh -N -L 27018:127.0.0.1:27017 myserver`, rồi kết nối Compass tới `mongodb://127.0.0.1:27018/sos_systems`. Cần có `cloudflared` SSH Access hoạt động để mở port forward.
+
 Để cập nhật phiên bản, chạy `git pull` rồi `docker compose up -d --build`. Dữ liệu upload nằm trong `backend/uploads`; hãy sao lưu thư mục này nếu ứng dụng lưu file cục bộ. Nếu các file được lưu trên Cloudinary, cấu hình Cloudinary trong backend env và có thể bỏ qua lưu trữ ảnh cục bộ.
 
 **Lưu ý:** URL web dùng `/api` và `/socket.io` cùng origin, nên không cần khai báo IP/domain public lúc build frontend. Mobile app dùng hostname API riêng; đặt `EXPO_PUBLIC_API_URL=https://api.example.com/api` trong `app/.env` rồi build lại app. Socket.IO của app kết nối cùng hostname API.
