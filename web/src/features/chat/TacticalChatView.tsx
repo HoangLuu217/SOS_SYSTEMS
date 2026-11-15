@@ -45,10 +45,9 @@ import {
   fetchCitizenInfo,
 } from '@/api';
 import {
-  subscribeSocketChatEvents,
-  joinChannelRoom,
-  leaveChannelRoom,
-  registerUserSocket,
+  subscribeChatRealtimeEvents,
+} from '@/api/chat.api';
+import {
   onSosUpdated,
 } from '@/services/socketService';
 import './TacticalChat.css';
@@ -538,45 +537,16 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
   const totalUnreadCount = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
 
-  // Đăng ký người dùng Socket.IO & Tham gia phòng địa bàn phụ trách
-  useEffect(() => {
-    if (currentUser?._id) {
-      registerUserSocket(currentUser._id);
-    }
-    if (currentUser?.authority?.areaName) {
-      const cleanSlug = currentUser.authority.areaName
-        .toLowerCase()
-        .replace(/\bp\.\s*/gi, 'phuong ')
-        .replace(/\bx\.\s*/gi, 'xa ')
-        .replace(/\btt\.\s*/gi, 'thi_tran ')
-        .replace(/\bq\.\s*/gi, 'quan ')
-        .replace(/\bh\.\s*/gi, 'huyen ')
-        .replace(/\btp\.\s*/gi, 'thanh_pho ')
-        .replace(/đ/g, 'd')
-        .replace(/Đ/g, 'd')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '');
-      const areaChannel = `area_${cleanSlug}`;
-      joinChannelRoom(areaChannel);
-    }
-  }, [currentUser?._id, currentUser?.authority?.areaName]);
-
-  // Khi chuyển đổi cuộc trò chuyện: tải tin nhắn và tham gia phòng socket tương ứng
+  // Khi chuyển đổi cuộc trò chuyện: tải tin nhắn của kênh tương ứng
   useEffect(() => {
     if (activeConv) {
       loadMessages(activeConv);
-      joinChannelRoom(activeConv.channel);
-      return () => {
-        leaveChannelRoom(activeConv.channel);
-      };
     }
   }, [activeConv, loadMessages]);
 
-  // ĐĂNG KÝ SỰ KIỆN THỜI GIAN THỰC QUA SOCKET.IO
+  // ĐĂNG KÝ SỰ KIỆN THỜI GIAN THỰC QUA SSE (/api/chat/stream)
   useEffect(() => {
-    const unsubscribe = subscribeSocketChatEvents(
+    const unsubscribe = subscribeChatRealtimeEvents(
       async (payload) => {
         if (payload.action === 'NEW_MESSAGE') {
           const newMsg = payload.data;

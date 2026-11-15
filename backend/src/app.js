@@ -31,6 +31,8 @@ const envOrigins = [process.env.CLIENT_URL, process.env.CLIENT_URLS]
 
 const allowedOrigins = new Set([
   ...envOrigins,
+  'https://www.cuuhocuunan.io.vn',
+  'https://cuuhocuunan.io.vn',
   'https://sos-systems.vercel.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
