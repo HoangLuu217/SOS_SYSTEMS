@@ -843,18 +843,42 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         }
       });
 
+      const handleTeamChangedInWorkspace = async () => {
+        const targetId = assignment?._id || assignmentId || initialAssignmentData?._id;
+        if (!targetId) return;
+        try {
+          const assignRes = await backendApi.get(`/assignments/${targetId}`);
+          if (assignRes.success && assignRes.data) {
+            setAssignment(assignRes.data);
+          }
+        } catch {
+          // ignore silent refresh errors
+        }
+      };
+
+      socket.on('team:membership_updated', handleTeamChangedInWorkspace);
+      socket.on('rescue_teams_updated', handleTeamChangedInWorkspace);
+      const subTeamWorkspace = DeviceEventEmitter.addListener(
+        'team:membership_updated',
+        handleTeamChangedInWorkspace
+      );
+
       return () => {
         socket.off('assignment:cancelled', handleMissionCancelled);
+        socket.off('sos:updated');
         socket.off('sos:shore_handoff_assigned');
         socket.off('assignment:supply_approved');
         socket.off('assignment:supply_rejected');
+        socket.off('team:membership_updated', handleTeamChangedInWorkspace);
+        socket.off('rescue_teams_updated', handleTeamChangedInWorkspace);
+        subTeamWorkspace.remove();
         socket.disconnect();
         socketRef.current = null;
       };
     } catch (err) {
       console.warn('[Socket Workspace Error]:', err);
     }
-  }, [visible, user?._id, sos?._id]);
+  }, [visible, user?._id, sos?._id, assignment?._id, assignmentId, initialAssignmentData?._id]);
 
   // 5. Tự động tải dữ liệu khi mở Modal
   useEffect(() => {

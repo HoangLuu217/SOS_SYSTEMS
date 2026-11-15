@@ -149,6 +149,12 @@ export function AuthenticatedApp() {
       DeviceEventEmitter.emit('sos:updated', payload);
     };
 
+    const onTeamSignal = (payload?: any) => {
+      loadMissionsCount();
+      DeviceEventEmitter.emit('team:membership_updated', payload);
+      DeviceEventEmitter.emit('rescue_teams_updated', payload);
+    };
+
     s.on('assignment:new', onSignal);
     s.on('assignment:created', onSignal);
     s.on('assignment:assigned', onSignal);
@@ -159,9 +165,13 @@ export function AuthenticatedApp() {
     s.on('sos:updated', onSignal);
     s.on('sos:status_changed', onSignal);
     s.on('sos:sync', onSignal);
+    s.on('team:membership_updated', onTeamSignal);
+    s.on('rescue_teams_updated', onTeamSignal);
 
     return () => {
       sub.remove();
+      s.off('team:membership_updated', onTeamSignal);
+      s.off('rescue_teams_updated', onTeamSignal);
       s.disconnect();
     };
   }, [isRescuer, user?._id]);

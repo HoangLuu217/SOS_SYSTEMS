@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { RefreshCw, Download, ArrowUpRight, Map } from 'lucide-react';
+import { onRescueTeamsUpdated } from '@/services/socketService';
 import {
   fetchSosRequests,
   fetchAdministrativeAreas,
@@ -433,6 +434,15 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   useEffect(() => {
     void loadAllDashboardData();
+  }, [loadAllDashboardData]);
+
+  useEffect(() => {
+    const unsubTeams = onRescueTeamsUpdated(() => {
+      void loadAllDashboardData();
+    });
+    return () => {
+      unsubTeams();
+    };
   }, [loadAllDashboardData]);
 
   useEffect(() => {
