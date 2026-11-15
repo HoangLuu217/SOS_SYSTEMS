@@ -35,6 +35,7 @@ interface Props {
     rescuerName: string;
     rescuerRole: string;
     vehicleId: string;
+    vehicleIdsByTeam: Record<string, string | null>;
     vehicleName: string;
     vehicleCapacity: string;
     supplies?: import('@/types/domainD').AssignedSupplyItem[];
