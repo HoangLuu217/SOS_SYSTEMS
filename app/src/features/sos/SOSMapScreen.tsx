@@ -1089,7 +1089,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               style={[
                 styles.doneBtn,
                 {
-                  flex: 1.25,
+                  flex: 1.08,
+                  paddingHorizontal: 10,
                   backgroundColor: '#0284C7',
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -1101,15 +1102,23 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               }}
               activeOpacity={0.85}
             >
-              <Feather name="navigation" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.doneBtnText}>THEO DÕI CỨU HỘ</Text>
+              <Feather name="navigation" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+              <Text
+                style={[styles.doneBtnText, { fontSize: 12.5, flexShrink: 1 }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+              >
+                THEO DÕI CỨU HỘ
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.doneBtn,
                 {
-                  flex: 0.95,
+                  flex: 1,
+                  paddingHorizontal: 10,
                   backgroundColor: '#F1F5F9',
                   borderWidth: 1,
                   borderColor: '#CBD5E1',
@@ -1124,8 +1133,13 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               }}
               activeOpacity={0.85}
             >
-              <Feather name="home" size={15} color="#0F172A" style={{ marginRight: 6 }} />
-              <Text style={[styles.doneBtnText, { color: '#0F172A' }]}>
+              <Feather name="home" size={14} color="#0F172A" style={{ marginRight: 5 }} />
+              <Text
+                style={[styles.doneBtnText, { color: '#0F172A', fontSize: 12.5, flexShrink: 1 }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+              >
                 {isTab ? 'VỀ TRANG CHỦ' : 'HOÀN TẤT'}
               </Text>
             </TouchableOpacity>

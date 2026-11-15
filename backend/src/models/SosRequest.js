@@ -255,6 +255,25 @@ const sosRequestSchema = new mongoose.Schema(
       assignedAt: { type: Date, default: null },
       completedAt: { type: Date, default: null },
     },
+    citizenFeedback: {
+      sentiment: {
+        type: String,
+        enum: ['SATISFIED', 'NEUTRAL', 'NEEDS_IMPROVEMENT', null],
+        default: null,
+      },
+      tags: {
+        type: [String],
+        default: [],
+      },
+      comment: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 1000,
+      },
+      submittedAt: { type: Date, default: null },
+      submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
   },
   {
     timestamps: true,
