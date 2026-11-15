@@ -222,7 +222,7 @@ export const IncidentFeed = ({
   }, [scopedIncidents]);
 
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
-  // Ưu tiên SOS chưa được AI phân loại để cán bộ kiểm tra, sau đó theo mức AI/authority đã gán.
+  // Sắp xếp ca SOS mới tạo lên đầu danh sách (trang 1) để cán bộ thấy ngay khi phát sinh.
   const filteredIncidents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = scopedIncidents.filter((s) => {
@@ -244,11 +244,9 @@ export const IncidentFeed = ({
       return true;
     });
 
-    const priorityOrder: Record<string, number> = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
-    return [...filtered].sort((a, b) => {
-      const orderDiff = (priorityOrder[a.priority] ?? 0) - (priorityOrder[b.priority] ?? 0);
-      return orderDiff || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
+    return [...filtered].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }, [scopedIncidents, searchQuery, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredIncidents.length / SOS_PER_PAGE));
