@@ -1,5 +1,17 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronRight, Sparkles, AlertTriangle } from 'lucide-react';
+import {
+  ChevronRight,
+  Sparkles,
+  AlertTriangle,
+  LifeBuoy,
+  Users,
+  Package,
+  Check,
+  CheckCircle2,
+  RefreshCw,
+  ShieldAlert,
+  Zap,
+} from 'lucide-react';
 import type {
   SosRequest,
   SosAssignment,
@@ -95,6 +107,7 @@ export const DispatchWorkflow = ({
   // Phương án điều phối do AI đề xuất từ dữ liệu đội đã kiểm tra
   const [smartRecs, setSmartRecs] = useState<DispatchRecommendationsData | null>(null);
   const [isLoadingAdvisor, setIsLoadingAdvisor] = useState<boolean>(false);
+  const [dispatchTab, setDispatchTab] = useState<'AI' | 'TEAMS'>('AI');
   const advisorRequestRef = useRef(0);
 
   const loadSmartRecommendations = useCallback(
@@ -212,15 +225,15 @@ export const DispatchWorkflow = ({
     const backupCrossAreaTeams =
       !isAdmin && (inAreaReadyCount === 0 || advisorIds.size > 0)
         ? rescueTeams
-            .filter((t) => {
-              if (inAreaIds.has(t.id)) return false;
-              const cand = candidateByTeamId.get(t.id);
-              const isBusy = !!domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id) || Boolean(cand?.isBusy);
-              if (isBusy || cand?.dispatchEligible === false) return false;
-              return inAreaReadyCount === 0 || advisorIds.has(t.id);
-            })
-            .sort((a, b) => (candidateByTeamId.get(a.id)?.distanceKm ?? Number.POSITIVE_INFINITY) - (candidateByTeamId.get(b.id)?.distanceKm ?? Number.POSITIVE_INFINITY))
-            .slice(0, advisorIds.size > 0 ? advisorIds.size : 3)
+          .filter((t) => {
+            if (inAreaIds.has(t.id)) return false;
+            const cand = candidateByTeamId.get(t.id);
+            const isBusy = !!domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id) || Boolean(cand?.isBusy);
+            if (isBusy || cand?.dispatchEligible === false) return false;
+            return inAreaReadyCount === 0 || advisorIds.has(t.id);
+          })
+          .sort((a, b) => (candidateByTeamId.get(a.id)?.distanceKm ?? Number.POSITIVE_INFINITY) - (candidateByTeamId.get(b.id)?.distanceKm ?? Number.POSITIVE_INFINITY))
+          .slice(0, advisorIds.size > 0 ? advisorIds.size : 3)
         : [];
 
     const list = [...inAreaTeams, ...backupCrossAreaTeams];
@@ -367,6 +380,7 @@ export const DispatchWorkflow = ({
 
       setAllocatedSupplies({});
     }
+    setDispatchTab(selectedSos?.id?.startsWith('sos-') ? 'TEAMS' : 'AI');
   }, [selectedSos?.id, assignment?.id]);
 
   // Quản lý vật tư cấp phát được chọn trong phiên phân công
@@ -516,6 +530,161 @@ export const DispatchWorkflow = ({
 
   const aiAdvisor = smartRecs?.aiAdvisor;
 
+  const vehicleTypeViMap: Record<string, string> = {
+    BOAT: 'Ca-nô',
+    MOTORBOAT: 'Xuồng máy',
+    COMPOSITE_BOAT: 'Xuồng Composite',
+    RUBBER_BOAT: 'Xuồng cao su',
+    INFLATABLE_BOAT: 'Thuyền hơi',
+    JET_SKI: 'Mô-tô nước',
+    AMPHIBIOUS_VEHICLE: 'Xe lội nước',
+    AMBULANCE: 'Xe cứu thương',
+    PICKUP_4X4: 'Bán tải 4x4',
+    PICKUP_TRUCK: 'Xe bán tải',
+    HIGH_CLEARANCE_TRUCK: 'Xe tải gầm cao',
+    TRUCK: 'Xe tác chiến',
+  };
+
+  const teamTypeLabelMap: Record<string, string> = {
+    WATER_RESCUE: 'Đường thủy',
+    FLOOD_RESCUE: 'Cứu hộ lũ',
+    EVACUATION: 'Sơ tán dân',
+    MEDICAL_RESCUE: 'Y tế',
+    SEARCH_RESCUE: 'Tìm kiếm CN',
+    LOGISTICS: 'Hậu cần',
+    FIRE_RESCUE: 'PCCC',
+    SECURITY: 'An ninh',
+  };
+
+  const normalizeWardName = (name?: string | null) =>
+    (name || '')
+      .toLowerCase()
+      .replace(/^(xã|phường|thị trấn|x\.|p\.|tt\.)\s+/i, '')
+      .trim();
+
+  const getTeamCardMeta = (team: RescueTeam) => {
+    const smartCand = candidateByTeamId.get(team.id);
+    const tVehicles = getVehiclesForTeam(team);
+    const teamVeh = tVehicles.find((v) => v.status === 'Available') || tVehicles[0];
+    const isRecommended = Boolean(aiAdvisor?.recommendedTeamIds?.includes(team.id));
+
+    let vehicleSpec = 'Chưa gán phương tiện';
+    let vehicleCategory: 'BOAT' | 'AMBULANCE' | 'TRUCK' | 'NONE' = 'NONE';
+    if (smartCand?.primaryVehicle || tVehicles.length > 0) {
+      const rawType = String(smartCand?.primaryVehicle?.type || teamVeh?.rawType || '').toUpperCase();
+      vehicleCategory =
+        rawType === 'AMBULANCE'
+          ? 'AMBULANCE'
+          : ['PICKUP_4X4', 'PICKUP_TRUCK', 'HIGH_CLEARANCE_TRUCK', 'TRUCK', 'AMPHIBIOUS_VEHICLE'].includes(rawType)
+            ? 'TRUCK'
+            : 'BOAT';
+      const typeLabel =
+        vehicleTypeViMap[rawType] || (teamVeh?.name ? teamVeh.name.replace(/^Phương tiện\s+/i, '') : 'Ca-nô');
+      const plate = smartCand?.primaryVehicle?.plateNumber || teamVeh?.plate || '';
+      const cap = smartCand?.primaryVehicle?.capacity || teamVeh?.numericCapacity || 4;
+      const labelWithPlate = plate && !typeLabel.includes(plate) ? `${typeLabel} ${plate}` : typeLabel;
+      vehicleSpec = `${labelWithPlate} (${cap} chỗ)`;
+    }
+
+    const etaText = smartCand?.etaText || 'Chưa có ETA định tuyến';
+    const rawTeamType = smartCand?.teamType || team.teamType;
+    const teamTypeLabel = rawTeamType ? teamTypeLabelMap[rawTeamType] || rawTeamType : undefined;
+    const activeTask = domainDService.getActiveAssignmentForTeam(team.id, selectedSos.id);
+    const isBusy = !!activeTask || Boolean(smartCand?.isBusy);
+    const busyMissionCode = activeTask
+      ? activeTask.sosRequestId
+        ? `SOS-${activeTask.sosRequestId.slice(-5)}`
+        : 'Đang làm nhiệm vụ'
+      : smartCand?.busyMission?.sosCode || undefined;
+
+    const sosWardNorm = normalizeWardName(selectedSos.wardName);
+    const teamWardNorm = normalizeWardName(team.wardName);
+    const hideWardBadge = Boolean(
+      (selectedSos.wardId && team.wardId && String(selectedSos.wardId) === String(team.wardId)) ||
+      (sosWardNorm && teamWardNorm && sosWardNorm === teamWardNorm)
+    );
+
+    return {
+      smartCand,
+      isRecommended: isRecommended && !isBusy,
+      vehicleSpec,
+      vehicleCategory,
+      etaText,
+      teamTypeLabel,
+      isBusy,
+      busyMissionCode,
+      hideWardBadge,
+    };
+  };
+
+  const validRecTeamIds = (aiAdvisor?.recommendedTeamIds || []).filter((tid) =>
+    availableTeams.some(
+      (t) =>
+        t.id === tid &&
+        !candidateByTeamId.get(t.id)?.isBusy &&
+        candidateByTeamId.get(t.id)?.dispatchEligible !== false &&
+        !domainDService.getActiveAssignmentForTeam(t.id, selectedSos.id)
+    )
+  );
+
+  const validRecTeams = validRecTeamIds
+    .map((tid) => availableTeams.find((t) => t.id === tid))
+    .filter((t): t is RescueTeam => Boolean(t));
+
+  const primarySuggestedSupplies =
+    aiAdvisor?.recommendedSupplies ||
+    (validRecTeamIds[0] ? candidateByTeamId.get(validRecTeamIds[0])?.suggestedSupplies : undefined) ||
+    (activeSelectedTeamIds[0] ? candidateByTeamId.get(activeSelectedTeamIds[0])?.suggestedSupplies : undefined) ||
+    smartRecs?.candidates?.[0]?.suggestedSupplies ||
+    [];
+
+  const cleanAiText = (raw?: string | null) => {
+    if (!raw) return '';
+    let text = raw;
+    availableTeams.forEach((t) => {
+      text = text.replace(new RegExp(`\\(\\s*${t.id}\\s*\\)`, 'gi'), '');
+      text = text.replace(new RegExp(`\\b${t.id}\\b`, 'gi'), t.name);
+    });
+    return text
+      .replace(/\(\s*[a-f0-9]{24}\s*\)/gi, '')
+      .replace(/\b[a-f0-9]{24}\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
+
+  const summaryText =
+    isLoadingAdvisor && !aiAdvisor
+      ? 'Đang phân tích ca SOS và trạng thái các đội trực chiến...'
+      : cleanAiText(aiAdvisor?.summary) ||
+      (smartRecs?.aiAdvisorStatus === 'UNAVAILABLE'
+        ? 'AI chưa được cấu hình. Vui lòng chuyển sang tab Tất cả đội để chọn đội thủ công.'
+        : smartRecs?.aiAdvisorStatus === 'TRIAGE_PENDING'
+          ? 'AI đang phân loại SOS...'
+          : smartRecs?.aiAdvisorStatus === 'NO_ELIGIBLE_TEAMS'
+            ? 'Không có đội rảnh khả dụng tại thời điểm này.'
+            : 'Chưa có phương án tự động từ AI. Vui lòng xem và chọn đội ở tab Tất cả đội.');
+
+  const isAlreadyApplied =
+    validRecTeamIds.length > 0 &&
+    validRecTeamIds.every((id) => activeSelectedTeamIds.includes(id));
+
+  const sosAiReasons = selectedSos.riskAssessment?.reasons || selectedSos.aiAssessment?.reasons || [];
+
+  const handleApplyAiPlan = () => {
+    if (validRecTeamIds.length === 0) return;
+    setLocalSelectedTeamIds(validRecTeamIds);
+    onSelectedTeamsChange?.(validRecTeamIds);
+    if (primarySuggestedSupplies.length > 0) {
+      const nextMap: Record<string, number> = {};
+      primarySuggestedSupplies.forEach((s) => {
+        const matchedItem = areaSupplies.find((eq) => eq._id === s.supplyId || eq.name === s.name);
+        const keyId = matchedItem?._id || s.supplyId;
+        if (keyId && s.quantity > 0) nextMap[keyId] = s.quantity;
+      });
+      if (Object.keys(nextMap).length > 0) setAllocatedSupplies(nextMap);
+    }
+  };
+
   return (
     <aside
       className="dispatch-right-col"
@@ -538,625 +707,747 @@ export const DispatchWorkflow = ({
           background: 'var(--sos-surface)',
         }}
       >
-        {/* Header Sự Cố */}
-        <div style={{ padding: '7px 10px 5px 10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 9,
-                  height: 9,
-                  borderRadius: '50%',
-                  background: isCompleted ? '#16a34a' : isCancelled ? '#64748b' : isAssigned ? '#1e293b' : '#dc2626',
-                  boxShadow: isCompleted
-                    ? '0 0 0 2px rgba(22, 163, 74, 0.2)'
-                    : isCancelled
-                      ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
-                      : isAssigned
-                        ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
-                        : '0 0 0 2px rgba(220, 38, 38, 0.2)',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 900,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.4px',
-                  color: isCompleted ? '#16a34a' : isCancelled ? '#64748b' : isAssigned ? '#1e293b' : '#dc2626',
-                }}
-              >
-                {isCompleted
-                  ? 'Hồ Sơ Cứu Nạn (Đã Hoàn Thành)'
-                  : isCancelled
-                    ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
-                    : isAssigned
-                      ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
-                      : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 900,
-                  padding: '2px 7px',
-                  borderRadius: 5,
-                  letterSpacing: '0.4px',
-                  color: '#ffffff',
-                  background:
-                    selectedSos.priority === 'CRITICAL'
-                      ? '#dc2626'
-                      : selectedSos.priority === 'HIGH'
-                      ? '#ea580c'
-                      : selectedSos.priority === 'LOW'
-                      ? '#16a34a'
-                      : selectedSos.priority === 'UNASSESSED'
-                      ? '#c2410c'
-                      : '#d97706',
-                  boxShadow:
-                    selectedSos.priority === 'CRITICAL'
-                      ? '0 1px 4px rgba(220, 38, 38, 0.4)'
-                      : 'none',
-                }}
-              >
-                {selectedSos.priority === 'CRITICAL'
-                  ? 'NGUY CẤP'
-                  : selectedSos.priority === 'HIGH'
-                  ? 'KHẨN CẤP'
-                  : selectedSos.priority === 'LOW'
-                  ? 'THẤP'
-                  : selectedSos.priority === 'UNASSESSED'
-                  ? 'CHỜ AI PHÂN LOẠI'
-                  : 'TRUNG BÌNH'}
-              </span>
-              {onToggleCollapse && (
-                <button
-                  type="button"
-                  className="sos-btn sos-btn--ghost sos-btn--icon-xs"
-                  onClick={onToggleCollapse}
-                  title="Thu gọn bảng tác chiến để mở rộng bản đồ"
-                  aria-label="Thu gọn bảng tác chiến"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Khung Thông Tin Nạn Nhân / Hiện Trường (CỐ ĐỊNH Ở VÙNG 1) */}
-        <div style={{ padding: '0 10px 6px 10px' }}>
-          <CitizenDistressProfile
-            selectedSos={selectedSos}
-            allocatedSupplies={allocatedSupplies}
-            onAllocatedSuppliesChange={setAllocatedSupplies}
-            areaSupplies={areaSupplies}
-            isLoadingSupplies={isLoadingSupplies}
-          />
-        </div>
-      </div>
-
-      {/* 2. VÙNG 2 - KHUNG PHÂN CÔNG ĐỘI CỨU HỘ HOẶC THÔNG BÁO TRẠNG THÁI CA ĐÃ ĐÓNG */}
-      {isClosed ? (
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px 20px',
-            textAlign: 'center',
-            background: 'var(--sos-surface)',
-          }}
-        >
+          {/* Header Sự Cố thống nhất: Trạng thái • Mã SOS | Thời gian • Mức độ • Đóng */}
           <div
             style={{
-              width: 58,
-              height: 58,
-              borderRadius: '50%',
-              background: isCompleted ? '#dcfce7' : '#f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 26,
-              marginBottom: 12,
-              border: isCompleted ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
+              padding: '8px 12px',
+              background: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
             }}
           >
-            {isCompleted ? '✅' : '🚫'}
-          </div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 800,
-              color: isCompleted ? '#166534' : '#334155',
-              marginBottom: 6,
-            }}
-          >
-            {isCompleted ? 'Ca cứu hộ đã hoàn thành' : 'Yêu cầu cứu nạn đã được hủy'}
-          </div>
-          <p
-            style={{
-              fontSize: 12.5,
-              color: 'var(--sos-text-muted)',
-              lineHeight: 1.6,
-              maxWidth: 290,
-              margin: 0,
-            }}
-          >
-            {isCompleted
-              ? 'Tất cả nạn nhân đã được lực lượng cứu hộ ứng cứu an toàn. Hồ sơ ca này đã kết thúc.'
-              : 'Yêu cầu cứu nạn đã được đóng lại bởi người dân hoặc ban chỉ huy.'}
-          </p>
-        </div>
-      ) : !isAssigned ? (
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            padding: '6px 10px 0 10px',
-          }}
-        >
-          {/* Header tiêu đề phân công CỐ ĐỊNH (shrink-0) */}
-          <div
-            style={{
-              flexShrink: 0,
-              paddingBottom: 6,
-              borderBottom: '1px solid var(--sos-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 900,
-                  color: 'var(--sos-text-primary, #0f172a)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  letterSpacing: '-0.1px',
-                }}
-              >
-                <span style={{ fontSize: 14 }}>🛟</span>
-                <span>PHÂN CÔNG ĐỘI CỨU HỘ</span>
-              </div>
-
-              {selectedSos?.id && !selectedSos.id.startsWith('sos-') && (
-                <button
-                  type="button"
-                  onClick={() => loadSmartRecommendations(true, true)}
-                  disabled={isLoadingAdvisor}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    border: '1px solid #c7d2fe',
-                    background: isLoadingAdvisor ? '#e0e7ff' : 'linear-gradient(135deg, #eef2ff 0%, #e0f2fe 100%)',
-                    color: '#3730a3',
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    cursor: isLoadingAdvisor ? 'wait' : 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title="Để AI phân tích SOS và đề xuất phương án điều phối từ dữ liệu đội hiện có"
-                >
-                  <Sparkles size={11.5} />
-                  <span>{isLoadingAdvisor ? 'AI đang phân tích...' : smartRecs?.aiAdvisor ? 'Phân tích lại AI' : 'Đề xuất bằng AI'}</span>
-                </button>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--sos-text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {busyTeamsCount === 0
-                  ? `${readyTeamsCount} đội sẵn sàng`
-                  : readyTeamsCount === 0
-                    ? `${availableTeams.length} đội đang bận`
-                    : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`}
-              </span>
-            </div>
-          </div>
-
-          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: CUỘN DỌC */}
-          <div className="dispatch-teams-scroll-list">
-            {/* Cảnh báo xung đột tài nguyên toàn cục */}
-            {smartRecs?.conflicts && smartRecs.conflicts.length > 0 && (
-              <div
-                style={{
-                  padding: '7px 9px',
-                  borderRadius: 8,
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#991b1b',
-                  fontSize: 11,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 6,
-                  marginBottom: 4,
-                }}
-              >
-                <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
-                <div>
-                  <strong style={{ display: 'block', fontSize: 11 }}>Cảnh báo điều phối đa ca</strong>
-                  <span>{smartRecs.conflicts[0].message}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 8.5,
+                      height: 8.5,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      background: isCompleted ? '#16a34a' : isCancelled ? '#64748b' : isAssigned ? '#1e293b' : '#dc2626',
+                      boxShadow: isCompleted
+                        ? '0 0 0 2px rgba(22, 163, 74, 0.2)'
+                        : isCancelled
+                          ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
+                          : isAssigned
+                            ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
+                            : '0 0 0 2px rgba(220, 38, 38, 0.2)',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.35px',
+                      color: '#334155',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isCompleted
+                        ? 'Đã hoàn thành'
+                        : isCancelled
+                            ? 'Đã hủy'
+                            : isAssigned
+                              ? 'Đã điều động'
+                              : 'Chờ phân công'}
+                  </span>
+                  <span style={{ color: '#cbd5e1', fontSize: 11.5 }}>•</span>
+                  <span
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 800,
+                      fontFamily: 'var(--sos-font-mono, monospace)',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: '#0f172a',
+                      letterSpacing: '-0.2px',
+                    }}
+                  >
+                    {selectedSos.sosCode}
+                  </span>
                 </div>
-              </div>
-            )}
 
-            {/* Thanh Gợi ý AI 1 chạm (Kiểu 1: Gộp chọn đội + vật tư gợi ý gọn gàng) */}
-            {(smartRecs?.aiAdvisor || isLoadingAdvisor || smartRecs?.aiAdvisorStatus === 'UNAVAILABLE' || smartRecs?.aiAdvisorStatus === 'FAILED' || smartRecs?.aiAdvisorStatus === 'TRIAGE_PENDING' || smartRecs?.aiAdvisorStatus === 'NEEDS_HUMAN_REVIEW' || smartRecs?.aiAdvisorStatus === 'NO_ELIGIBLE_TEAMS') && (() => {
-              const validRecTeamIds = (aiAdvisor?.recommendedTeamIds || []).filter((tid) =>
-                availableTeams.some(
-                  (t) =>
-                    t.id === tid &&
-                    !candidateByTeamId.get(t.id)?.isBusy &&
-                    candidateByTeamId.get(t.id)?.dispatchEligible !== false &&
-                    !domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id)
-                )
-              );
-              const recTeamNames = validRecTeamIds
-                .map((tid) => availableTeams.find((t) => t.id === tid)?.name || candidateByTeamId.get(tid)?.teamName)
-                .filter(Boolean);
-              const primarySuggestedSupplies =
-                aiAdvisor?.recommendedSupplies ||
-                (validRecTeamIds[0] ? candidateByTeamId.get(validRecTeamIds[0])?.suggestedSupplies : undefined) ||
-                (activeSelectedTeamIds[0] ? candidateByTeamId.get(activeSelectedTeamIds[0])?.suggestedSupplies : undefined) ||
-                smartRecs?.candidates?.[0]?.suggestedSupplies ||
-                [];
-
-              const cleanAiText = (raw?: string | null) => {
-                if (!raw) return '';
-                let text = raw;
-                availableTeams.forEach((t) => {
-                  text = text.replace(new RegExp(`\\(\\s*${t.id}\\s*\\)`, 'gi'), '');
-                  text = text.replace(new RegExp(`\\b${t.id}\\b`, 'gi'), t.name);
-                });
-                return text
-                  .replace(/\(\s*[a-f0-9]{24}\s*\)/gi, '')
-                  .replace(/\b[a-f0-9]{24}\b/gi, '')
-                  .replace(/\s{2,}/g, ' ')
-                  .trim();
-              };
-
-              const summaryText = isLoadingAdvisor && !smartRecs?.aiAdvisor
-                ? 'Đang phân tích ca SOS và trạng thái các đội trực chiến...'
-                : cleanAiText(smartRecs?.aiAdvisor?.summary) ||
-                  (smartRecs?.aiAdvisorStatus === 'UNAVAILABLE'
-                    ? 'AI chưa được cấu hình. Cần cán bộ chọn đội thủ công.'
-                    : smartRecs?.aiAdvisorStatus === 'TRIAGE_PENDING'
-                    ? 'AI đang phân loại SOS...'
-                    : smartRecs?.aiAdvisorStatus === 'NO_ELIGIBLE_TEAMS'
-                    ? 'Không có đội rảnh khả dụng tại thời điểm này.'
-                    : 'Cần cán bộ xem xét và chọn đội thủ công.');
-
-              const isAlreadyApplied =
-                validRecTeamIds.length > 0 &&
-                validRecTeamIds.every((id) => activeSelectedTeamIds.includes(id));
-
-              return (
-                <div
-                  style={{
-                    padding: '6px 9px',
-                    borderRadius: 8,
-                    background: 'linear-gradient(135deg, #f5f3ff 0%, #f0f9ff 100%)',
-                    border: '1px solid #c7d2fe',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3,
-                    marginBottom: 4,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <div
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {selectedSos.timeAgo || 'Vừa xong'}
+                    </span>
+                    <span
                       style={{
-                        fontSize: 11,
-                        fontWeight: 900,
-                        color: '#3730a3',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis',
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        padding: '2px 7px',
+                        borderRadius: 5,
+                        letterSpacing: '0.35px',
+                        color: '#ffffff',
+                        background:
+                          selectedSos.priority === 'CRITICAL'
+                            ? '#dc2626'
+                            : selectedSos.priority === 'HIGH'
+                              ? '#ea580c'
+                              : selectedSos.priority === 'LOW'
+                                ? '#16a34a'
+                                : selectedSos.priority === 'UNASSESSED'
+                                  ? '#c2410c'
+                                  : '#d97706',
+                        boxShadow:
+                          selectedSos.priority === 'CRITICAL'
+                              ? '0 1px 4px rgba(220, 38, 38, 0.35)'
+                              : 'none',
                       }}
-                      title={
-                        recTeamNames.length > 0
-                          ? `Gợi ý AI: ${recTeamNames.join(' + ')}${
-                              primarySuggestedSupplies.length > 0
-                                ? ` • Vật tư: ${primarySuggestedSupplies.map((s) => `${s.name} x${s.quantity}`).join(', ')}`
-                                : ''
-                            }`
-                          : 'Gợi ý điều phối AI'
-                      }
                     >
-                      <Sparkles size={12} style={{ flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {recTeamNames.length > 0
-                          ? `GỢI Ý AI: ${recTeamNames.join(' + ')}`
-                          : 'PHƯƠNG ÁN ĐIỀU PHỐI AI'}
-                      </span>
-                      {primarySuggestedSupplies.length > 0 && (
-                        <span
-                          style={{
-                            fontSize: 9.5,
-                            fontWeight: 800,
-                            background: '#e0f2fe',
-                            color: '#0369a1',
-                            border: '1px solid #bae6fd',
-                            padding: '0.5px 5px',
-                            borderRadius: 4,
-                            flexShrink: 0,
-                          }}
-                        >
-                          +{primarySuggestedSupplies.length} vật tư
-                        </span>
-                      )}
-                    </div>
-
-                    {validRecTeamIds.length > 0 && (
+                      {selectedSos.priority === 'CRITICAL'
+                        ? 'NGUY CẤP'
+                        : selectedSos.priority === 'HIGH'
+                          ? 'KHẨN CẤP'
+                          : selectedSos.priority === 'LOW'
+                            ? 'THẤP'
+                            : selectedSos.priority === 'UNASSESSED'
+                              ? 'CHỜ AI PHÂN LOẠI'
+                              : 'TRUNG BÌNH'}
+                    </span>
+                    {onToggleCollapse && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setLocalSelectedTeamIds(validRecTeamIds);
-                          onSelectedTeamsChange?.(validRecTeamIds);
-                          if (primarySuggestedSupplies.length > 0) {
-                            const nextMap: Record<string, number> = {};
-                            primarySuggestedSupplies.forEach((s) => {
-                              const matchedItem = areaSupplies.find((eq) => eq._id === s.supplyId || eq.name === s.name);
-                              const keyId = matchedItem?._id || s.supplyId;
-                              if (keyId && s.quantity > 0) nextMap[keyId] = s.quantity;
-                            });
-                            if (Object.keys(nextMap).length > 0) setAllocatedSupplies(nextMap);
-                          }
-                        }}
+                        className="sos-btn sos-btn--ghost sos-btn--icon-xs"
+                        onClick={onToggleCollapse}
+                        title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+                        aria-label="Thu gọn bảng tác chiến"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Khung Thông Tin Nạn Nhân / Hiện Trường (CỐ ĐỊNH Ở VÙNG 1) */}
+              <div>
+                <CitizenDistressProfile
+                  selectedSos={selectedSos}
+                  allocatedSupplies={allocatedSupplies}
+                  onAllocatedSuppliesChange={setAllocatedSupplies}
+                  areaSupplies={areaSupplies}
+                  isLoadingSupplies={isLoadingSupplies}
+                />
+              </div>
+            </div>
+
+            {/* 2. VÙNG 2 - KHUNG PHÂN CÔNG ĐỘI CỨU HỘ HOẶC THÔNG BÁO TRẠNG THÁI CA ĐÃ ĐÓNG */}
+            {isClosed ? (
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '24px 20px',
+                  textAlign: 'center',
+                  background: 'var(--sos-surface)',
+                }}
+              >
+                <div
+                  style={{
+                    width: 58,
+                    height: 58,
+                    borderRadius: '50%',
+                    background: isCompleted ? '#dcfce7' : '#f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 26,
+                    marginBottom: 12,
+                    border: isCompleted ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
+                  }}
+                >
+                  {isCompleted ? '✅' : '🚫'}
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: isCompleted ? '#166534' : '#334155',
+                    marginBottom: 6,
+                  }}
+                >
+                  {isCompleted ? 'Ca cứu hộ đã hoàn thành' : 'Yêu cầu cứu nạn đã được hủy'}
+                </div>
+                <p
+                  style={{
+                    fontSize: 12.5,
+                    color: 'var(--sos-text-muted)',
+                    lineHeight: 1.6,
+                    maxWidth: 290,
+                    margin: 0,
+                  }}
+                >
+                  {isCompleted
+                    ? 'Tất cả nạn nhân đã được lực lượng cứu hộ ứng cứu an toàn. Hồ sơ ca này đã kết thúc.'
+                    : 'Yêu cầu cứu nạn đã được đóng lại bởi người dân hoặc ban chỉ huy.'}
+                </p>
+              </div>
+            ) : !isAssigned ? (
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  padding: '6px 10px 0 10px',
+                }}
+              >
+                {/* Header tiêu đề phân công & Tab Bar 2 chế độ (shrink-0) */}
+                <div
+                  style={{
+                    flexShrink: 0,
+                    paddingBottom: 6,
+                    borderBottom: '1px solid var(--sos-border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+                      <div
                         style={{
-                          background: isAlreadyApplied ? '#16a34a' : '#4f46e5',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: 5,
-                          padding: '2.5px 8px',
-                          fontSize: 10,
-                          fontWeight: 800,
-                          cursor: 'pointer',
+                          fontSize: 13.5,
+                          fontWeight: 900,
+                          color: 'var(--sos-text-primary, #0f172a)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          letterSpacing: '-0.1px',
+                        }}
+                      >
+                        <LifeBuoy size={16} style={{ color: '#0f172a', flexShrink: 0 }} />
+                        <span>PHÂN CÔNG</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--sos-text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        ({busyTeamsCount === 0
+                          ? `${readyTeamsCount} sẵn sàng`
+                          : readyTeamsCount === 0
+                            ? `${availableTeams.length} bận`
+                            : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`})
+                      </span>
+                    </div>
+
+                    {selectedSos?.id && !selectedSos.id.startsWith('sos-') && (
+                      <button
+                        type="button"
+                        onClick={() => loadSmartRecommendations(true, true)}
+                        disabled={isLoadingAdvisor}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #cbd5e1',
+                          background: isLoadingAdvisor ? '#f1f5f9' : '#ffffff',
+                          color: '#334155',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: isLoadingAdvisor ? 'wait' : 'pointer',
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                         }}
-                        title={
-                          primarySuggestedSupplies.length > 0
-                            ? `Chọn ${validRecTeamIds.length} đội và nạp tự động: ${primarySuggestedSupplies.map((s) => `${s.name} x${s.quantity}`).join(', ')}`
-                            : `Chọn ${validRecTeamIds.length} đội theo đề xuất của AI`
-                        }
+                        title="Phân tích lại ca SOS và đề xuất phương án điều phối bằng AI"
                       >
-                        {isAlreadyApplied ? '✓ Đã áp dụng' : 'Áp dụng ngay ⚡'}
+                        <RefreshCw size={12.5} style={{ color: '#475569' }} />
+                        <span>{isLoadingAdvisor ? 'Đang phân tích...' : aiAdvisor ? 'Phân tích lại AI' : 'Đề xuất AI'}</span>
                       </button>
                     )}
                   </div>
 
+                  {/* 2 Tabs: Phương án AI | Tất cả đội */}
                   <div
+                    role="tablist"
+                    aria-label="Chế độ chọn đội phân công"
                     style={{
-                      fontSize: 11,
-                      color: '#334155',
-                      lineHeight: 1.35,
-                      fontWeight: 600,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 4,
+                      padding: 3,
+                      borderRadius: 8,
+                      background: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
                     }}
-                    title={summaryText}
                   >
-                    {summaryText}
-                  </div>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={dispatchTab === 'AI'}
+                      onClick={() => setDispatchTab('AI')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        padding: '6px 8px',
+                        borderRadius: 6,
+                        border: dispatchTab === 'AI' ? '1px solid #cbd5e1' : '1px solid transparent',
+                        background: dispatchTab === 'AI' ? '#ffffff' : 'transparent',
+                        color: dispatchTab === 'AI' ? '#3730a3' : '#64748b',
+                        boxShadow: dispatchTab === 'AI' ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                        fontSize: 12.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Sparkles size={13.5} style={{ flexShrink: 0 }} />
+                      <span>Phương án AI</span>
+                      {validRecTeamIds.length > 0 && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            padding: '0 6px',
+                            borderRadius: 999,
+                            background: dispatchTab === 'AI' ? '#eef2ff' : '#e2e8f0',
+                            color: dispatchTab === 'AI' ? '#4338ca' : '#475569',
+                          }}
+                        >
+                          {validRecTeamIds.length} đội
+                        </span>
+                      )}
+                    </button>
 
-                  {(aiAdvisor?.routeWarnings?.length || 0) > 0 && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={dispatchTab === 'TEAMS'}
+                      onClick={() => setDispatchTab('TEAMS')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        padding: '6px 8px',
+                        borderRadius: 6,
+                        border: dispatchTab === 'TEAMS' ? '1px solid #cbd5e1' : '1px solid transparent',
+                        background: dispatchTab === 'TEAMS' ? '#ffffff' : 'transparent',
+                        color: dispatchTab === 'TEAMS' ? '#0f172a' : '#64748b',
+                        boxShadow: dispatchTab === 'TEAMS' ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
+                        fontSize: 12.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Users size={13.5} style={{ flexShrink: 0 }} />
+                      <span>Tất cả đội ({readyTeamsCount}/{availableTeams.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* NỘI DUNG THEO TAB ĐANG CHỌN: CUỘN DỌC */}
+                <div className="dispatch-teams-scroll-list">
+                  {/* Cảnh báo xung đột tài nguyên toàn cục */}
+                  {smartRecs?.conflicts && smartRecs.conflicts.length > 0 && (
                     <div
                       style={{
-                        fontSize: 10,
-                        color: '#b45309',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        color: '#991b1b',
+                        fontSize: 12,
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 6,
+                        marginBottom: 4,
                       }}
-                      title={cleanAiText(aiAdvisor?.routeWarnings?.[0])}
                     >
-                      ⚠ {cleanAiText(aiAdvisor?.routeWarnings?.[0])}
+                      <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+                      <div>
+                        <strong style={{ display: 'block', fontSize: 12 }}>Cảnh báo điều phối đa ca</strong>
+                        <span>{smartRecs.conflicts[0].message}</span>
+                      </div>
                     </div>
                   )}
-                </div>
-              );
-            })()}
 
-            {availableTeams.length === 0 ? (
-              <div
-                style={{
-                  padding: '20px 14px',
-                  textAlign: 'center',
-                  background: '#f8fafc',
-                  borderRadius: 8,
-                  border: '1px dashed #cbd5e1',
-                  color: '#64748b',
-                  fontSize: 12.5,
-                }}
-              >
-                Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
+                  {dispatchTab === 'AI' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {/* Khối 1: Tóm tắt & Phân tích đầy đủ của AI (Không cắt chữ) */}
+                      <div
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          background: '#f8fafc',
+                          border: '1px solid #cbd5e1',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 800, color: '#1e293b' }}>
+                            <Sparkles size={14.5} style={{ color: '#4f46e5', flexShrink: 0 }} />
+                            <span>Nhận định & Đề xuất điều phối AI</span>
+                          </div>
+
+                          {isAlreadyApplied && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: '#dcfce7',
+                                color: '#15803d',
+                                border: '1px solid #86efac',
+                                borderRadius: 5,
+                                padding: '2px 8px',
+                                fontSize: 11.5,
+                                fontWeight: 800,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <CheckCircle2 size={12.5} />
+                              <span>Đã áp dụng</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Tóm tắt đầy đủ */}
+                        <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.5, fontWeight: 500 }}>
+                          {summaryText}
+                        </div>
+
+                        {/* Đánh giá ca SOS */}
+                        {sosAiReasons.length > 0 && (
+                          <div
+                            style={{
+                              paddingTop: 7,
+                              borderTop: '1px dashed #cbd5e1',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 4,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: '#334155' }}>
+                              <ShieldAlert size={13.5} style={{ color: '#475569', flexShrink: 0 }} />
+                              <span>Đánh giá mức độ ca SOS</span>
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#334155', lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {sosAiReasons.map((reason, idx) => (
+                                <li key={idx}>{reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Vật tư đề xuất */}
+                        {primarySuggestedSupplies.length > 0 && (
+                          <div
+                            style={{
+                              paddingTop: 7,
+                              borderTop: '1px dashed #cbd5e1',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 5,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: '#0369a1' }}>
+                              <Package size={13.5} style={{ flexShrink: 0 }} />
+                              <span>Vật tư AI đề xuất cấp kèm</span>
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                              {primarySuggestedSupplies.map((s, idx) => (
+                                <span
+                                  key={s.supplyId || idx}
+                                  style={{
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    color: '#0f172a',
+                                    background: '#ffffff',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 5,
+                                    padding: '2px 8px',
+                                  }}
+                                >
+                                  {s.name} x{s.quantity}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cảnh báo lộ trình */}
+                        {(aiAdvisor?.routeWarnings?.length || 0) > 0 && (
+                          <div
+                            style={{
+                              padding: '7px 9px',
+                              borderRadius: 7,
+                              background: '#fffbeb',
+                              border: '1px solid #fde68a',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 4,
+                            }}
+                          >
+                            {aiAdvisor!.routeWarnings!.map((w, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 6,
+                                  fontSize: 12,
+                                  color: '#92400e',
+                                  fontWeight: 600,
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                <AlertTriangle size={13.5} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
+                                <span>{cleanAiText(w)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Nút Áp dụng toàn bộ phương án AI */}
+                        {validRecTeamIds.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={handleApplyAiPlan}
+                            style={{
+                              marginTop: 2,
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: 7,
+                              border: isAlreadyApplied ? '1px solid #16a34a' : '1px solid #4338ca',
+                              background: isAlreadyApplied ? '#16a34a' : '#4f46e5',
+                              color: '#ffffff',
+                              fontSize: 12.5,
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            {isAlreadyApplied ? (
+                              <>
+                                <CheckCircle2 size={15} />
+                                <span>Đã chọn {validRecTeamIds.length} đội & vật tư theo AI</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={15} />
+                                <span>
+                                  Áp dụng phương án AI ({validRecTeamIds.length} đội
+                                  {primarySuggestedSupplies.length > 0 ? ` + ${primarySuggestedSupplies.length} vật tư` : ''})
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        ) : !isLoadingAdvisor ? (
+                          <button
+                            type="button"
+                            onClick={() => setDispatchTab('TEAMS')}
+                            style={{
+                              marginTop: 2,
+                              width: '100%',
+                              padding: '7px 12px',
+                              borderRadius: 7,
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              color: '#0f172a',
+                              fontSize: 12.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Chuyển sang Tất cả đội để chọn thủ công →
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {/* Khối 2 trong Tab AI: Danh sách đầy đủ các đội được AI đề xuất */}
+                      {validRecTeams.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '0 2px',
+                            }}
+                          >
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                              Đội AI đề xuất ({validRecTeams.length} đội)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setDispatchTab('TEAMS')}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                color: '#0284c7',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Đổi / thêm từ {availableTeams.length} đội →
+                            </button>
+                          </div>
+
+                          {validRecTeams.map((team) => {
+                            const meta = getTeamCardMeta(team);
+                            return (
+                              <TeamSelectorCard
+                                key={team.id}
+                                team={team}
+                                isSelected={activeSelectedTeamIds.includes(team.id)}
+                                isRecommended={meta.isRecommended}
+                                teamTypeLabel={meta.teamTypeLabel}
+                                matchReasons={meta.smartCand?.matchReasons}
+                                warnings={meta.smartCand?.warnings}
+                                vehicleSpec={meta.vehicleSpec}
+                                vehicleCategory={meta.vehicleCategory}
+                                hideWardBadge={meta.hideWardBadge}
+                                etaText={meta.etaText}
+                                teamDisplayName={team.name}
+                                isBusy={meta.isBusy}
+                                busyMissionCode={meta.busyMissionCode}
+                                onToggle={() => handleToggleTeam(team.id)}
+                                onViewMembers={() => setViewingTeamDetail(team)}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : availableTeams.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '20px 14px',
+                        textAlign: 'center',
+                        background: '#f8fafc',
+                        borderRadius: 8,
+                        border: '1px dashed #cbd5e1',
+                        color: '#64748b',
+                        fontSize: 12.5,
+                      }}
+                    >
+                      Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
+                    </div>
+                  ) : (
+                    availableTeams.map((team) => {
+                      const meta = getTeamCardMeta(team);
+                      return (
+                        <TeamSelectorCard
+                          key={team.id}
+                          team={team}
+                          isSelected={activeSelectedTeamIds.includes(team.id)}
+                          isRecommended={meta.isRecommended}
+                          teamTypeLabel={meta.teamTypeLabel}
+                          matchReasons={meta.smartCand?.matchReasons}
+                          warnings={meta.smartCand?.warnings}
+                          vehicleSpec={meta.vehicleSpec}
+                          vehicleCategory={meta.vehicleCategory}
+                          hideWardBadge={meta.hideWardBadge}
+                          etaText={meta.etaText}
+                          teamDisplayName={team.name}
+                          isBusy={meta.isBusy}
+                          busyMissionCode={meta.busyMissionCode}
+                          onToggle={() => handleToggleTeam(team.id)}
+                          onViewMembers={() => setViewingTeamDetail(team)}
+                        />
+                      );
+                    })
+                  )}
+                </div>
               </div>
             ) : (
-              availableTeams.map((team) => {
-                const isSelected = activeSelectedTeamIds.includes(team.id);
-                const smartCand = candidateByTeamId.get(team.id);
-                const tVehicles = getVehiclesForTeam(team);
-                const teamVeh = tVehicles.find((v) => v.status === 'Available') || tVehicles[0];
-                const isRecommended = Boolean(smartRecs?.aiAdvisor?.recommendedTeamIds?.includes(team.id));
-
-                const vehicleTypeViMap: Record<string, string> = {
-                  BOAT: 'Ca-nô',
-                  MOTORBOAT: 'Xuồng máy',
-                  COMPOSITE_BOAT: 'Xuồng Composite',
-                  RUBBER_BOAT: 'Xuồng cao su',
-                  INFLATABLE_BOAT: 'Thuyền hơi',
-                  JET_SKI: 'Mô-tô nước',
-                  AMPHIBIOUS_VEHICLE: 'Xe lội nước',
-                  AMBULANCE: 'Xe cứu thương',
-                  PICKUP_4X4: 'Bán tải 4x4',
-                  PICKUP_TRUCK: 'Xe bán tải',
-                  HIGH_CLEARANCE_TRUCK: 'Xe tải gầm cao',
-                  TRUCK: 'Xe tác chiến',
-                };
-
-                const vehicleSpec = (() => {
-                  if (!smartCand?.primaryVehicle && tVehicles.length === 0) return 'Chưa gán phương tiện';
-                  const rawType = smartCand?.primaryVehicle?.type || teamVeh?.rawType || '';
-                  const typeLabel = vehicleTypeViMap[rawType] || (teamVeh?.name ? teamVeh.name.replace(/^Phương tiện\s+/i, '') : 'Ca-nô');
-                  const plate = smartCand?.primaryVehicle?.plateNumber || teamVeh?.plate || '';
-                  const cap = smartCand?.primaryVehicle?.capacity || teamVeh?.numericCapacity || 4;
-                  const labelWithPlate = plate && !typeLabel.includes(plate) ? `${typeLabel} ${plate}` : typeLabel;
-                  return `${labelWithPlate} (${cap} chỗ)`;
-                })();
-
-                const etaText = smartCand?.etaText || 'Chưa có ETA định tuyến';
-
-                const teamDisplayName = team.name;
-
-                const teamTypeLabelMap: Record<string, string> = {
-                  WATER_RESCUE: 'Đường thủy',
-                  FLOOD_RESCUE: 'Cứu hộ lũ',
-                  EVACUATION: 'Sơ tán dân',
-                  MEDICAL_RESCUE: 'Y tế',
-                  SEARCH_RESCUE: 'Tìm kiếm CN',
-                  LOGISTICS: 'Hậu cần',
-                  FIRE_RESCUE: 'PCCC',
-                  SECURITY: 'An ninh',
-                };
-                const rawTeamType = smartCand?.teamType || team.teamType;
-                const teamTypeLabel = rawTeamType ? teamTypeLabelMap[rawTeamType] || rawTeamType : undefined;
-
-                const activeTask = domainDService.getActiveAssignmentForTeam(team.id, selectedSos?.id);
-                const isBusy = !!activeTask || Boolean(smartCand?.isBusy);
-                const busyMissionCode = activeTask
-                  ? activeTask.sosRequestId
-                    ? `SOS-${activeTask.sosRequestId.slice(-5)}`
-                    : 'Đang làm nhiệm vụ'
-                  : smartCand?.busyMission?.sosCode || undefined;
-
-                return (
-                  <TeamSelectorCard
-                    key={team.id}
-                    team={team}
-                    isSelected={isSelected}
-                    isRecommended={isRecommended && !isBusy}
-                    teamTypeLabel={teamTypeLabel}
-                    matchReasons={smartCand?.matchReasons}
-                    warnings={smartCand?.warnings}
-                    vehicleSpec={vehicleSpec}
-                    etaText={etaText}
-                    teamDisplayName={teamDisplayName}
-                    isBusy={isBusy}
-                    busyMissionCode={busyMissionCode}
-                    onToggle={() => handleToggleTeam(team.id)}
-                    onViewMembers={() => setViewingTeamDetail(team)}
-                  />
-                );
-              })
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '6px 12px 10px 12px' }}>
+                <ActiveMissionConsole
+                  assignment={assignment}
+                  selectedSos={selectedSos}
+                  allSos={allSos}
+                  rescueTeams={rescueTeams}
+                  vehicles={vehicles}
+                  activeOfficer={activeOfficer}
+                  areas={areas}
+                  onOpenReassign={onOpenReassign}
+                  onOpenCancel={onOpenCancel}
+                />
+              </div>
             )}
-          </div>
-        </div>
-      ) : (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '6px 12px 10px 12px' }}>
-          <ActiveMissionConsole
-            assignment={assignment}
-            selectedSos={selectedSos}
-            allSos={allSos}
-            rescueTeams={rescueTeams}
-            vehicles={vehicles}
-            activeOfficer={activeOfficer}
-            areas={areas}
-            onOpenReassign={onOpenReassign}
-            onOpenCancel={onOpenCancel}
-          />
-        </div>
-      )}
 
-      {/* 3. VÙNG 3 - CỐ ĐỊNH Ở ĐÁY (shrink-0): STICKY ACTION FOOTER */}
-      {!isAssigned && !isClosed && (
-        <div
-          style={{
-            flexShrink: 0,
-            padding: '8px 10px',
-            borderTop: '1px solid var(--sos-border)',
-            background: 'var(--sos-surface)',
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
-          }}
-        >
-          <button
-            type="button"
-            disabled={activeSelectedTeamIds.length === 0}
-            onClick={() => setIsConfirmModalOpen(true)}
-            style={{
-              width: '100%',
-              padding: '9px 14px',
-              background:
-                activeSelectedTeamIds.length === 0
-                  ? '#94a3b8'
-                  : '#dc2626',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 12.5,
-              fontWeight: 800,
-              cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              letterSpacing: '0.35px',
-              boxShadow:
-                activeSelectedTeamIds.length === 0
-                  ? 'none'
-                  : '0 3px 10px rgba(220, 38, 38, 0.3)',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <span>
-              {activeSelectedTeamIds.length === 0
-                ? 'CHỌN ĐỘI CỨU HỘ'
-                : '⚡ XÁC NHẬN PHÂN CÔNG'}
-            </span>
-          </button>
-        </div>
-      )}
+            {/* 3. VÙNG 3 - CỐ ĐỊNH Ở ĐÁY (shrink-0): STICKY ACTION FOOTER */}
+            {!isAssigned && !isClosed && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: '8px 10px',
+                  borderTop: '1px solid var(--sos-border)',
+                  background: 'var(--sos-surface)',
+                  boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={activeSelectedTeamIds.length === 0}
+                  onClick={() => setIsConfirmModalOpen(true)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 14px',
+                    background:
+                      activeSelectedTeamIds.length === 0
+                        ? '#94a3b8'
+                        : '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                    cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    letterSpacing: '0.35px',
+                    boxShadow:
+                      activeSelectedTeamIds.length === 0
+                        ? 'none'
+                        : '0 3px 10px rgba(220, 38, 38, 0.3)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {activeSelectedTeamIds.length > 0 && <Zap size={14} style={{ flexShrink: 0 }} />}
+                  <span>
+                    {activeSelectedTeamIds.length === 0
+                      ? 'CHỌN ĐỘI CỨU HỘ'
+                      : `XÁC NHẬN PHÂN CÔNG (${activeSelectedTeamIds.length} ĐỘI)`}
+                  </span>
+                </button>
+              </div>
+            )}
 
-      {/* Sub-component: Confirm Dispatch Modal */}
-      <ConfirmDispatchModal
-        isOpen={isConfirmModalOpen}
-        selectedSos={selectedSos}
-        selectedTeams={selectedTeams}
-        vehicles={vehicles}
-        allocatedSupplies={allocatedSupplies}
-        onClose={() => setIsConfirmModalOpen(false)}
-        onConfirm={handleExecuteDispatch}
-      />
+            {/* Sub-component: Confirm Dispatch Modal */}
+            <ConfirmDispatchModal
+              isOpen={isConfirmModalOpen}
+              selectedSos={selectedSos}
+              selectedTeams={selectedTeams}
+              vehicles={vehicles}
+              allocatedSupplies={allocatedSupplies}
+              onClose={() => setIsConfirmModalOpen(false)}
+              onConfirm={handleExecuteDispatch}
+            />
 
-      {/* Sub-component: Team Members Detail Modal */}
-      <TeamMembersModal
-        team={viewingTeamDetail}
-        onClose={() => setViewingTeamDetail(null)}
-      />
-    </aside>
-  );
+            {/* Sub-component: Team Members Detail Modal */}
+            <TeamMembersModal
+              team={viewingTeamDetail}
+              onClose={() => setViewingTeamDetail(null)}
+            />
+          </aside>
+          );
 };
