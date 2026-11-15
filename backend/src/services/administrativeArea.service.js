@@ -345,7 +345,7 @@ class AdministrativeAreaService {
       });
     }
 
-    // Lấy toàn bộ đơn vị hiện có thuộc các cây tỉnh cùng tên (VD: VN-48 + DANANG) để tránh tạo bản ghi trùng
+    // Lấy toàn bộ đơn vị hiện có thuộc các cây tỉnh cùng tên (VD: VN-48 + DANANG) và prefix VN<provinceCode>- để tránh tạo bản ghi trùng
     const equivalentProvIds = await getEquivalentProvinceIds(provinceDoc, AdministrativeArea);
     const existingChildren = await AdministrativeArea.find({
       parentId: { $in: equivalentProvIds },
@@ -355,15 +355,27 @@ class AdministrativeAreaService {
       childIds.length > 0
         ? await AdministrativeArea.find({ parentId: { $in: childIds } }).lean()
         : [];
+    const prefixRegex = provinceCode ? new RegExp(`^VN${provinceCode}-`, 'i') : null;
+    const existingByPrefix = prefixRegex
+      ? await AdministrativeArea.find({ code: prefixRegex, type: { $ne: 'PROVINCE' } }).lean()
+      : [];
+    const provinceAreasMap = new Map();
+    [...existingChildren, ...existingGrandChildren, ...existingByPrefix].forEach((doc) => {
+      if (doc && doc._id) provinceAreasMap.set(String(doc._id), doc);
+    });
     const codePriority = (code) => {
       const upper = String(code || '').trim().toUpperCase();
       if (/^VN\d+-\d{4,}$/i.test(upper)) return 3;
       if (/^VN\d+-W\d{1,3}$/i.test(upper)) return 1;
       return 2;
     };
-    const provinceAreas = [...existingChildren, ...existingGrandChildren].sort(
-      (a, b) => codePriority(b.code) - codePriority(a.code)
-    );
+    const provinceAreas = Array.from(provinceAreasMap.values()).sort((a, b) => {
+      const priorityDiff = codePriority(b.code) - codePriority(a.code);
+      if (priorityDiff !== 0) return priorityDiff;
+      const aHasBound = a.boundary?.coordinates?.length ? 1 : 0;
+      const bHasBound = b.boundary?.coordinates?.length ? 1 : 0;
+      return bHasBound - aHasBound;
+    });
 
     const byName = new Map();
     const byCode = new Map();

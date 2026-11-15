@@ -22,84 +22,48 @@ async function seedNguHanhSon() {
     const defaultPasswordHash = await bcrypt.hash('Password@123', 10);
 
     // ========================================================
-    // 1. KIỂM TRA & TẠO KHU VỰC HÀNH CHÍNH QUẬN/PHƯỜNG NGŨ HÀNH SƠN
+    // 1. DÙNG KHU VỰC HÀNH CHÍNH CHUẨN HIỆN CÓ TRONG DB (KHÔNG TẠO THÊM BẢN GHI CŨ GÂY PHÌNH 95 -> 195)
     // ========================================================
-    console.log('\n--- 1. Đồng bộ Khu Vực Hành Chính Quận Ngũ Hành Sơn ---');
+    console.log('\n--- 1. Lấy Khu Vực Hành Chính Chuẩn Đà Nẵng & Ngũ Hành Sơn ---');
 
     let danang = await AdministrativeArea.findOne({
       type: 'PROVINCE',
-      $or: [{ code: 'DANANG' }, { code: 'VN-48' }, { name: /^Thành phố Đà Nẵng$/i }],
+      $or: [{ code: 'VN-48' }, { name: /^Thành phố Đà Nẵng$/i }, { code: 'DANANG' }],
     });
     if (!danang) {
       danang = await AdministrativeArea.create({
         name: 'Thành phố Đà Nẵng',
-        code: 'DANANG',
+        code: 'VN-48',
         type: 'PROVINCE',
         status: 'ACTIVE',
       });
     }
 
-    let districtNHS = await AdministrativeArea.findOne({
-      $or: [{ code: 'DAD-NHS' }, { name: /Ngũ Hành Sơn/i, type: 'DISTRICT' }],
+    let wardNguHanhSon = await AdministrativeArea.findOne({
+      $or: [
+        { code: 'VN48-20285' },
+        { name: /^Phường Ngũ Hành Sơn$/i, type: 'WARD' },
+        { code: 'DAD-NHS-01' },
+        { code: 'DAD-NHS' },
+      ],
     });
-
-    if (!districtNHS) {
-      districtNHS = await AdministrativeArea.create({
-        name: 'Quận Ngũ Hành Sơn',
-        code: 'DAD-NHS',
-        type: 'DISTRICT',
+    if (!wardNguHanhSon) {
+      wardNguHanhSon = await AdministrativeArea.create({
+        name: 'Phường Ngũ Hành Sơn',
+        code: 'VN48-20285',
+        type: 'WARD',
         parentId: danang._id,
         status: 'ACTIVE',
       });
-      console.log('➕ Đã tạo Quận Ngũ Hành Sơn:', districtNHS.name);
-    } else {
-      districtNHS.code = 'DAD-NHS';
-      districtNHS.status = 'ACTIVE';
-      await districtNHS.save();
-      console.log('✔ Đã có Quận Ngũ Hành Sơn:', districtNHS.name, `(${districtNHS.code})`);
     }
+    console.log('✔ Dùng địa bàn chuẩn:', wardNguHanhSon.name, `(${wardNguHanhSon.code})`);
 
-    // Các phường của Ngũ Hành Sơn (Giữ DAD-NHS-01 là Phường Ngũ Hành Sơn để đồng bộ với các tài khoản cán bộ hiện có)
-    const wardsConfig = [
-      { name: 'Phường Ngũ Hành Sơn', code: 'DAD-NHS-01' },
-      { name: 'Phường Khuê Mỹ', code: 'DAD-NHS-02' },
-      { name: 'Phường Hòa Quý', code: 'DAD-NHS-03' },
-      { name: 'Phường Hòa Hải', code: 'DAD-NHS-04' },
-      { name: 'Phường Mỹ An', code: 'DAD-NHS-05' },
-    ];
-
-    const wardDocs = {};
-    for (const w of wardsConfig) {
-      let ward = await AdministrativeArea.findOne({
-        $or: [
-          { code: w.code },
-          { name: new RegExp(`^${w.name}$`, 'i'), parentId: districtNHS._id },
-        ],
-      });
-      if (!ward) {
-        ward = await AdministrativeArea.create({
-          name: w.name,
-          code: w.code,
-          type: 'WARD',
-          parentId: districtNHS._id,
-          status: 'ACTIVE',
-        });
-        console.log(`➕ Đã tạo ${w.name} (${w.code})`);
-      } else {
-        ward.name = w.name;
-        ward.parentId = districtNHS._id;
-        ward.status = 'ACTIVE';
-        await ward.save();
-        console.log(`✔ Đã có ${ward.name} (${ward.code})`);
-      }
-      wardDocs[w.code] = ward;
-    }
-
-    const wardNguHanhSon = wardDocs['DAD-NHS-01'];
-    const wardKhueMy = wardDocs['DAD-NHS-02'];
-    const wardHoaQuy = wardDocs['DAD-NHS-03'];
-    const wardHoaHai = wardDocs['DAD-NHS-04'];
-    const wardMyAn = wardDocs['DAD-NHS-05'];
+    // Giữ tương thích các biến trong script mà không chèn thêm 4 phường cũ / quận cũ vào administrative_areas
+    const districtNHS = wardNguHanhSon;
+    const wardKhueMy = wardNguHanhSon;
+    const wardHoaQuy = wardNguHanhSon;
+    const wardHoaHai = wardNguHanhSon;
+    const wardMyAn = wardNguHanhSon;
 
     // ========================================================
     // 2. TẠO CƠ QUAN QUẢN LÝ / BAN CHỈ HUY QUẬN NGŨ HÀNH SƠN

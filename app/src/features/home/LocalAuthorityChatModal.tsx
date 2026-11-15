@@ -71,6 +71,8 @@ export interface WardOption {
   category: string;
   province: string;
   fullName: string;
+  officerName?: string | null;
+  phone?: string | null;
 }
 
 const removeVietnameseTones = (str: string): string => {
@@ -104,12 +106,14 @@ const POPULAR_WARDS: WardOption[] = [
   { ward: 'Phường Ngũ Hành Sơn', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng' },
   { ward: 'Phường Hải Vân', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Vân, Thành phố Đà Nẵng' },
   { ward: 'Đặc khu Hoàng Sa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Đặc khu Hoàng Sa, Thành phố Đà Nẵng' },
+  { ward: 'Xã Duy Nghĩa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Xã Duy Nghĩa, Thành phố Đà Nẵng' },
 
   // 3. Phường Đô thị mới & Công nghiệp
   { ward: 'Phường Liên Chiểu', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Liên Chiểu, Thành phố Đà Nẵng' },
   { ward: 'Phường Hòa Khánh', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Khánh, Thành phố Đà Nẵng' },
   { ward: 'Phường Cẩm Lệ', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Cẩm Lệ, Thành phố Đà Nẵng' },
   { ward: 'Phường Hòa Xuân', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Xuân, Thành phố Đà Nẵng' },
+  { ward: 'Phường Điện Bàn', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Điện Bàn, Thành phố Đà Nẵng' },
 
   // 4. Ngoại thành & Nông thôn
   { ward: 'Xã Hòa Vang', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Vang, Thành phố Đà Nẵng' },
@@ -144,6 +148,10 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const [selectedCustomWard, setSelectedCustomWard] = useState<WardOption | null>(null);
   const [searchWardText, setSearchWardText] = useState('');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState('Tất cả');
+
+  // Danh sách các Phường/Xã khả dụng (đồng bộ thời gian thực từ CSDL Backend)
+  const [wardOptionsList, setWardOptionsList] = useState<WardOption[]>(POPULAR_WARDS);
+  const [loadingWards, setLoadingWards] = useState(false);
 
   // Danh sách tin nhắn & input
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -519,6 +527,32 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     };
   }, [visible, resolveAreaAndAuthority, initialSosData, fetchActiveSosRequest, updateSosStatusMap]);
 
+  // Tải danh sách Phường/Xã từ CSDL Backend (tự động nhận diện cán bộ địa phương mới như Xã Duy Nghĩa)
+  const fetchWardOptions = useCallback(async () => {
+    try {
+      setLoadingWards(true);
+      const res = await backendApi.getWardOptions();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setWardOptionsList(res.data);
+      }
+    } catch (err) {
+      console.warn('[Fetch Ward Options Error]:', err);
+    } finally {
+      setLoadingWards(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWardOptions();
+  }, [fetchWardOptions]);
+
+  // Khi người dùng bấm mở Modal Chọn Phường / Xã, làm mới danh sách
+  useEffect(() => {
+    if (showWardPicker) {
+      fetchWardOptions();
+    }
+  }, [showWardPicker, fetchWardOptions]);
+
   // Xử lý chuyển kênh chat sang một Phường/Xã được người dân tự chọn
   const handleSelectWard = async (wardItem: WardOption | null) => {
     setShowWardPicker(false);
@@ -568,7 +602,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   };
 
   // Danh sách phường/xã đã lọc theo ô tìm kiếm và tab Khu vực (hỗ trợ tiếng Việt không dấu)
-  const filteredWards = POPULAR_WARDS.filter((w) => {
+  const filteredWards = wardOptionsList.filter((w) => {
     const matchCategory = selectedCategoryTab === 'Tất cả' || w.category === selectedCategoryTab;
     const rawQ = searchWardText.trim().toLowerCase();
     if (!rawQ) return matchCategory;
@@ -577,14 +611,17 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     const wardClean = removeVietnameseTones(w.ward);
     const catClean = removeVietnameseTones(w.category);
     const fullClean = removeVietnameseTones(w.fullName);
+    const officerClean = w.officerName ? removeVietnameseTones(w.officerName) : '';
 
     const matchSearch =
       w.ward.toLowerCase().includes(rawQ) ||
       w.category.toLowerCase().includes(rawQ) ||
       w.fullName.toLowerCase().includes(rawQ) ||
+      (w.officerName && w.officerName.toLowerCase().includes(rawQ)) ||
       wardClean.includes(cleanQ) ||
       catClean.includes(cleanQ) ||
-      fullClean.includes(cleanQ);
+      fullClean.includes(cleanQ) ||
+      officerClean.includes(cleanQ);
 
     return matchCategory && matchSearch;
   });
@@ -1328,10 +1365,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     localInfo?.authority?.department ||
     (isCommuneOrWard ? `UBND ${displayArea}` : `Ban Chỉ Huy PCTT ${cleanDisplayArea}`);
 
-  const headerSubtitleText = localInfo?.authority?.name
-    ? `${localInfo.authority.name} · Trực ban 24/7`
-    : `${displayArea} · Trực tuyến 24/7`;
-
   // Tính toán Top Inset an toàn cho tai thỏ iPhone / Dynamic Island
   const topSafeInset = Math.max(
     insets.top,
@@ -1367,7 +1400,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             />
           </View>
 
-          {/* Tiêu đề & phụ đề địa phương (nhấn để đổi địa phương) */}
+          {/* Tiêu đề địa phương (nhấn để đổi địa phương) */}
           <TouchableOpacity
             style={styles.headerTextWrap}
             onPress={() => setShowWardPicker(true)}
@@ -1379,17 +1412,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                 {headerDepartmentTitle}
               </Text>
               <Ionicons name="chevron-down" size={14} color="#64748B" style={{ marginLeft: 4 }} />
-            </View>
-            <View style={styles.headerSubRow}>
-              <View
-                style={[
-                  styles.subDot,
-                  { backgroundColor: isConnected ? '#16A34A' : '#94A3B8' },
-                ]}
-              />
-              <Text style={styles.headerSubtitle} numberOfLines={1}>
-                {isConnected ? headerSubtitleText : 'Đang kết nối lại...'}
-              </Text>
             </View>
           </TouchableOpacity>
 
@@ -1984,6 +2006,42 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                 </TouchableOpacity>
               )}
 
+              {/* Tùy chọn kết nối trực tiếp theo từ khóa người dùng vừa nhập (ví dụ: Duy Nghĩa) */}
+              {!!searchWardText.trim() && (
+                <TouchableOpacity
+                  style={styles.customSearchWardBtn}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    const raw = searchWardText.trim();
+                    const clean = raw.replace(/^(phường|xã|thị trấn|p\.|x\.)\s+/i, '').trim();
+                    const wardTitle = /^(phường|xã|thị trấn)/i.test(raw)
+                      ? raw
+                      : `Xã ${clean}`;
+                    const customOption: WardOption = {
+                      ward: wardTitle,
+                      category: 'Ngoại thành',
+                      province: 'Thành phố Đà Nẵng',
+                      fullName: `${wardTitle}, Thành phố Đà Nẵng`,
+                    };
+                    handleSelectWard(customOption);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.customSearchWardIcon}>
+                    <Ionicons name="compass" size={18} color="#0066FF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.customSearchWardTitle} numberOfLines={1}>
+                      Kết nối tới: "{searchWardText.trim()}"
+                    </Text>
+                    <Text style={styles.customSearchWardSub} numberOfLines={1}>
+                      Chạm để tìm kiếm và kết nối cán bộ trực ban phụ trách
+                    </Text>
+                  </View>
+                  <Ionicons name="arrow-forward-circle" size={20} color="#0066FF" />
+                </TouchableOpacity>
+              )}
+
               {/* Danh sách các phường / xã (mô hình 2 cấp sau sáp nhập) */}
               <FlatList
                 data={filteredWards}
@@ -2007,14 +2065,9 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                         <View style={[styles.wardItemIcon, isSelected && styles.wardItemIconSelected]}>
                           <FontAwesome5 name="landmark" size={13} color={isSelected ? '#0066FF' : '#64748B'} />
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.wardItemName, isSelected && styles.wardItemNameSelected]}>
-                            {item.ward}
-                          </Text>
-                          <Text style={styles.wardItemDistrict}>
-                            Trực thuộc TP. Đà Nẵng · Khu vực {item.category}
-                          </Text>
-                        </View>
+                        <Text style={[styles.wardItemName, isSelected && styles.wardItemNameSelected]}>
+                          {item.ward}
+                        </Text>
                       </View>
                       {isSelected ? (
                         <Ionicons name="checkmark-circle" size={20} color="#0066FF" />
@@ -2025,10 +2078,17 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                   );
                 }}
                 ListEmptyComponent={
-                  <View style={styles.wardEmptyWrap}>
-                    <Ionicons name="search-outline" size={32} color="#CBD5E1" />
-                    <Text style={styles.wardEmptyText}>Không tìm thấy phường/xã phù hợp</Text>
-                  </View>
+                  loadingWards ? (
+                    <View style={styles.wardEmptyWrap}>
+                      <ActivityIndicator size="small" color="#0066FF" />
+                      <Text style={[styles.wardEmptyText, { marginTop: 8 }]}>Đang tải danh sách địa phương...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.wardEmptyWrap}>
+                      <Ionicons name="search-outline" size={32} color="#CBD5E1" />
+                      <Text style={styles.wardEmptyText}>Không tìm thấy phường/xã phù hợp trong danh mục</Text>
+                    </View>
+                  )
                 }
               />
             </View>
@@ -2115,22 +2175,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.2,
-    marginBottom: 2,
-  },
-  headerSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  subDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
   },
   headerActionBtn: {
     width: 36,
@@ -2672,6 +2716,36 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
+  customSearchWardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 10,
+    gap: 10,
+  },
+  customSearchWardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customSearchWardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  customSearchWardSub: {
+    fontSize: 11,
+    color: '#60A5FA',
+    marginTop: 2,
+  },
   wardListContent: {
     paddingBottom: 16,
   },
@@ -2679,7 +2753,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',

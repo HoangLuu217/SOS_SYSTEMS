@@ -37,13 +37,12 @@ import {
   UserMinus,
   Crown,
 } from 'lucide-react';
-import type { RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { RescueTeamItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
 import {
   fetchRescueTeams,
   fetchAdminUsers,
   verifyRescuer,
-  fetchAdministrativeAreas,
   updateRescueTeam,
   updateRescueTeamStatus,
   updateTeamMemberStatus,
@@ -58,6 +57,7 @@ import { domainDService } from '@/services/domainDService';
 import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged, onRescueTeamsUpdated } from '@/services/socketService';
 import {
   SPECIALIZATION_LABELS,
@@ -184,8 +184,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   const [rawTeams, setRawTeams] = useState<RescueTeamItem[]>([]);
   const [rescuers, setRescuers] = useState<any[]>([]);
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [specFilter, setSpecFilter] = useState<string>('ALL');
@@ -508,6 +506,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     activeOfficer?.jurisdictionAreaName ||
     '';
 
+  const {
+    wards,
+    wardsLoading,
+    selectedAreaId,
+    setSelectedAreaId,
+    managedArea,
+    isTeamInTargetArea,
+  } = useAdministrativeFilter({
+    isAdmin,
+    userAreaId,
+    userAreaName,
+    wardsScopeProvince: 'Đà Nẵng',
+  });
+
   // Form thêm đội cứu hộ mới
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamSpec, setNewTeamSpec] = useState<RescueSpecialization>('WATER_RESCUE');
@@ -625,52 +637,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   };
 
-  const managedArea = useMemo(() => {
-    if (isAdmin) return null;
-    if (userAreaId) {
-      const byId = areas.find((a) => a._id === userAreaId || a.code === userAreaId);
-      if (byId) return byId;
-    }
-    if (userAreaName) {
-      const cleanUser = userAreaName.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
-      const byName = areas.find((a) => {
-        const cleanArea = a.name.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
-        return cleanUser && (cleanArea.includes(cleanUser) || cleanUser.includes(cleanArea));
-      });
-      if (byName) return byName;
-    }
-    return null;
-  }, [areas, isAdmin, userAreaId, userAreaName]);
-
-  // Danh sách địa bàn thuộc Đà Nẵng cho dropdown lọc của Admin (loại bỏ các tỉnh/TP khác)
-  const daNangAreas = useMemo(() => {
-    const areaMap = new Map<string, AdministrativeAreaItem>();
-    areas.forEach((a) => {
-      if (a?._id) areaMap.set(String(a._id), a);
-    });
-
-    const isBelongsToDaNang = (area: AdministrativeAreaItem): boolean => {
-      if (area.type === 'PROVINCE') return false;
-      if (area.code?.startsWith('VN48-')) return true;
-      let curr: AdministrativeAreaItem | undefined = area;
-      let depth = 0;
-      while (curr && depth < 5) {
-        if (curr.type === 'PROVINCE') {
-          const norm = curr.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-          return norm.includes('da nang');
-        }
-        const pId = typeof curr.parentId === 'object' && curr.parentId ? (curr.parentId as any)._id : curr.parentId;
-        if (!pId) break;
-        curr = areaMap.get(String(pId));
-        depth++;
-      }
-      return false;
-    };
-
-    const filtered = areas.filter(isBelongsToDaNang);
-    return filtered.length > 0 ? filtered : areas.filter((a) => a.type !== 'PROVINCE');
-  }, [areas]);
-
   const effectiveAreaId = !isAdmin
     ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
     : selectedAreaId;
@@ -678,25 +644,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   useEffect(() => {
     if (!isAdmin && managedArea?._id) {
       setSelectedAreaId(managedArea._id);
-    } else if (user?.authority?.areaId) {
+    } else if (!isAdmin && user?.authority?.areaId) {
       setSelectedAreaId(user.authority.areaId);
     }
-  }, [isAdmin, managedArea, user?.authority?.areaId]);
+  }, [isAdmin, managedArea, user?.authority?.areaId, setSelectedAreaId]);
 
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const [teamsRes, rescuersRes, areasRes] = await Promise.allSettled([
+      const areaParam = !isAdmin && effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
+      const [teamsRes, rescuersRes] = await Promise.allSettled([
         fetchRescueTeams({ areaId: areaParam, limit: 100 }),
         fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
-        fetchAdministrativeAreas(),
       ]);
-
-      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
-        setAreas(areasRes.value.data);
-      }
 
       const rawTeams =
         teamsRes.status === 'fulfilled' && teamsRes.value.success
@@ -715,7 +676,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [effectiveAreaId]);
+  }, [isAdmin, effectiveAreaId]);
 
   const refreshData = useCallback(() => {
     loadData();
@@ -1117,9 +1078,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   // Operational KPI Counts (Tính toán thực từ authorizedTeams thuộc phạm vi quản lý)
   const pendingMembersTotal = allPendingJoinRequests.length;
 
-  // Bộ lọc chuyên môn, trạng thái và từ khóa tìm kiếm
+  // Bộ lọc địa bàn (cho Admin), chuyên môn, trạng thái và từ khóa tìm kiếm
   const filteredTeams = useMemo(() => {
     return authorizedTeams.filter((team) => {
+      // 0. Lọc theo địa bàn đã chọn (Admin)
+      if (isAdmin && selectedAreaId !== 'ALL' && !isTeamInTargetArea(team)) {
+        return false;
+      }
+
       // 1. Lọc theo chuyên môn
       if (specFilter !== 'ALL') {
         if (specFilter === 'WATER_RESCUE') {
@@ -1151,7 +1117,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
       return true;
     });
-  }, [authorizedTeams, specFilter, searchQuery]);
+  }, [authorizedTeams, isAdmin, selectedAreaId, isTeamInTargetArea, specFilter, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTeams.length / pageSize));
   const paginatedTeams = useMemo(() => {
@@ -1531,14 +1497,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     options={[
                       {
                         value: 'ALL',
-                        label: `📍 Tất cả địa bàn Đà Nẵng (${daNangAreas.length})`,
+                        label: wardsLoading
+                          ? '📍 Đang tải địa bàn Đà Nẵng...'
+                          : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
                         keywords: 'tat ca toan thanh pho da nang',
                       },
-                      ...daNangAreas.map((area) => ({
-                        value: area._id,
-                        label: `${area.name}${area.code ? ` (${area.code})` : ''}`,
-                        badgeText: area.code || undefined,
-                        keywords: `${area.name} ${area.code || ''}`,
+                      ...wards.map((ward) => ({
+                        value: ward.id,
+                        label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+                        badgeText: ward.code || undefined,
+                        keywords: `${ward.name} ${ward.code || ''}`,
                       })),
                     ]}
                   />
