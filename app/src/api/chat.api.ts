@@ -6,6 +6,7 @@ export interface ChatMessageItem {
   senderId: any;
   senderName: string;
   senderRole: 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN' | 'RESCUER' | string;
+  senderAvatarUrl?: string | null;
   recipientId?: any;
   channel: string;
   content: string;

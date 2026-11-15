@@ -7,6 +7,11 @@ import {
   isShortGoogleMapsUrl,
   resolveGoogleMapsInput,
 } from '@/utils/mapLinkParser';
+import {
+  reverseGeocodeCoords,
+  searchGeocodeSuggestions,
+  type GeocodeSearchResult,
+} from '@/utils/geocode';
 
 export interface LocationSearchMapPickerProps {
   lat: number;
@@ -18,13 +23,6 @@ export interface LocationSearchMapPickerProps {
   mapHeight?: number;
   error?: string;
   onLocationSelected: (lat: number, lng: number, detectedAddress?: string) => void;
-}
-
-interface SearchResultItem {
-  place_id: number | string;
-  display_name: string;
-  lat: string;
-  lon: string;
 }
 
 const DEFAULT_LAT = 16.057;
@@ -41,90 +39,6 @@ function buildMarkerIcon(markerHtml: string): L.DivIcon {
     iconSize: [28, 34],
     iconAnchor: [14, 34],
   });
-}
-
-async function reverseGeocodeCoords(lat: number, lng: number): Promise<string> {
-  try {
-    const res = await fetch(`/api/blood-donations/geocode/reverse?lat=${lat}&lng=${lng}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (json?.data) return String(json.data);
-    }
-  } catch {
-    // Fallback Photon API bên dưới
-  }
-  try {
-    const fbRes = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
-    if (fbRes.ok) {
-      const fbData = await fbRes.json();
-      const props = fbData?.features?.[0]?.properties;
-      if (props) {
-        const addr = [props.name, props.street, props.city, props.state, props.country]
-          .filter(Boolean)
-          .join(', ');
-        if (addr) return addr;
-      }
-    }
-  } catch {
-    // Bỏ qua lỗi mạng khi tra cứu ngược địa chỉ
-  }
-  return '';
-}
-
-async function searchGeocodeSuggestions(query: string, areaBias?: string): Promise<SearchResultItem[]> {
-  const fullQuery = areaBias ? `${query}, ${areaBias}` : query;
-  try {
-    const res = await fetch(`/api/blood-donations/geocode/search?q=${encodeURIComponent(fullQuery)}`);
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json?.data) && json.data.length > 0) {
-        return json.data;
-      }
-    }
-  } catch {
-    // Fallback phía dưới
-  }
-
-  if (areaBias) {
-    try {
-      const fbRes = await fetch(`/api/blood-donations/geocode/search?q=${encodeURIComponent(query)}`);
-      if (fbRes.ok) {
-        const fbJson = await fbRes.json();
-        if (Array.isArray(fbJson?.data) && fbJson.data.length > 0) {
-          return fbJson.data;
-        }
-      }
-    } catch {
-      // Fallback phía dưới
-    }
-  }
-
-  try {
-    const photonRes = await fetch(
-      `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`
-    );
-    if (photonRes.ok) {
-      const photonData = await photonRes.json();
-      if (Array.isArray(photonData?.features) && photonData.features.length > 0) {
-        return photonData.features.map((f: any) => {
-          const props = f.properties || {};
-          const parts = [props.name, props.street, props.city, props.state, props.country].filter(
-            Boolean
-          );
-          return {
-            place_id: props.osm_id || Math.random(),
-            display_name: parts.join(', ') || props.name || 'Địa điểm tìm thấy',
-            lat: String(f.geometry.coordinates[1]),
-            lon: String(f.geometry.coordinates[0]),
-          };
-        });
-      }
-    }
-  } catch {
-    // Không tìm được qua Photon
-  }
-
-  return [];
 }
 
 /**
@@ -158,7 +72,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [searchResults, setSearchResults] = useState<GeocodeSearchResult[]>([]);
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number }>({
     lat: initialLat,
     lng: initialLng,
@@ -276,7 +190,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
     markerRef.current.setIcon(buildMarkerIcon(markerHtml));
   }, [markerHtml]);
 
-  const handleSelectSearchResult = (item: SearchResultItem) => {
+  const handleSelectSearchResult = (item: GeocodeSearchResult) => {
     const parsedLat = parseFloat(item.lat);
     const parsedLng = parseFloat(item.lon);
     if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
@@ -329,7 +243,11 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
       }
 
       // 3. Tìm kiếm theo tên địa chỉ / địa điểm
-      const list = await searchGeocodeSuggestions(q, selectedAreaName);
+      const list = await searchGeocodeSuggestions(q, {
+        areaBias: selectedAreaName,
+        lat: currentCoords.lat,
+        lng: currentCoords.lng,
+      });
       setSearchResults(list);
       if (list.length === 0) {
         setSearchFeedback({

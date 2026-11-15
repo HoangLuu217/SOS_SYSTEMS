@@ -2,8 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const fileService = require('../services/file.service');
 const cloudinary = require('../config/cloudinary');
-
-const localUploadsDir = path.join(__dirname, '../../uploads');
+const { ensureLocalUploadsDir } = require('../utils/uploadsDir');
 
 const buildLocalFileUrl = (req, fileName) => {
   const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
@@ -12,9 +11,7 @@ const buildLocalFileUrl = (req, fileName) => {
 };
 
 const saveBase64Locally = (rawB64, req, prefix = 'mobile_image', preferredName = '') => {
-  if (!fs.existsSync(localUploadsDir)) {
-    fs.mkdirSync(localUploadsDir, { recursive: true });
-  }
+  const targetDir = ensureLocalUploadsDir();
   const trimmed = String(rawB64 || '').trim();
   const dataMatch = trimmed.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.*)$/s);
   const cleanB64 = dataMatch ? dataMatch[2] : trimmed;
@@ -23,7 +20,7 @@ const saveBase64Locally = (rawB64, req, prefix = 'mobile_image', preferredName =
   const ext = extFromData || extFromName || (cleanB64.startsWith('iVBOR') ? 'png' : 'jpg');
   const fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
   const buffer = Buffer.from(cleanB64, 'base64');
-  fs.writeFileSync(path.join(localUploadsDir, fileName), buffer);
+  fs.writeFileSync(path.join(targetDir, fileName), buffer);
   return {
     url: buildLocalFileUrl(req, fileName),
     fileName,

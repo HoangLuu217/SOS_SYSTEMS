@@ -69,6 +69,22 @@ export const FALLBACK_WARDS: Record<string | number, Ward[]> = {
   ],
 };
 
+const normalizeAreaName = (value?: string): string =>
+  (value || '')
+    .replace(/đ/gi, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getAreaCodePriority = (code?: string): number => {
+  const upper = String(code || '').trim().toUpperCase();
+  if (/^VN-?\d+-\d+$/i.test(upper) || /^VN-?\d+$/i.test(upper)) return 3;
+  if (/^VN\d+-W\d+$/i.test(upper)) return 1;
+  return 2;
+};
+
 class ProvinceApiService {
   private provincesCache: Province[] | null = null;
   private wardsCache: Map<string | number, Ward[]> = new Map();
@@ -81,9 +97,18 @@ class ProvinceApiService {
       if (!this.provincesCache) {
         const res = await apiClient.get<any[]>('/administrative-areas?type=PROVINCE');
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          this.provincesCache = res.data.map((p, idx) => {
+          const dedupedProvinces = new Map<string, any>();
+          res.data.forEach((p) => {
+            const key = normalizeAreaName(p.name) || String(p._id);
+            const existing = dedupedProvinces.get(key);
+            if (!existing || getAreaCodePriority(p.code) > getAreaCodePriority(existing.code)) {
+              dedupedProvinces.set(key, p);
+            }
+          });
+
+          this.provincesCache = [...dedupedProvinces.values()].map((p, idx) => {
             let numCode = idx + 1;
-            if (p.name.includes('Đà Nẵng') || p.code === 'DANANG') numCode = 48;
+            if (p.name.includes('Đà Nẵng') || p.code === 'DANANG' || p.code === 'VN-48') numCode = 48;
             else if (p.name.includes('Hà Nội')) numCode = 1;
             else if (p.name.includes('Hồ Chí Minh')) numCode = 79;
             else if (p.name.includes('Cần Thơ')) numCode = 92;
@@ -148,20 +173,61 @@ class ProvinceApiService {
           if (fb?.id) provinceMongoId = fb.id;
         }
 
+        if (!provinceMongoId) {
+          const provRes = await apiClient.get<any[]>('/administrative-areas?type=PROVINCE');
+          if (provRes.success && Array.isArray(provRes.data)) {
+            const pCodeStr = String(provinceCodeOrId).toLowerCase();
+            const matchedProv = provRes.data.find((p) => {
+              const norm = normalizeAreaName(p.name);
+              return (
+                String(p._id) === String(provinceCodeOrId) ||
+                String(p.code).toLowerCase() === pCodeStr ||
+                (pCodeStr === '48' && norm.includes('da nang'))
+              );
+            });
+            if (matchedProv?._id) provinceMongoId = matchedProv._id;
+          }
+        }
+
         const endpoint = provinceMongoId
           ? `/administrative-areas?provinceId=${provinceMongoId}`
-          : `/administrative-areas?type=WARD`;
+          : `/administrative-areas`;
 
         const res = await apiClient.get<any[]>(endpoint);
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           const pCodeNum = typeof provinceCodeOrId === 'number' ? provinceCodeOrId : 48;
-          wards = res.data.map((w, idx) => ({
-            id: w._id,
-            code: typeof w.code === 'number' ? w.code : idx + 1000,
-            name: w.name,
-            province_code: pCodeNum,
-            division_type: w.type === 'DISTRICT' ? 'quận' : 'phường',
-          }));
+          const activeList = res.data.filter((w) => w && w.status !== 'INACTIVE');
+          const parentIdsWithWards = new Set<string>();
+          activeList.forEach((w) => {
+            if (w.type === 'WARD' && w.parentId) {
+              const pid = typeof w.parentId === 'object' ? w.parentId._id : w.parentId;
+              if (pid) parentIdsWithWards.add(String(pid));
+            }
+          });
+          const dedupedWards = new Map<string, any>();
+          activeList.forEach((w) => {
+            const isLeafUnit =
+              w.type === 'WARD' || (w.type === 'DISTRICT' && !parentIdsWithWards.has(String(w._id)));
+            if (!isLeafUnit) return;
+            const key = normalizeAreaName(w.name) || String(w._id);
+            const existing = dedupedWards.get(key);
+            if (!existing || getAreaCodePriority(w.code) > getAreaCodePriority(existing.code)) {
+              dedupedWards.set(key, w);
+            }
+          });
+          wards = [...dedupedWards.values()]
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'vi', { sensitivity: 'base' }))
+            .map((w, idx) => ({
+              id: w._id,
+              code: typeof w.code === 'number' ? w.code : idx + 1000,
+              name: w.name,
+              province_code: pCodeNum,
+              division_type: String(w.name || '').startsWith('Đặc khu')
+                ? 'đặc khu'
+                : w.type === 'DISTRICT'
+                  ? 'quận'
+                  : 'phường',
+            }));
           this.wardsCache.set(provinceCodeOrId, wards);
         }
       }

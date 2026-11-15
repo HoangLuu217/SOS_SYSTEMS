@@ -74,10 +74,6 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
     title: 'CÀI ĐẶT HỆ THỐNG',
     desc: 'Cấu hình tham số điều hành, thông báo khẩn cấp và kết nối vệ tinh',
   },
-  admin_overview: {
-    title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN',
-    desc: 'Bảng điều khiển trung tâm giám sát hoạt động hệ thống SOS trên toàn quốc',
-  },
   citizens: {
     title: 'QUẢN TRỊ TÀI KHOẢN NGƯỜI DÂN',
     desc: 'Quản lý danh sách, thông tin liên lạc và trạng thái tài khoản người dân',

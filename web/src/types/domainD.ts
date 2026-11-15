@@ -276,6 +276,7 @@ export interface SosRequest {
   wardName: string;
   districtId?: string;
   districtName: string;
+  citizenId?: string;
   citizenName: string;
   citizenPhone: string;
   affectedPeople: number;
@@ -352,6 +353,8 @@ export interface RescueTeam {
   code?: string;
   teamType?: string;
   teamStatus?: string;
+  operationalStatus?: string;
+  leaderId?: string;
   description?: string;
   authorityOrganizationId: string;
   authorityName?: string;

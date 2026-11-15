@@ -6,7 +6,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
-const { findAreaByCoordinates } = require('../utils/geoUtils');
+const { findAreaByCoordinates, resolveTargetScopeForArea } = require('../utils/geoUtils');
 const eventBus = require('./eventBus');
 
 class BloodDonationService {
@@ -504,13 +504,13 @@ class BloodDonationService {
       targetAreaDoc = await AdministrativeArea.findById(areaId);
       if (targetAreaDoc) {
         targetAreaId = targetAreaDoc._id;
-        scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
+        scope = await resolveTargetScopeForArea(targetAreaDoc, AdministrativeArea);
       }
     } else if (!isAdmin && senderUser.authority?.areaId) {
       targetAreaDoc = await AdministrativeArea.findById(senderUser.authority.areaId);
       if (targetAreaDoc) {
         targetAreaId = targetAreaDoc._id;
-        scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
+        scope = await resolveTargetScopeForArea(targetAreaDoc, AdministrativeArea);
       }
     }
 

@@ -354,9 +354,17 @@ function buildTeamCandidate({
     warnings.push('Đội đang hoạt động hạn chế; cần cán bộ xác nhận khả năng xuất phát');
   }
 
-  // Cấm tuyệt đối đội đang bận nhiệm vụ hoặc không ở trạng thái ACTIVE / READY
+  const sosCitizenId = sos.citizenId?._id ? String(sos.citizenId._id) : sos.citizenId ? String(sos.citizenId) : null;
+  const teamLeaderId = team.leaderId?._id ? String(team.leaderId._id) : team.leaderId ? String(team.leaderId) : null;
+  const isTeamLeaderDistressed = Boolean(sosCitizenId && teamLeaderId && sosCitizenId === teamLeaderId);
+  if (isTeamLeaderDistressed) {
+    warnings.push('Đội trưởng của đội này đang gửi yêu cầu SOS; không thể phân công');
+  }
+
+  // Cấm tuyệt đối đội đang bận nhiệm vụ, có đội trưởng đang gửi SOS, hoặc không ở trạng thái ACTIVE / READY
   const dispatchEligible =
     !busyAssignment &&
+    !isTeamLeaderDistressed &&
     team.status === 'ACTIVE' &&
     (team.operationalStatus === 'READY' || !team.operationalStatus);
 

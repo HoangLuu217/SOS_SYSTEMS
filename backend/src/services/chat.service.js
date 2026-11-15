@@ -310,8 +310,12 @@ class ChatService {
       const rawCode = m.sosData?.sosCode || m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i)?.[1]?.trim();
       const liveStatus = (rawId && liveStatusMap.get(String(rawId))) || (rawCode && liveStatusMap.get(rawCode));
 
+      const mObj = m.toObject ? m.toObject() : { ...m };
+      if (mObj.senderId && typeof mObj.senderId === 'object' && mObj.senderId.avatarUrl) {
+        mObj.senderAvatarUrl = mObj.senderId.avatarUrl;
+      }
+
       if (liveStatus) {
-        const mObj = m.toObject ? m.toObject() : { ...m };
         if (!mObj.sosData) mObj.sosData = {};
         mObj.sosData.status = liveStatus;
         if (mObj.sosRequestId && typeof mObj.sosRequestId === 'object') {
@@ -328,9 +332,8 @@ class ChatService {
               : liveStatus;
           mObj.content = mObj.content.replace(/Trạng thái hiện tại:\s*[^\n]+/i, `Trạng thái hiện tại: ${statusLabel}`);
         }
-        return mObj;
       }
-      return m;
+      return mObj;
     });
 
     return {

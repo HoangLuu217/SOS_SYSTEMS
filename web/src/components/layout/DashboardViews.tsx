@@ -25,7 +25,6 @@ import { HazardReportsView } from '@/features/hazards';
 import { BloodDonationsView } from '@/features/blood-donations';
 import {
   ReportsView,
-  AdminOverviewView,
   CitizensManagementView,
   RbacMatrixView,
 } from '@/features/admin';
@@ -124,11 +123,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'reports':
       return <ReportsView user={user} onOpenMap={onOpenMap} />;
 
-    // 9. Tổng quan & Giám sát quản trị
-    case 'admin_overview':
-      return <AdminOverviewView />;
-
-    // 10. Quản lý người dân
+    // 9. Quản lý người dân
     case 'citizens':
       return <CitizensManagementView />;
 

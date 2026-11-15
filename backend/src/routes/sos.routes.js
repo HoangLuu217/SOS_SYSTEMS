@@ -53,6 +53,9 @@ router.post('/:id/shore-handoff/cancel', authorize('LOCAL_AUTHORITY', 'ADMIN', '
 // POST /api/sos/:id/shore-handoff/complete - Xác nhận hoàn thành tiếp vận tại bờ
 router.post('/:id/shore-handoff/complete', authorize('RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.completeShoreHandoff);
 
+// POST /api/sos/:id/feedback - Người dân gửi phản hồi sau khi ca cứu hộ hoàn thành
+router.post('/:id/feedback', authorize('CITIZEN', 'RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.submitFeedback);
+
 
 // DELETE /api/sos/clear-cancelled - Dọn dẹp hàng loạt các ca đã hủy (Dành cho Authority & Admin)
 router.delete('/clear-cancelled', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.clearCancelledSos);

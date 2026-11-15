@@ -45,6 +45,35 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   const activeSupplies = Object.entries(allocatedSupplies || {}).filter(([_, qty]) => qty > 0);
   const totalSupplyUnits = activeSupplies.reduce((acc, [_, qty]) => acc + qty, 0);
 
+  // Tính ETA tiếp cận dự kiến thực tế
+  const estimatedEtaText = (() => {
+    const sosWithGeo = selectedSos as SosRequest & { location?: { coordinates?: [number, number] } };
+    const sosLat = selectedSos?.coordinates?.lat ?? sosWithGeo?.location?.coordinates?.[1];
+    const sosLng = selectedSos?.coordinates?.lng ?? sosWithGeo?.location?.coordinates?.[0];
+    if (typeof sosLat === 'number' && typeof sosLng === 'number') {
+      const firstTeam = selectedTeams[0];
+      const lead = firstTeam?.rescuers?.find(
+        (r) => typeof r.coordinates?.lat === 'number' && typeof r.coordinates?.lng === 'number'
+      );
+      const origin = lead?.coordinates ?? firstTeam?.baseCoordinates;
+      if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
+        const R = 6371;
+        const dLat = ((sosLat - origin.lat) * Math.PI) / 180;
+        const dLon = ((sosLng - origin.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((origin.lat * Math.PI) / 180) *
+            Math.cos((sosLat * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const min = Math.max(3, Math.round((distKm / 25) * 60 + 2));
+        return `~${min} phút (${distKm < 1 ? Math.round(distKm * 1000) + ' m' : distKm.toFixed(1) + ' km'})`;
+      }
+    }
+    return '~5-7 phút';
+  })();
+
   return (
     <div
       className="sos-modal-overlay"

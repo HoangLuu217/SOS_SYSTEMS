@@ -153,6 +153,11 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isCompleting, setIsCompleting] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [feedbackSentiment, setFeedbackSentiment] = useState<'SATISFIED' | 'NEUTRAL' | 'NEEDS_IMPROVEMENT'>('SATISFIED');
+  const [feedbackTags, setFeedbackTags] = useState<string[]>([]);
+  const [feedbackComment, setFeedbackComment] = useState<string>('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
   const [inAppAlert, setInAppAlert] = useState<{
     visible: boolean;
     type: 'success' | 'danger' | 'warning' | 'info';
@@ -363,10 +368,15 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               visible: true,
               type: 'success',
               title: 'Cứu hộ thành công! 🎉',
-              message: 'Hệ thống đã ghi nhận bạn an toàn. Chúc bạn và gia đình luôn bình an!',
-              confirmText: 'Hoàn tất',
+              message: 'Hệ thống đã ghi nhận bạn an toàn. Bạn có muốn gửi góp ý nhanh về quá trình cứu hộ cho Ban Chỉ Huy không?',
+              cancelText: 'Để sau',
+              confirmText: 'Gửi góp ý',
               confirmStyle: 'success',
-              onConfirm: () => setInAppAlert(null),
+              onCancel: () => setInAppAlert(null),
+              onConfirm: () => {
+                setInAppAlert(null);
+                setShowFeedbackModal(true);
+              },
             });
           } else {
             setInAppAlert({
@@ -1278,18 +1288,21 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   <Text style={styles.editBtnText}>CẬP NHẬT / SỬA THÔNG TIN YÊU CẦU</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.completedBtn}
-                  onPress={handleConfirmSafety}
-                  disabled={isCompleting}
-                  activeOpacity={0.85}
-                >
-                  {isCompleting ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.completedBtnText}>XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN</Text>
-                  )}
-                </TouchableOpacity>
+                {(['ARRIVED', 'RESCUING'].includes(currentStatus) ||
+                  ['ARRIVED', 'RESCUING', 'COMPLETED'].includes(assignment?.status)) && (
+                  <TouchableOpacity
+                    style={styles.completedBtn}
+                    onPress={handleConfirmSafety}
+                    disabled={isCompleting}
+                    activeOpacity={0.85}
+                  >
+                    {isCompleting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.completedBtnText}>XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.cancelBtn}
@@ -1310,17 +1323,19 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   },
                 ]}
               >
-                <Ionicons
-                  name={currentStatus === 'CANCELLED' || currentStatus === 'REJECTED' ? 'close-circle' : 'checkmark-done-circle'}
-                  size={42}
-                  color={currentStatus === 'CANCELLED' || currentStatus === 'REJECTED' ? '#64748B' : '#16A34A'}
-                />
+                {(currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') && (
+                  <Ionicons
+                    name="close-circle"
+                    size={42}
+                    color="#64748B"
+                  />
+                )}
                 <Text
                   style={[
                     styles.completedBadgeTitle,
                     (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED')
                       ? { color: '#334155' }
-                      : { color: '#16A34A' },
+                      : { color: '#0284C7' },
                   ]}
                 >
                   {currentStatus === 'CANCELLED' || currentStatus === 'REJECTED'
@@ -1339,6 +1354,47 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                     ? 'Bạn đã xác nhận an toàn. Chúc bạn và gia đình luôn khỏe mạnh và bình an!'
                     : 'Yêu cầu cứu hộ này đã được hủy. Bạn có thể xóa ca này để danh sách không bị rối mắt.'}
                 </Text>
+
+                {currentStatus === 'COMPLETED' && (
+                  sos?.citizenFeedback?.submittedAt ? (
+                    <View style={styles.feedbackCard}>
+                      <View style={styles.feedbackHeaderRow}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#0284C7" />
+                        <Text style={styles.feedbackCardTitle}>Phản hồi bạn đã gửi</Text>
+                      </View>
+                      <View style={styles.feedbackSentimentPill}>
+                        <Text style={styles.feedbackSentimentPillText}>
+                          {sos.citizenFeedback.sentiment === 'NEEDS_IMPROVEMENT'
+                            ? 'Cần cải thiện'
+                            : sos.citizenFeedback.sentiment === 'NEUTRAL'
+                            ? 'Bình thường'
+                            : 'Hài lòng'}
+                        </Text>
+                      </View>
+                      {Array.isArray(sos.citizenFeedback.tags) && sos.citizenFeedback.tags.length > 0 && (
+                        <View style={styles.feedbackTagsWrap}>
+                          {sos.citizenFeedback.tags.map((t: string, idx: number) => (
+                            <View key={idx} style={styles.feedbackTagReadonly}>
+                              <Text style={styles.feedbackTagReadonlyText}>{t}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      {!!sos.citizenFeedback.comment && (
+                        <Text style={styles.feedbackCommentReadonly}>"{sos.citizenFeedback.comment}"</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.openFeedbackBtn}
+                      onPress={() => setShowFeedbackModal(true)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={17} color="#FFFFFF" />
+                      <Text style={styles.openFeedbackBtnText}>Gửi góp ý / Phản hồi sau cứu hộ</Text>
+                    </TouchableOpacity>
+                  )
+                )}
 
                 <TouchableOpacity
                   style={{
@@ -1388,6 +1444,149 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             })}
           </Modal>
         ) : null}
+
+        {/* POPUP RIÊNG: GÓP Ý / PHẢN HỒI SAU CỨU HỘ */}
+        <Modal
+          visible={showFeedbackModal}
+          animationType="fade"
+          transparent={true}
+          statusBarTranslucent={true}
+          onRequestClose={() => setShowFeedbackModal(false)}
+        >
+          <View style={styles.feedbackModalOverlay}>
+            <View style={styles.feedbackModalSheet}>
+              <View style={styles.feedbackModalHeader}>
+                <View style={{ width: 34 }} />
+                <Text style={[styles.feedbackModalTitle, { flex: 1, textAlign: 'center' }]}>
+                  Góp ý sau cứu hộ
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowFeedbackModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.feedbackModalCloseBtn}
+                >
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.feedbackSubDesc}>
+                  Góp ý giúp Ban Chỉ Huy cải thiện công tác cứu hộ (không bắt buộc).
+                </Text>
+
+                <Text style={styles.feedbackFieldLabel}>Mức độ hài lòng</Text>
+                <View style={styles.feedbackSentimentRow}>
+                  {[
+                    { key: 'SATISFIED', label: 'Hài lòng', color: '#0284C7' },
+                    { key: 'NEUTRAL', label: 'Bình thường', color: '#D97706' },
+                    { key: 'NEEDS_IMPROVEMENT', label: 'Cần cải thiện', color: '#DC2626' },
+                  ].map((opt) => {
+                    const active = feedbackSentiment === opt.key;
+                    return (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.feedbackSentimentBtn,
+                          active && { borderColor: opt.color, backgroundColor: '#E0F2FE' },
+                          active && opt.key === 'NEUTRAL' && { backgroundColor: '#FFFBEB' },
+                          active && opt.key === 'NEEDS_IMPROVEMENT' && { backgroundColor: '#FEF2F2' },
+                        ]}
+                        onPress={() => setFeedbackSentiment(opt.key as any)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.feedbackSentimentBtnText, active && { color: opt.color, fontWeight: '700' }]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.feedbackFieldLabel}>Lời cảm ơn hoặc góp ý thêm</Text>
+                <TextInput
+                  style={styles.feedbackInput}
+                  placeholder="Nhập lời cảm ơn hoặc phản ánh gửi Ban Chỉ Huy..."
+                  placeholderTextColor="#94A3B8"
+                  value={feedbackComment}
+                  onChangeText={setFeedbackComment}
+                  multiline
+                  maxLength={500}
+                />
+
+                <View style={styles.feedbackModalActions}>
+                  <TouchableOpacity
+                    style={styles.feedbackSkipBtn}
+                    onPress={() => setShowFeedbackModal(false)}
+                    disabled={isSubmittingFeedback}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.feedbackSkipBtnText}>Để sau</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.feedbackSubmitBtn, { flex: 1.5 }, isSubmittingFeedback && { opacity: 0.65 }]}
+                    disabled={isSubmittingFeedback}
+                    activeOpacity={0.85}
+                    onPress={async () => {
+                      if (!sos?._id) return;
+                      setIsSubmittingFeedback(true);
+                      try {
+                        const res = await backendApi.post(`/sos/${sos._id}/feedback`, {
+                          sentiment: feedbackSentiment,
+                          tags: feedbackTags,
+                          comment: feedbackComment.trim(),
+                        });
+                        if (res.success && res.data) {
+                          setSos(res.data);
+                          setShowFeedbackModal(false);
+                          DeviceEventEmitter.emit('sos:sync');
+                          DeviceEventEmitter.emit('sos:updated', res.data);
+                          setInAppAlert({
+                            visible: true,
+                            type: 'success',
+                            title: 'Đã gửi phản hồi',
+                            message: 'Cảm ơn bạn đã gửi góp ý. Thông tin đã được chuyển tới Ban Chỉ Huy.',
+                            confirmText: 'Đóng',
+                            confirmStyle: 'success',
+                            onConfirm: () => setInAppAlert(null),
+                          });
+                        } else {
+                          setInAppAlert({
+                            visible: true,
+                            type: 'danger',
+                            title: 'Không thể gửi',
+                            message: res.message || 'Vui lòng thử lại sau.',
+                            confirmText: 'Đã hiểu',
+                            confirmStyle: 'primary',
+                            onConfirm: () => setInAppAlert(null),
+                          });
+                        }
+                      } catch (err: any) {
+                        setInAppAlert({
+                          visible: true,
+                          type: 'danger',
+                          title: 'Lỗi kết nối',
+                          message: err?.message || 'Không thể gửi phản hồi lúc này.',
+                          confirmText: 'Đã hiểu',
+                          confirmStyle: 'primary',
+                          onConfirm: () => setInAppAlert(null),
+                        });
+                      } finally {
+                        setIsSubmittingFeedback(false);
+                      }
+                    }}
+                  >
+                    {isSubmittingFeedback ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.feedbackSubmitBtnText}>Gửi phản hồi</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         {/* DIALOG XÁC NHẬN / THÔNG BÁO TÙY BIẾN THEO PHONG CÁCH SOS SYSTEMS (CHUẨN TRUNG TÂM MÀN HÌNH) */}
         {inAppAlert?.visible ? (
@@ -2257,22 +2456,22 @@ const styles = StyleSheet.create({
   completedBadgeBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EFF6FF',
     borderRadius: PROFILE_THEME.radius.card,
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: '#BFDBFE',
     padding: 20,
     marginTop: 8,
   },
   completedBadgeTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#16A34A',
+    color: '#0284C7',
     marginTop: 6,
   },
   completedBadgeSub: {
     fontSize: 12,
-    color: '#15803D',
+    color: '#0369A1',
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 18,
@@ -2400,6 +2599,275 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  feedbackCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    padding: 14,
+    marginTop: 14,
+    alignItems: 'flex-start',
+  },
+  feedbackHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  feedbackCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  feedbackSubDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  feedbackSentimentRow: {
+    flexDirection: 'row',
+    gap: 6,
+    width: '100%',
+    marginBottom: 10,
+  },
+  feedbackSentimentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  feedbackSentimentBtnText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  feedbackTagsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  feedbackTagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  feedbackTagChipSelected: {
+    borderColor: '#0F766E',
+    backgroundColor: '#CCFBF1',
+  },
+  feedbackTagChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  feedbackTagChipTextSelected: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  feedbackInput: {
+    width: '100%',
+    minHeight: 68,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#1E293B',
+    textAlignVertical: 'top',
+    marginBottom: 10,
+  },
+  feedbackSubmitBtn: {
+    width: '100%',
+    backgroundColor: '#0284C7',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackSubmitBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  feedbackSentimentPill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  feedbackSentimentPillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  feedbackTagReadonly: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  feedbackTagReadonlyText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  feedbackCommentReadonly: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  openFeedbackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 14,
+    width: '100%',
+  },
+  openFeedbackBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  feedbackModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+  },
+  feedbackModalSheet: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
+    maxHeight: '85%',
+  },
+  feedbackModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  feedbackModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  feedbackModalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackFieldLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  feedbackModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  feedbackSkipBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackSkipBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  feedbackDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  feedbackDropdownLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  feedbackDropdownTrigger: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  feedbackDropdownTriggerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#64748B',
+  },
+  feedbackDropdownList: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  feedbackDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  feedbackDropdownItemText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
   },
 });
 

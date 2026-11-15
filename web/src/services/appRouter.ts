@@ -39,7 +39,6 @@ const VALID_KEYS: Set<string> = new Set([
   'operation_logs',
   'chat',
   'settings',
-  'admin_overview',
   'citizens',
   'rescuers_admin',
   'authorities',
@@ -50,8 +49,8 @@ const VALID_KEYS: Set<string> = new Set([
 
 // Aliases thân thiện
 const KEY_ALIASES: Record<string, NavItemKey> = {
-  overview: 'admin_overview',
-  dashboard: 'admin_overview',
+  overview: 'map',
+  dashboard: 'map',
   sos: 'sos_requests',
   requests: 'sos_requests',
   dispatch: 'coordination',
@@ -163,7 +162,6 @@ export function parseRoute(
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
   const ADMIN_ONLY_KEYS: Set<NavItemKey> = new Set([
     'weather',
-    'admin_overview',
     'citizens',
     'rescuers_admin',
     'authorities',

@@ -32,6 +32,34 @@ interface NotificationsScreenProps {
 
 type ScreenStateMode = 'populated' | 'empty' | 'loading' | 'error';
 
+const NOTIFICATION_ICON_MAP: Record<string, React.ComponentProps<typeof Feather>['name']> = {
+  RESCUE: 'navigation',
+  WEATHER: 'cloud-rain',
+  ALERT: 'alert-triangle',
+  HAZARD: 'alert-triangle',
+  SAFE_LOCATION: 'map-pin',
+  BLOOD_DONATION: 'heart',
+  SAFETY_CHECK: 'shield',
+  CHAT: 'message-square',
+  SYSTEM: 'bell',
+};
+
+const CATEGORY_FILTERS: { key: NotificationFilterKey; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'alert', label: NOTIFICATION_CATEGORIES.alert.shortLabel },
+  { key: 'safeLocation', label: NOTIFICATION_CATEGORIES.safeLocation.shortLabel },
+  { key: 'chat', label: NOTIFICATION_CATEGORIES.chat.shortLabel },
+  { key: 'systemNotification', label: NOTIFICATION_CATEGORIES.systemNotification.shortLabel },
+];
+
+const stripLeadingEmoji = (text?: string): string => {
+  const raw = String(text || '').trim();
+  const cleaned = raw
+    .replace(/^(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\uFE0F?\s*)+/u, '')
+    .trim();
+  return cleaned || raw;
+};
+
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   onBack,
   onNavigateToTab,
@@ -240,72 +268,27 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     });
   }, [notifications, activeTab, selectedCategory, screenState, settings]);
 
-  // Biểu tượng loại thông báo cứu hộ
-  const renderTypeIcon = (type: string) => {
-    switch (type) {
-      case 'RESCUE':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#EFF6FF' }]}>
-            <Feather name="navigation" size={20} color="#2563EB" />
-          </View>
-        );
-      case 'WEATHER':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#FEF3C7' }]}>
-            <Feather name="cloud-rain" size={20} color="#D97706" />
-          </View>
-        );
-      case 'ALERT':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#FEF2F2' }]}>
-            <Feather name="alert-triangle" size={20} color={PROFILE_THEME.colors.primary} />
-          </View>
-        );
-      case 'HAZARD':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#FFF7ED' }]}>
-            <Feather name="alert-triangle" size={20} color="#EA580C" />
-          </View>
-        );
-      case 'SAFE_LOCATION':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#ECFDF5' }]}>
-            <Feather name="map-pin" size={20} color="#16A34A" />
-          </View>
-        );
-      case 'BLOOD_DONATION':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#FEF2F2' }]}>
-            <Feather name="heart" size={20} color="#DC2626" />
-          </View>
-        );
-      case 'SAFETY_CHECK':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
-            <Feather name="shield" size={20} color="#0284C7" />
-          </View>
-        );
-      case 'CHAT':
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
-            <Feather name="message-square" size={20} color="#0284C7" />
-          </View>
-        );
-      case 'SYSTEM':
-      default:
-        return (
-          <View style={[styles.typeIconBox, { backgroundColor: '#ECFDF5' }]}>
-            <Feather name="check-circle" size={20} color="#10B981" />
-          </View>
-        );
-    }
+  // Biểu tượng loại thông báo (monochrome, không màu)
+  const renderTypeIcon = (type: string, isRead = false) => {
+    const iconName = NOTIFICATION_ICON_MAP[type] || 'bell';
+    return (
+      <View style={[styles.typeIconBox, isRead && styles.typeIconBoxRead]}>
+        <Feather name={iconName} size={16} color={isRead ? '#94A3B8' : '#475569'} />
+      </View>
+    );
   };
 
   const detailActionConfig = getDetailActionConfig(selectedNotif);
+  const disabledSettingKey =
+    settings.appEnabled === false
+      ? ('appEnabled' as const)
+      : selectedCategory !== 'all' && settings[selectedCategory] === false
+        ? selectedCategory
+        : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" {...({ backgroundColor: PROFILE_THEME.colors.background } as any)} />
+      <StatusBar barStyle="dark-content" {...({ backgroundColor: '#FFFFFF' } as any)} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -318,11 +301,11 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               testID="btn-back-notifications"
             >
-              <Feather name="arrow-left" size={24} color={PROFILE_THEME.colors.textPrimary} />
+              <Feather name="arrow-left" size={19} color="#0F172A" />
             </TouchableOpacity>
           ) : (
             <View style={styles.headerIconBox}>
-              <Feather name="bell" size={20} color={PROFILE_THEME.colors.primary} />
+              <Feather name="bell" size={16} color="#475569" />
             </View>
           )}
           <Text style={styles.headerTitle}>Thông báo</Text>
@@ -336,69 +319,68 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             testID="btn-mark-all-read"
           >
-            <Feather name="check" size={15} color={PROFILE_THEME.colors.primary} />
+            <Feather name="check" size={13} color="#475569" />
             <Text style={styles.markAllText}>Đọc tất cả</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Bộ lọc danh mục (không chứa Tin tức/Thời tiết vì đã có riêng ở tab Tin tức) */}
-      <View style={styles.categoryScrollWrap}>
+      {/* Thanh lọc gọn: Segmented Tất cả / Chưa đọc + Danh mục đơn sắc */}
+      <View style={styles.filterToolbar}>
+        <View style={styles.tabsContainer}>
+          <View style={styles.segmentedTrack}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'all' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('all')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                Tất cả
+              </Text>
+              <View style={[styles.tabCountBadge, activeTab === 'all' && styles.tabCountBadgeActive]}>
+                <Text style={[styles.tabCountText, activeTab === 'all' && styles.tabCountTextActive]}>
+                  {screenState === 'empty' ? 0 : enabledNotifications.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'unread' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('unread')}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.tabText, activeTab === 'unread' && styles.tabTextActive]}>
+                Chưa đọc
+              </Text>
+              {unreadCount > 0 && screenState !== 'empty' && (
+                <View style={[styles.tabCountBadge, activeTab === 'unread' && styles.tabCountBadgeActive]}>
+                  <Text style={[styles.tabCountText, activeTab === 'unread' && styles.tabCountTextActive]}>
+                    {unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryScrollContent}
         >
-          {[
-            { key: 'all' as const, label: 'Tất cả', icon: 'layers' },
-            {
-              key: 'alert' as const,
-              label: NOTIFICATION_CATEGORIES.alert.shortLabel,
-              icon: 'alert-triangle',
-              color: NOTIFICATION_CATEGORIES.alert.color,
-            },
-            {
-              key: 'safeLocation' as const,
-              label: NOTIFICATION_CATEGORIES.safeLocation.shortLabel,
-              icon: 'shield',
-              color: NOTIFICATION_CATEGORIES.safeLocation.color,
-            },
-            {
-              key: 'chat' as const,
-              label: NOTIFICATION_CATEGORIES.chat.shortLabel,
-              icon: 'message-circle',
-              color: NOTIFICATION_CATEGORIES.chat.color,
-            },
-            {
-              key: 'systemNotification' as const,
-              label: NOTIFICATION_CATEGORIES.systemNotification.shortLabel,
-              icon: 'bell',
-              color: NOTIFICATION_CATEGORIES.systemNotification.color,
-            },
-          ].map((cat) => {
+          {CATEGORY_FILTERS.map((cat) => {
             const isSel = selectedCategory === cat.key;
             return (
               <TouchableOpacity
                 key={cat.key}
-                style={[
-                  styles.categoryFilterChip,
-                  isSel && styles.categoryFilterChipActive,
-                  isSel && cat.color && { borderColor: cat.color },
-                ]}
+                style={[styles.categoryFilterChip, isSel && styles.categoryFilterChipActive]}
                 onPress={() => setSelectedCategory(cat.key)}
                 activeOpacity={0.75}
               >
-                <Feather
-                  name={cat.icon as any}
-                  size={13}
-                  color={isSel && cat.color ? cat.color : isSel ? '#0066FF' : '#64748B'}
-                  style={{ marginRight: 5 }}
-                />
                 <Text
                   style={[
                     styles.categoryFilterChipText,
                     isSel && styles.categoryFilterChipTextActive,
-                    isSel && cat.color && { color: cat.color },
                   ]}
                 >
                   {cat.label}
@@ -407,46 +389,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             );
           })}
         </ScrollView>
-      </View>
-
-      {/* Filter Tabs: Tất cả & Chưa đọc kèm số lượng động */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'all' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('all')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
-            Tất cả
-          </Text>
-          <View style={[styles.tabCountBadge, activeTab === 'all' && styles.tabCountBadgeActive]}>
-            <Text style={[styles.tabCountText, activeTab === 'all' && styles.tabCountTextActive]}>
-              {screenState === 'empty' ? 0 : enabledNotifications.length}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'unread' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('unread')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, activeTab === 'unread' && styles.tabTextActive]}>
-            Chưa đọc
-          </Text>
-          {unreadCount > 0 && screenState !== 'empty' && (
-            <View style={[styles.unreadBadge, activeTab === 'unread' && styles.unreadBadgeActive]}>
-              <Text
-                style={[
-                  styles.unreadBadgeText,
-                  activeTab === 'unread' && styles.unreadBadgeTextActive,
-                ]}
-              >
-                {unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
       </View>
 
       {/* ========================================================
@@ -471,7 +413,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
            ======================================================== */
         <View style={styles.centerContainer}>
           <View style={styles.errorIconCircle}>
-            <Feather name="wifi-off" size={32} color={PROFILE_THEME.colors.primary} />
+            <Feather name="wifi-off" size={24} color="#475569" />
           </View>
           <Text style={styles.errorTitle}>Không thể tải thông báo</Text>
           <Text style={styles.errorDesc}>
@@ -482,7 +424,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             onPress={() => setScreenState('populated')}
             activeOpacity={0.8}
           >
-            <Feather name="refresh-cw" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Feather name="refresh-cw" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
             <Text style={styles.retryButtonText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
@@ -496,13 +438,17 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[PROFILE_THEME.colors.primary]}
-              tintColor={PROFILE_THEME.colors.primary}
+              colors={['#475569']}
+              tintColor="#475569"
             />
           }
         >
           <View style={styles.emptyIconCircle}>
-            <Feather name={settings.appEnabled === false ? 'bell-off' : 'inbox'} size={36} color={PROFILE_THEME.colors.textMuted} />
+            <Feather
+              name={settings.appEnabled === false ? 'bell-off' : 'inbox'}
+              size={28}
+              color="#64748B"
+            />
           </View>
           <Text style={styles.emptyTitle}>
             {settings.appEnabled === false ? 'Thông báo ứng dụng đang tắt' : 'Bạn chưa có thông báo'}
@@ -545,46 +491,29 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[PROFILE_THEME.colors.primary]}
-              tintColor={PROFILE_THEME.colors.primary}
+              colors={['#475569']}
+              tintColor="#475569"
             />
           }
         >
-          {settings.appEnabled === false ? (
+          {disabledSettingKey && (
             <View style={styles.categoryDisabledNotice}>
               <View style={styles.categoryDisabledNoticeLeft}>
-                <Feather name="bell-off" size={15} color="#DC2626" />
+                <Feather name="bell-off" size={14} color="#475569" />
                 <Text style={styles.categoryDisabledNoticeText}>
-                  Bạn đang tắt toàn bộ Thông báo ứng dụng trong Cài đặt.
+                  {disabledSettingKey === 'appEnabled'
+                    ? 'Bạn đang tắt toàn bộ Thông báo ứng dụng trong Cài đặt.'
+                    : 'Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.'}
                 </Text>
               </View>
               <TouchableOpacity
                 style={styles.categoryReEnableBtn}
-                onPress={() => updateSetting('appEnabled', true)}
+                onPress={() => updateSetting(disabledSettingKey, true)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            selectedCategory !== 'all' &&
-            settings[selectedCategory] === false && (
-              <View style={styles.categoryDisabledNotice}>
-                <View style={styles.categoryDisabledNoticeLeft}>
-                  <Feather name="bell-off" size={15} color="#DC2626" />
-                  <Text style={styles.categoryDisabledNoticeText}>
-                    Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.categoryReEnableBtn}
-                  onPress={() => updateSetting(selectedCategory, true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
-                </TouchableOpacity>
-              </View>
-            )
           )}
 
           {displayList.map((item) => (
@@ -595,11 +524,11 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                 !item.isRead ? styles.cardUnread : styles.cardRead,
               ]}
               onPress={() => handleOpenDetail(item)}
-              activeOpacity={0.85}
+              activeOpacity={0.82}
               testID={`notif-card-${item._id}`}
             >
-              {/* Type Icon */}
-              {renderTypeIcon(item.type)}
+              {/* Type Icon (monochrome) */}
+              {renderTypeIcon(item.type, item.isRead)}
 
               {/* Text Info */}
               <View style={styles.cardContent}>
@@ -608,37 +537,32 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                     style={[styles.cardTitle, !item.isRead && styles.cardTitleUnread]}
                     numberOfLines={1}
                   >
-                    {item.title}
+                    {stripLeadingEmoji(item.title)}
                   </Text>
-                  {!item.isRead && <View style={styles.coralDot} />}
+                  {!item.isRead && <View style={styles.unreadDot} />}
+                  <TouchableOpacity
+                    style={styles.moreButton}
+                    onPress={() => handleOpenMenu(item)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    testID={`menu-${item._id}`}
+                  >
+                    <Feather name="more-vertical" size={15} color="#94A3B8" />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Short preview 2 lines */}
-                <Text style={styles.cardPreview} numberOfLines={2}>
+                <Text
+                  style={[styles.cardPreview, item.isRead && styles.cardPreviewRead]}
+                  numberOfLines={2}
+                >
                   {item.content}
                 </Text>
 
-                <View style={styles.cardBottomRow}>
-                  <View style={styles.timeRow}>
-                    <Feather name="clock" size={11} color={PROFILE_THEME.colors.textMuted} />
-                    <Text style={styles.timeText}>{formatRelativeTimeVi(item.createdAt)}</Text>
-                  </View>
+                <View style={styles.timeRow}>
+                  <Feather name="clock" size={10.5} color="#94A3B8" />
+                  <Text style={styles.timeText}>{formatRelativeTimeVi(item.createdAt)}</Text>
                 </View>
               </View>
-
-              {/* Nút 3 chấm mở tùy chọn */}
-              <TouchableOpacity
-                style={styles.moreButton}
-                onPress={() => handleOpenMenu(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                testID={`menu-${item._id}`}
-              >
-                <Feather
-                  name="more-vertical"
-                  size={18}
-                  color={PROFILE_THEME.colors.textSecondary}
-                />
-              </TouchableOpacity>
             </TouchableOpacity>
           ))}
 
@@ -663,7 +587,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                 <View style={styles.sheetHandle} />
 
                 <Text style={styles.sheetTitle} numberOfLines={1}>
-                  {selectedNotif?.title || 'Tùy chọn thông báo'}
+                  {selectedNotif?.title ? stripLeadingEmoji(selectedNotif.title) : 'Tùy chọn thông báo'}
                 </Text>
 
                 {/* Tùy chọn 1: Xem chi tiết */}
@@ -672,8 +596,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                   onPress={() => selectedNotif && handleOpenDetail(selectedNotif)}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.sheetIconWrap, { backgroundColor: '#F1F5F9' }]}>
-                    <Feather name="eye" size={18} color={PROFILE_THEME.colors.textPrimary} />
+                  <View style={styles.sheetIconWrap}>
+                    <Feather name="eye" size={17} color="#475569" />
                   </View>
                   <Text style={styles.sheetOptionText}>Xem chi tiết</Text>
                 </TouchableOpacity>
@@ -685,13 +609,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                     onPress={() => handleMarkAsRead(selectedNotif)}
                     activeOpacity={0.7}
                   >
-                    <View
-                      style={[
-                        styles.sheetIconWrap,
-                        { backgroundColor: PROFILE_THEME.colors.successLight },
-                      ]}
-                    >
-                      <Feather name="check" size={18} color={PROFILE_THEME.colors.success} />
+                    <View style={styles.sheetIconWrap}>
+                      <Feather name="check" size={17} color="#475569" />
                     </View>
                     <Text style={styles.sheetOptionText}>Đánh dấu đã đọc</Text>
                   </TouchableOpacity>
@@ -703,17 +622,10 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                   onPress={() => selectedNotif && handlePromptDelete(selectedNotif)}
                   activeOpacity={0.7}
                 >
-                  <View
-                    style={[
-                      styles.sheetIconWrap,
-                      { backgroundColor: PROFILE_THEME.colors.primaryLight },
-                    ]}
-                  >
-                    <Feather name="trash-2" size={18} color={PROFILE_THEME.colors.primary} />
+                  <View style={styles.sheetIconWrap}>
+                    <Feather name="trash-2" size={17} color="#475569" />
                   </View>
-                  <Text style={[styles.sheetOptionText, { color: PROFILE_THEME.colors.primary }]}>
-                    Xóa thông báo
-                  </Text>
+                  <Text style={styles.sheetOptionText}>Xóa thông báo</Text>
                 </TouchableOpacity>
 
                 {/* Nút Hủy */}
@@ -748,7 +660,9 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                 <View style={styles.detailHeaderRow}>
                   {selectedNotif && renderTypeIcon(selectedNotif.type)}
                   <View style={styles.detailHeaderTextWrap}>
-                    <Text style={styles.detailTitle}>{selectedNotif?.title}</Text>
+                    <Text style={styles.detailTitle}>
+                      {stripLeadingEmoji(selectedNotif?.title)}
+                    </Text>
                     <Text style={styles.detailTime}>
                       {formatRelativeTimeVi(selectedNotif?.createdAt)}
                     </Text>
@@ -758,7 +672,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     style={styles.detailCloseBtn}
                   >
-                    <Feather name="x" size={20} color={PROFILE_THEME.colors.textSecondary} />
+                    <Feather name="x" size={19} color="#64748B" />
                   </TouchableOpacity>
                 </View>
 
@@ -778,7 +692,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                   >
                     <Feather
                       name={detailActionConfig.icon as any}
-                      size={16}
+                      size={15}
                       color="#FFFFFF"
                       style={{ marginRight: 6 }}
                     />
@@ -815,7 +729,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <TouchableWithoutFeedback>
               <View style={styles.dialogBox}>
                 <View style={styles.dialogIconCircle}>
-                  <Feather name="trash-2" size={24} color={PROFILE_THEME.colors.primary} />
+                  <Feather name="trash-2" size={22} color="#475569" />
                 </View>
                 <Text style={styles.dialogTitle}>Xóa thông báo?</Text>
                 <Text style={styles.dialogMessage}>
@@ -851,208 +765,189 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: PROFILE_THEME.colors.background,
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: PROFILE_THEME.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: PROFILE_THEME.colors.borderLight,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PROFILE_THEME.colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  headerIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
-  },
-  markAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
-    borderRadius: 14,
-    gap: 5,
-    minHeight: 36,
-  },
-  markAllText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: PROFILE_THEME.colors.primary,
-  },
-
-  /* Category Filter Scroll Bar */
-  categoryScrollWrap: {
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  categoryScrollContent: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  categoryFilterChip: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    gap: 10,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 16.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  markAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    gap: 4,
+  },
+  markAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+
+  /* Unified Compact Filter Toolbar */
+  filterToolbar: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tabsContainer: {
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  segmentedTrack: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 9,
+    padding: 3,
+    gap: 4,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    gap: 5,
+  },
+  tabButtonActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  tabCountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: '#E2E8F0',
+  },
+  tabCountBadgeActive: {
+    backgroundColor: '#0F172A',
+  },
+  tabCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  tabCountTextActive: {
+    color: '#FFFFFF',
+  },
+
+  /* Category Filter Chips (text-only monochrome) */
+  categoryScrollContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    gap: 6,
+  },
+  categoryFilterChip: {
+    paddingVertical: 4.5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   categoryFilterChipActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#0066FF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
   },
   categoryFilterChipText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
   },
   categoryFilterChipTextActive: {
     fontWeight: '700',
-    color: '#0066FF',
-  },
-
-  /* Tabs */
-  tabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  tabButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: PROFILE_THEME.colors.card,
-    borderWidth: 1,
-    borderColor: PROFILE_THEME.colors.border,
-    minHeight: 40,
-    gap: 6,
-  },
-  tabButtonActive: {
-    backgroundColor: PROFILE_THEME.colors.primary,
-    borderColor: PROFILE_THEME.colors.primary,
-  },
-  tabText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: PROFILE_THEME.colors.textSecondary,
-  },
-  tabTextActive: {
     color: '#FFFFFF',
-  },
-  tabCountBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-  },
-  tabCountBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  tabCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: PROFILE_THEME.colors.textSecondary,
-  },
-  tabCountTextActive: {
-    color: '#FFFFFF',
-  },
-  unreadBadge: {
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 10,
-  },
-  unreadBadgeActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  unreadBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: PROFILE_THEME.colors.primary,
-  },
-  unreadBadgeTextActive: {
-    color: PROFILE_THEME.colors.primary,
   },
 
   /* Notification List */
   scrollList: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
+    paddingHorizontal: 14,
+    paddingTop: 10,
   },
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
   },
   cardUnread: {
-    backgroundColor: '#FFF8F8', // subtle coral tint for unread
-    borderColor: '#FEE2E2',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#CBD5E1',
   },
   cardRead: {
-    backgroundColor: PROFILE_THEME.colors.card, // pure white for read
-    borderColor: PROFILE_THEME.colors.borderLight,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
   },
   typeIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
+    marginTop: 1,
+  },
+  typeIconBoxRead: {
+    backgroundColor: '#F1F5F9',
+    opacity: 0.75,
   },
   cardContent: {
     flex: 1,
@@ -1060,36 +955,39 @@ const styles = StyleSheet.create({
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-    paddingRight: 6,
+    gap: 6,
+    marginBottom: 3,
   },
   cardTitle: {
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textPrimary,
+    color: '#475569',
     flex: 1,
   },
   cardTitleUnread: {
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
+    color: '#0F172A',
   },
-  coralDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: PROFILE_THEME.colors.primary,
-    marginLeft: 6,
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0066FF',
+  },
+  moreButton: {
+    width: 24,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardPreview: {
-    fontSize: 13,
-    color: PROFILE_THEME.colors.textSecondary,
-    lineHeight: 18.5,
-    marginBottom: 8,
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 17.5,
+    marginBottom: 5,
   },
-  cardBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cardPreviewRead: {
+    color: '#64748B',
   },
   timeRow: {
     flexDirection: 'row',
@@ -1097,140 +995,136 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   timeText: {
-    fontSize: 11.5,
-    color: PROFILE_THEME.colors.textMuted,
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '500',
-  },
-  moreButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
   },
 
   /* Center Container (Empty / Error) */
   centerContainer: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 36,
-    paddingVertical: 60,
+    paddingHorizontal: 32,
+    paddingVertical: 48,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: PROFILE_THEME.colors.card,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: PROFILE_THEME.colors.border,
+    borderColor: '#E2E8F0',
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
-    marginBottom: 8,
+    color: '#0F172A',
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptyDesc: {
-    fontSize: 13.5,
-    color: PROFILE_THEME.colors.textSecondary,
+    fontSize: 13,
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 19,
   },
   restoreButton: {
-    marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
-    borderRadius: 12,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
   },
   restoreButtonText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.primary,
+    color: '#FFFFFF',
   },
   errorIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   errorTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
+    color: '#0F172A',
     marginBottom: 6,
   },
   errorDesc: {
-    fontSize: 13.5,
-    color: PROFILE_THEME.colors.textSecondary,
+    fontSize: 13,
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 19,
+    marginBottom: 18,
   },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: PROFILE_THEME.colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: PROFILE_THEME.radius.button,
-    minHeight: 44,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
   },
 
   /* Skeleton Loading */
   skeletonContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    gap: 12,
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    gap: 8,
   },
   skeletonCard: {
     flexDirection: 'row',
-    backgroundColor: PROFILE_THEME.colors.card,
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: PROFILE_THEME.colors.borderLight,
+    borderColor: '#E2E8F0',
   },
   skeletonIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     backgroundColor: '#E2E8F0',
-    marginRight: 14,
+    marginRight: 10,
   },
   skeletonTextWrap: {
     flex: 1,
-    gap: 8,
+    gap: 6,
   },
   skeletonTitle: {
-    width: '65%',
-    height: 14,
+    width: '60%',
+    height: 12,
     borderRadius: 4,
     backgroundColor: '#E2E8F0',
   },
   skeletonDesc: {
     width: '90%',
-    height: 12,
+    height: 10,
     borderRadius: 4,
     backgroundColor: '#F1F5F9',
   },
   skeletonTime: {
-    width: '30%',
-    height: 10,
+    width: '28%',
+    height: 9,
     borderRadius: 4,
     backgroundColor: '#F1F5F9',
   },
@@ -1242,140 +1136,135 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bottomSheetCard: {
-    backgroundColor: PROFILE_THEME.colors.card,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: PROFILE_THEME.radius.sheet,
     borderTopRightRadius: PROFILE_THEME.radius.sheet,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 28,
   },
   sheetHandle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#CBD5E1',
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sheetTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
-    marginBottom: 16,
-    paddingHorizontal: 4,
+    color: '#0F172A',
+    marginBottom: 12,
+    paddingHorizontal: 2,
   },
   sheetOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    minHeight: 48,
+    paddingVertical: 10,
     gap: 12,
   },
   sheetIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sheetOptionText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textPrimary,
+    color: '#0F172A',
   },
   sheetCancelButton: {
-    marginTop: 12,
+    marginTop: 10,
     backgroundColor: '#F1F5F9',
-    borderRadius: PROFILE_THEME.radius.button,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 44,
   },
   sheetCancelText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textSecondary,
+    color: '#475569',
   },
 
   /* Detail Card Modal */
   detailCard: {
-    backgroundColor: PROFILE_THEME.colors.card,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: PROFILE_THEME.radius.sheet,
     borderTopRightRadius: PROFILE_THEME.radius.sheet,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
     maxHeight: '80%',
   },
   detailHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   detailHeaderTextWrap: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
   },
   detailTitle: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
+    color: '#0F172A',
     marginBottom: 2,
   },
   detailTime: {
-    fontSize: 12,
-    color: PROFILE_THEME.colors.textMuted,
+    fontSize: 11.5,
+    color: '#94A3B8',
   },
   detailCloseBtn: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   detailDivider: {
     height: 1,
-    backgroundColor: PROFILE_THEME.colors.borderLight,
-    marginVertical: 16,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 14,
   },
   detailScroll: {
     maxHeight: 220,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   detailContent: {
-    fontSize: 14.5,
-    color: PROFILE_THEME.colors.textPrimary,
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#334155',
+    lineHeight: 21,
   },
   detailActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PROFILE_THEME.colors.primary,
-    borderRadius: PROFILE_THEME.radius.button,
-    minHeight: 48,
-    marginBottom: 10,
-    shadowColor: PROFILE_THEME.colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    minHeight: 46,
+    marginBottom: 8,
   },
   detailActionText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   detailDismissButton: {
     backgroundColor: '#F1F5F9',
-    borderRadius: PROFILE_THEME.radius.button,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 44,
   },
   detailDismissText: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textSecondary,
+    color: '#475569',
   },
 
   /* Delete Confirmation Dialog */
@@ -1388,66 +1277,61 @@ const styles = StyleSheet.create({
   },
   dialogBox: {
     width: '100%',
-    backgroundColor: PROFILE_THEME.colors.card,
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 6,
   },
   dialogIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   dialogTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: PROFILE_THEME.colors.textPrimary,
-    marginBottom: 8,
+    color: '#0F172A',
+    marginBottom: 6,
   },
   dialogMessage: {
-    fontSize: 13.5,
-    color: PROFILE_THEME.colors.textSecondary,
+    fontSize: 13,
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 19,
+    marginBottom: 18,
   },
   dialogButtonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     width: '100%',
   },
   dialogCancelBtn: {
     flex: 1,
-    minHeight: 46,
-    borderRadius: PROFILE_THEME.radius.button,
+    minHeight: 42,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dialogCancelText: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textSecondary,
+    color: '#475569',
   },
   dialogConfirmBtn: {
     flex: 1,
-    minHeight: 46,
-    borderRadius: PROFILE_THEME.radius.button,
-    backgroundColor: PROFILE_THEME.colors.primary,
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dialogConfirmText: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -1455,13 +1339,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#E2E8F0',
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
     gap: 8,
   },
   categoryDisabledNoticeLeft: {
@@ -1471,20 +1355,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryDisabledNoticeText: {
-    fontSize: 12.5,
-    color: '#DC2626',
+    fontSize: 12,
+    color: '#475569',
     fontWeight: '500',
     flex: 1,
   },
   categoryReEnableBtn: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#0F172A',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 7,
   },
   categoryReEnableBtnText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
 });

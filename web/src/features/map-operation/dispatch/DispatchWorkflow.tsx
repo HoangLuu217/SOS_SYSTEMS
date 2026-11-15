@@ -88,21 +88,6 @@ export const DispatchWorkflow = ({
   const { lang: _lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
 
-  // Hàm tính khoảng cách địa lý chính xác (Haversine Formula) tính bằng km
-  function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // km
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
   // Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
   const [areaSupplies, setAreaSupplies] = useState<EquipmentItem[]>([]);
   const [isLoadingSupplies, setIsLoadingSupplies] = useState<boolean>(false);
@@ -212,14 +197,24 @@ export const DispatchWorkflow = ({
 
   // Available rescue teams filtered by officer jurisdiction (hoặc mở rộng sang đội chi viện lân cận nếu toàn bộ đội nội vùng đang bận)
   // AI được ưu tiên hiển thị trước; các đội còn lại để cán bộ tự kiểm tra.
-  const isTeamInactive = (t: RescueTeam) =>
-    t.teamStatus === 'INACTIVE' || t.teamStatus === 'SUSPENDED' || t.status === 'Off-duty';
-
   const availableTeams = useMemo(() => {
-    const inAreaTeams = (isAdmin
-      ? [...rescueTeams]
-      : rescueTeams.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard))
-    ).filter((t) => !isTeamInactive(t));
+    // Loại bỏ hoàn toàn các đội đang không hoạt động (INACTIVE / SUSPENDED / Off-duty)
+    // hoặc có đội trưởng đang là người gửi ca SOS hiện tại để tránh phân công nhầm đội.
+    // Thành viên thường gửi SOS vẫn giữ nguyên đội hoạt động để có thể cử đội đi cứu đồng đội.
+    const isTeamEligibleToAppear = (t: RescueTeam) => {
+      if (t.status === 'Off-duty') return false;
+      if (t.teamStatus && t.teamStatus !== 'ACTIVE') return false;
+      if (t.operationalStatus === 'INACTIVE') return false;
+      if (selectedSos?.citizenId && t.leaderId && String(t.leaderId) === String(selectedSos.citizenId)) {
+        return false;
+      }
+      return true;
+    };
+
+    const activeTeamsPool = rescueTeams.filter(isTeamEligibleToAppear);
+    const inAreaTeams = isAdmin
+      ? [...activeTeamsPool]
+      : activeTeamsPool.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
 
     const inAreaReadyCount = inAreaTeams.filter(
       (t) =>
@@ -234,9 +229,9 @@ export const DispatchWorkflow = ({
     // Mở rộng danh sách đội chi viện khi AI đề xuất đội ngoài địa bàn.
     const backupCrossAreaTeams =
       !isAdmin && (inAreaReadyCount === 0 || advisorIds.size > 0)
-        ? rescueTeams
+        ? activeTeamsPool
           .filter((t) => {
-            if (inAreaIds.has(t.id) || isTeamInactive(t)) return false;
+            if (inAreaIds.has(t.id)) return false;
             const cand = candidateByTeamId.get(t.id);
             const isBusy = !!domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id) || Boolean(cand?.isBusy);
             if (isBusy || cand?.dispatchEligible === false) return false;
@@ -291,7 +286,7 @@ export const DispatchWorkflow = ({
     }
 
     return list;
-  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, candidateByTeamId, smartRecs]);
+  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, selectedSos?.citizenId, candidateByTeamId, smartRecs]);
 
   // Đếm số lượng đội thực tế đang sẵn sàng (không bận nhiệm vụ)
   const readyTeamsCount = useMemo(() => {

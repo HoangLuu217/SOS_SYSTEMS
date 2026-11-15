@@ -19,9 +19,14 @@ import {
   Bell,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
-import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
+import {
+  fetchAdministrativeAreas,
+  getDaNangAreaScope,
+  getSelectedWardValue,
+} from '@/api/area.api';
 import type { User } from '@/types/auth';
 import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 
 export interface BloodDonationsViewProps {
   user?: User | null;
@@ -352,7 +357,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     void fetchAllData(false);
   }, [fetchAreas, fetchAllData]);
 
-  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+  const {
+    daNangProvince,
+    daNangProvinceId,
+    daNangWards,
+    daNangWardIds,
+    canonicalAreaIdMap,
+  } = useMemo(
     () => getDaNangAreaScope(areas),
     [areas]
   );
@@ -1204,30 +1215,16 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           Đang tải...
         </div>
       ) : activeTab === 'REGISTRATIONS' ? (
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            overflow: 'hidden',
-          }}
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <div className="sos-clean-table-container">
+          <table className="sos-clean-table">
             <thead>
-              <tr
-                style={{
-                  background: '#f8fafc',
-                  borderBottom: '1px solid #e2e8f0',
-                  color: '#475569',
-                  textAlign: 'left',
-                }}
-              >
-                <th style={{ padding: '11px 16px' }}>Người đăng ký</th>
-                <th style={{ padding: '11px 14px' }}>Số điện thoại</th>
-                <th style={{ padding: '11px 14px', textAlign: 'center' }}>Nhóm máu</th>
-                <th style={{ padding: '11px 14px' }}>Khu vực</th>
-                <th style={{ padding: '11px 14px' }}>Thời gian</th>
-                <th style={{ padding: '11px 16px', textAlign: 'center' }}>Trạng thái</th>
+              <tr>
+                <th>Người đăng ký</th>
+                <th>Số điện thoại</th>
+                <th style={{ textAlign: 'center' }}>Nhóm máu</th>
+                <th>Khu vực</th>
+                <th>Thời gian</th>
+                <th style={{ textAlign: 'center' }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
@@ -1243,18 +1240,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   return (
                     <tr
                       key={reg._id}
+                      className={`ra-clickable-row ${selectedRegistration?._id === reg._id ? 'row-selected' : ''}`}
                       onClick={() => {
                         setSelectedEventDetail(null);
                         setSelectedRegistration(reg);
                       }}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        cursor: 'pointer',
-                        backgroundColor:
-                          selectedRegistration?._id === reg._id ? '#eff6ff' : undefined,
-                      }}
+                      style={{ cursor: 'pointer' }}
+                      title="Nhấn để xem chi tiết đăng ký hiến máu"
                     >
-                      <td style={{ padding: '11px 16px' }}>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {avatarUrl ? (
                             <img
@@ -1288,19 +1282,18 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           )}
                           <span
                             style={{
-                              fontWeight: 600,
+                              fontWeight: 700,
                               color: '#2563eb',
                             }}
-                            title="Nhấn để xem chi tiết"
                           >
                             {reg.fullName}
                           </span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '11px 14px', color: '#334155' }}>{reg.phone}</td>
+                      <td style={{ color: '#334155', fontWeight: 500 }}>{reg.phone}</td>
 
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center' }}>
                         <span
                           style={{
                             background: '#fee2e2',
@@ -1315,15 +1308,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         </span>
                       </td>
 
-                      <td style={{ padding: '11px 14px', color: '#334155' }}>
+                      <td style={{ color: '#334155' }}>
                         {reg.provinceName || reg.areaName || '—'}
                       </td>
 
-                      <td style={{ padding: '11px 14px', fontSize: 12.5, color: '#64748b' }}>
+                      <td style={{ fontSize: 12.5, color: '#64748b' }}>
                         {formatDateTime(reg.respondedAt || reg.createdAt)}
                       </td>
 
-                      <td style={{ padding: '11px 16px', textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center' }}>
                         {renderStatusBadge(reg.status)}
                       </td>
                     </tr>
@@ -1335,36 +1328,21 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       ) : (
         /* ================= BẢNG ĐỢT HIẾN MÁU GỌN GÀNG ================= */
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            overflow: 'hidden',
-          }}
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <div className="sos-clean-table-container">
+          <table className="sos-clean-table">
             <thead>
-              <tr
-                style={{
-                  background: '#f8fafc',
-                  borderBottom: '1px solid #e2e8f0',
-                  color: '#475569',
-                  textAlign: 'left',
-                }}
-              >
-                <th style={{ padding: '11px 16px' }}>Tên đợt hiến máu</th>
-                <th style={{ padding: '11px 14px' }}>Địa điểm</th>
-                <th style={{ padding: '11px 14px' }}>Thời gian</th>
-                <th style={{ padding: '11px 14px', textAlign: 'center' }}>Xác nhận trên App</th>
-                <th style={{ padding: '11px 14px', textAlign: 'center' }}>Trạng thái</th>
-                <th style={{ padding: '11px 16px', textAlign: 'center' }}>Chi tiết</th>
+              <tr>
+                <th>Tên đợt hiến máu</th>
+                <th>Địa điểm</th>
+                <th>Thời gian</th>
+                <th style={{ textAlign: 'center' }}>Xác nhận trên App</th>
+                <th style={{ textAlign: 'center' }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
               {filteredEvents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={5} style={{ padding: 36, textAlign: 'center', color: '#64748b' }}>
                     Chưa có đợt hiến máu nào.
                   </td>
                 </tr>
@@ -1372,27 +1350,24 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 filteredEvents.map((ev) => (
                   <tr
                     key={ev._id}
+                    className={`ra-clickable-row ${selectedEventDetail?._id === ev._id ? 'row-selected' : ''}`}
                     onClick={() => handleOpenEventDetail(ev)}
-                    style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      cursor: 'pointer',
-                      backgroundColor:
-                        selectedEventDetail?._id === ev._id ? '#eff6ff' : undefined,
-                    }}
+                    style={{ cursor: 'pointer' }}
+                    title="Nhấn để xem chi tiết đợt hiến máu"
                   >
-                    <td style={{ padding: '11px 16px', fontWeight: 600, color: '#2563eb' }}>
+                    <td style={{ fontWeight: 700, color: '#2563eb' }}>
                       {ev.title}
                     </td>
-                    <td style={{ padding: '11px 14px', color: '#334155' }}>
+                    <td style={{ color: '#334155' }}>
                       {ev.locationName} ({ev.areaName || 'Toàn hệ thống'})
                     </td>
-                    <td style={{ padding: '11px 14px', color: '#475569', fontSize: 12.5 }}>
+                    <td style={{ color: '#475569', fontSize: 12.5 }}>
                       {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
                     </td>
-                    <td style={{ padding: '11px 14px', textAlign: 'center', fontWeight: 700, color: '#16a34a' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#16a34a' }}>
                       {ev.stats?.confirmedCount || 0} / {ev.targetDonors}
                     </td>
-                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                    <td style={{ textAlign: 'center' }}>
                       <span
                         style={{
                           background: ev.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9',
@@ -1405,57 +1380,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       >
                         {ev.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng'}
                       </span>
-                    </td>
-                    <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleExportEventParticipantsCsv(ev);
-                          }}
-                          title="Xuất file CSV danh sách tên & thông tin người tham gia đợt hiến máu này"
-                          style={{
-                            padding: '5px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #cbd5e1',
-                            background: '#ffffff',
-                            color: '#334155',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}
-                        >
-                          <Download size={13} />
-                          <span>Xuất CSV</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleOpenEventDetail(ev);
-                          }}
-                          style={{
-                            padding: '5px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #cbd5e1',
-                            background: '#ffffff',
-                            color: '#334155',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}
-                        >
-                          <Eye size={13} />
-                          <span>Xem</span>
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))
@@ -2478,20 +2402,17 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
                         Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-                      <select
-                        value={
-                          areaById.get(formAreaId)?.type === 'WARD'
-                            ? formAreaId
-                            : ''
-                        }
-                        onChange={(e) => {
-                          const wardId = e.target.value;
+                      <SearchableSelect
+                        ariaLabel="Chọn Phường / Xã tổ chức hiến máu"
+                        searchPlaceholder="Tìm nhanh Phường / Xã..."
+                        value={getSelectedWardValue(formAreaId, daNangWardIds, canonicalAreaIdMap)}
+                        onChange={(wardId) => {
                           const nextAreaId = wardId || daNangProvinceId || 'ALL';
                           setFormAreaId(nextAreaId);
                           const matched = areas.find((a) => a._id === nextAreaId);
                           if (matched) setFormAddress(matched.name);
                         }}
-                        style={{
+                        triggerStyle={{
                           width: '100%',
                           padding: '8px 11px',
                           borderRadius: 8,
@@ -2499,16 +2420,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           fontSize: 13,
                           background: '#ffffff',
                         }}
-                      >
-                        <option value="">
-                          Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã)
-                        </option>
-                        {daNangWards.map((w) => (
-                          <option key={w._id} value={w._id}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          {
+                            value: '',
+                            label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
+                            keywords: 'tat ca toan thanh pho da nang',
+                          },
+                          ...daNangWards.map((w) => ({
+                            value: w._id,
+                            label: w.name,
+                            badgeText: w.code || undefined,
+                            keywords: `${w.name} ${w.code || ''}`,
+                          })),
+                        ]}
+                      />
                       <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </div>

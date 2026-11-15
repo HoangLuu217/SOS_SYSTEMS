@@ -169,8 +169,12 @@ const weatherArticleSchema = new mongoose.Schema(
 weatherArticleSchema.pre('validate', function () {
   if (!this.category && this.weatherType) this.category = this.weatherType.toLowerCase();
 
-  if (this.relevance_score == null && this.score != null) this.relevance_score = this.score;
-  if (this.score == null && this.relevance_score != null) this.score = this.relevance_score;
+  if ((this.relevance_score == null || this.relevance_score === 0) && this.score != null && this.score > 0) {
+    this.relevance_score = this.score;
+  }
+  if ((this.score == null || this.score === 0) && this.relevance_score != null && this.relevance_score > 0) {
+    this.score = this.relevance_score;
+  }
 
   if (!this.regions?.length && (this.area || this.areaName)) {
     this.regions = [this.area || this.areaName];
