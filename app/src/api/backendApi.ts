@@ -219,6 +219,9 @@ class BackendApiService {
   getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>
     chatApi.getLocalAuthority(params);
 
+  getWardOptions = (search?: string) =>
+    chatApi.getWardOptions(search);
+
   getChatMessages = (params: Parameters<typeof chatApi.getMessages>[0]) =>
     chatApi.getMessages(params);
 
