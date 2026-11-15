@@ -13,8 +13,10 @@
 }
 
 .sos-views-container.warm-executive-theme {
-  gap: 12px;
-  margin: 4px -6px 6px;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+  margin: 0 -6px -12px;
 }
 
 /* 1. CONTAINER TỔNG QUAN TÌNH HÌNH */
@@ -429,10 +431,15 @@
 
 /* 4. EXECUTIVE TABLE CARD (DESIGN SYSTEM TOKENS) */
 .executive-table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--sos-surface);
   border: 1px solid var(--sos-border);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px 6px;
   box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
 }
 
@@ -440,10 +447,47 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 14px;
+  flex-wrap: nowrap;
   margin-bottom: 10px;
   padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.executive-table-toolbar.is-admin-toolbar {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.sos-status-filter-select {
+  height: 36px;
+  width: auto;
+  min-width: 0;
+  max-width: 195px;
+  padding: 0 10px;
+  background: var(--sos-surface);
+  border: 1px solid var(--sos-control-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sos-font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--sos-text-primary);
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sos-status-filter-select:focus {
+  border-color: var(--sos-primary);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+}
+
+.sos-status-filter-select.has-filter {
+  border-color: var(--sos-primary);
+  background: #f0f9ff;
+  color: #0369a1;
 }
 
 .executive-triage-pills {
@@ -453,8 +497,16 @@
   border: 1px solid var(--sos-border);
   border-radius: 10px;
   padding: 3px;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 3px;
+  flex-wrap: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.executive-triage-pills::-webkit-scrollbar {
+  display: none;
 }
 
 .triage-btn {
@@ -462,7 +514,7 @@
   border: 1px solid transparent;
   outline: none;
   border-radius: 7px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   font-size: 12.5px;
   font-weight: 600;
   font-family: var(--sos-font-sans);
@@ -536,25 +588,71 @@
   background: var(--sos-text-muted);
 }
 
+.sos-area-filter-select {
+  height: 36px;
+  min-width: 205px;
+  max-width: 250px;
+  padding: 0 10px;
+  background: var(--sos-surface);
+  border: 1px solid var(--sos-control-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--sos-font-sans);
+  color: var(--sos-text-primary);
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sos-area-filter-select.has-filter {
+  border-color: var(--sos-primary);
+  background: #f0f9ff;
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.sos-area-filter-select:focus {
+  border-color: var(--sos-primary);
+  background: var(--sos-surface);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+}
+
 .executive-search-input-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  width: 270px;
+  width: 255px;
   flex-shrink: 0;
+}
+
+.executive-search-input-wrap.is-admin-search {
+  flex: 1;
+  width: auto;
+  min-width: 210px;
+  max-width: none;
+  flex-shrink: 1;
 }
 
 .executive-search-input-wrap input {
   width: 100%;
+  height: 36px;
   background: var(--sos-surface-muted);
   border: 1px solid var(--sos-control-border);
-  border-radius: 9999px;
-  padding: 7px 30px 7px 32px;
+  border-radius: 8px;
+  padding: 0 30px 0 32px;
   font-size: 12.5px;
   font-family: var(--sos-font-sans);
   color: var(--sos-text-primary);
   outline: none;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (max-width: 900px) {
+  .executive-table-toolbar {
+    flex-wrap: wrap;
+  }
 }
 
 .executive-search-input-wrap input::placeholder {
@@ -594,10 +692,10 @@
 
 /* 5. BẢNG DỮ LIỆU CỨU NẠN (CUỘN NỘI BỘ BÊN TRONG BẢNG, TIÊU ĐỀ CỐ ĐỊNH) */
 .executive-table-scroll {
+  flex: 1;
+  min-height: 240px;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 220px);
-  min-height: clamp(380px, calc(100vh - 230px), 860px);
   border: 1px solid var(--sos-border);
   border-radius: 10px;
   background: var(--sos-surface);

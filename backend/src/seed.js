@@ -36,11 +36,13 @@ const seed = async () => {
     }
 
     // 1. Đảm bảo có Khu vực hành chính (Đà Nẵng)
-    let area = await AdministrativeArea.findOne({ code: 'DANANG' });
+    let area = await AdministrativeArea.findOne({
+      $or: [{ code: 'VN-48' }, { name: 'Thành phố Đà Nẵng', type: 'PROVINCE' }, { code: 'DANANG' }],
+    });
     if (!area) {
       area = await AdministrativeArea.create({
         name: 'Thành phố Đà Nẵng',
-        code: 'DANANG',
+        code: 'VN-48',
         type: 'PROVINCE',
         parentId: null,
         status: 'ACTIVE',

@@ -318,11 +318,12 @@ class AdministrativeAreaService {
         .toLowerCase()
         .replace(/\s+/g, ' ');
 
-    // 1. Tìm hoặc tạo Province
+    // 1. Tìm hoặc tạo Province (ưu tiên mã chuẩn VN-<provinceCode> trước, tránh tạo trùng với DANANG)
     let provinceDoc = await AdministrativeArea.findOne({
       $or: [
         { code: `VN-${provinceCode}` },
-        { name: provinceName },
+        { name: provinceName, type: 'PROVINCE' },
+        { code: 'DANANG' },
         { code: String(provinceCode || '') }
       ]
     });
@@ -336,17 +337,34 @@ class AdministrativeAreaService {
       });
     }
 
-    // Lấy tất cả đơn vị hiện có thuộc tỉnh này để so khớp theo tên trước khi xét code
+    // Lấy tất cả đơn vị hiện có thuộc tỉnh này (cả theo parentId lẫn prefix VN<provinceCode>-) để so khớp theo tên trước khi xét code
     const existingChildren = await AdministrativeArea.find({ parentId: provinceDoc._id }).lean();
     const childIds = existingChildren.map((c) => c._id);
     const existingGrandChildren =
       childIds.length > 0
         ? await AdministrativeArea.find({ parentId: { $in: childIds } }).lean()
         : [];
-    const provinceAreas = [...existingChildren, ...existingGrandChildren];
+    const prefixRegex = provinceCode ? new RegExp(`^VN${provinceCode}-`, 'i') : null;
+    const existingByPrefix = prefixRegex
+      ? await AdministrativeArea.find({ code: prefixRegex, type: { $ne: 'PROVINCE' } }).lean()
+      : [];
+    const provinceAreasMap = new Map();
+    [...existingChildren, ...existingGrandChildren, ...existingByPrefix].forEach((doc) => {
+      if (doc && doc._id) provinceAreasMap.set(String(doc._id), doc);
+    });
+    const provinceAreas = Array.from(provinceAreasMap.values());
 
     const byName = new Map();
     const byCode = new Map();
+    // Ưu tiên giữ bản ghi có mã chuẩn VN48-\d+ hoặc đã có boundary trước khi map byName
+    provinceAreas.sort((a, b) => {
+      const aOfficial = /^VN\d+-\d{4,}$/i.test(a.code || '') ? 1 : 0;
+      const bOfficial = /^VN\d+-\d{4,}$/i.test(b.code || '') ? 1 : 0;
+      if (aOfficial !== bOfficial) return bOfficial - aOfficial;
+      const aHasBound = a.boundary?.coordinates?.length ? 1 : 0;
+      const bHasBound = b.boundary?.coordinates?.length ? 1 : 0;
+      return bHasBound - aHasBound;
+    });
     for (const doc of provinceAreas) {
       const nKey = normalizeNameKey(doc.name);
       if (nKey && !byName.has(nKey)) byName.set(nKey, doc);

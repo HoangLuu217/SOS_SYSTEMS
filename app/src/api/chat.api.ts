@@ -44,6 +44,15 @@ export interface EmergencyAuthorityContact {
   lng?: number;
 }
 
+export interface WardOption {
+  ward: string;
+  category: 'Trung tâm' | 'Ven biển' | 'Đô thị mới' | 'Ngoại thành' | string;
+  province: string;
+  fullName: string;
+  officerName?: string;
+  phone?: string;
+}
+
 export class ChatApi {
   constructor(private client: ApiClient = apiClient) {}
 
@@ -87,6 +96,14 @@ export class ChatApi {
     const queryString = query.toString();
     const endpoint = `/chat/local-authority${queryString ? `?${queryString}` : ''}`;
     return this.client.get<LocalAuthorityInfo>(endpoint);
+  }
+
+  /**
+   * Lấy danh sách các Phường / Xã / Địa phương cứu hộ khả dụng kèm cán bộ phụ trách
+   */
+  async getWardOptions(search?: string): Promise<ApiResponse<WardOption[]>> {
+    const endpoint = `/chat/ward-options${search ? `?search=${encodeURIComponent(search)}` : ''}`;
+    return this.client.get<WardOption[]>(endpoint);
   }
 
   /**
