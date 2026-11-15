@@ -17,6 +17,7 @@ const WeatherArticle = require('./WeatherArticle');
 const WeatherNotification = WeatherArticle;
 const SafetyCheck = require('./SafetyCheck');
 const SafetyCheckResponse = require('./SafetyCheckResponse');
+const OtpCode = require('./OtpCode');
 
 module.exports = {
   User,
@@ -39,4 +40,5 @@ module.exports = {
   weather_article: WeatherArticle,
   SafetyCheck,
   SafetyCheckResponse,
+  OtpCode,
 };

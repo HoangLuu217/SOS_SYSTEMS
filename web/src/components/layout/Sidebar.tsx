@@ -27,12 +27,6 @@ import {
 } from '@/services/socketService';
 import { getRolePrefix } from '@/services/appRouter';
 import {
-  fetchProvincesV2,
-  fetchProvinceWithWardsV2,
-  type ProvinceV2,
-  type WardV2,
-} from '@/api';
-import {
   Map,
   Siren,
   LifeBuoy,
@@ -682,137 +676,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => clearInterval(timer);
   }, [otpCountdown]);
 
-  // Dữ liệu Vietnam Provinces online API (2025)
-  const [provinces, setProvinces] = useState<ProvinceV2[]>([]);
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | ''>('');
-  const [wards, setWards] = useState<WardV2[]>([]);
-  const [selectedWardCode, setSelectedWardCode] = useState<number | 'ALL'>('ALL');
-  const [loadingProvinces, setLoadingProvinces] = useState(false);
-  const [loadingWards, setLoadingWards] = useState(false);
-
-  // Khi mở Modal: tải danh mục 63 Tỉnh/TP từ Vietnam Provinces API v2 (2025) & nhận diện địa bàn hiện tại
-  useEffect(() => {
-    if (!isProfileModalOpen) return;
-    let isMounted = true;
-    setLoadingProvinces(true);
-
-    fetchProvincesV2()
-      .then(async (list) => {
-        if (!isMounted) return;
-        const safeList = Array.isArray(list) ? list : [];
-        setProvinces(safeList);
-        setLoadingProvinces(false);
-
-        const currentArea = (localProfile.managedArea || '').toLowerCase();
-        if (currentArea && safeList.length > 0) {
-          // Tự động tìm Tỉnh/TP khớp với hồ sơ hiện tại
-          const foundProv = safeList.find((p) => {
-            if (!p) return false;
-            const cleanName = (p.name || '').toLowerCase().replace(/tỉnh\s+|thành phố\s+/g, '').trim();
-            const pCodeName = (p.codename || '').replace(/_/g, ' ');
-            return (cleanName && currentArea.includes(cleanName)) || (pCodeName && currentArea.includes(pCodeName));
-          });
-
-          if (foundProv) {
-            setSelectedProvinceCode(foundProv.code);
-            setLoadingWards(true);
-            try {
-              const detail = await fetchProvinceWithWardsV2(foundProv.code);
-              if (!isMounted) return;
-              setLoadingWards(false);
-
-              if (detail && Array.isArray(detail.wards)) {
-                setWards(detail.wards);
-                // Tìm Phường/Xã tương ứng
-                const foundWard = detail.wards.find((w) => {
-                  if (!w) return false;
-                  const cleanW = (w.name || '').toLowerCase().replace(/phường\s+|xã\s+|thị trấn\s+/g, '').trim();
-                  const wCodeName = (w.codename || '').replace(/_/g, ' ');
-                  return (cleanW && currentArea.includes(cleanW)) || (wCodeName && currentArea.includes(wCodeName));
-                });
-                if (foundWard) {
-                  setSelectedWardCode(foundWard.code);
-                } else {
-                  setSelectedWardCode('ALL');
-                }
-              }
-            } catch (err) {
-              console.warn('Lỗi lấy danh sách phường/xã:', err);
-              if (isMounted) setLoadingWards(false);
-            }
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Lỗi lấy danh mục Tỉnh/TP:', err);
-        if (isMounted) setLoadingProvinces(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isProfileModalOpen]);
-
-  // Xử lý khi cán bộ chọn Tỉnh / Thành phố
-  const handleProvinceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (!val) {
-      setSelectedProvinceCode('');
-      setWards([]);
-      setSelectedWardCode('ALL');
-      return;
-    }
-
-    const code = Number(val);
-    setSelectedProvinceCode(code);
-    setSelectedWardCode('ALL');
-
-    const chosenProv = provinces.find((p) => p.code === code);
-    if (chosenProv) {
-      setLocalProfile((prev) => ({
-        ...prev,
-        managedArea: chosenProv.name,
-      }));
-    }
-
-    setLoadingWards(true);
-    const detail = await fetchProvinceWithWardsV2(code);
-    setLoadingWards(false);
-    if (detail && Array.isArray(detail.wards)) {
-      setWards(detail.wards);
-    } else {
-      setWards([]);
-    }
-  };
-
-  // Xử lý khi cán bộ chọn Phường / Xã
-  const handleWardChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    const chosenProv = provinces.find((p) => p.code === selectedProvinceCode);
-    const provName = chosenProv ? chosenProv.name : '';
-
-    if (val === 'ALL' || !val) {
-      setSelectedWardCode('ALL');
-      if (provName) {
-        setLocalProfile((prev) => ({
-          ...prev,
-          managedArea: provName,
-        }));
-      }
-      return;
-    }
-
-    const wardCode = Number(val);
-    setSelectedWardCode(wardCode);
-    const chosenWard = wards.find((w) => w.code === wardCode);
-    if (chosenWard && provName) {
-      setLocalProfile((prev) => ({
-        ...prev,
-        managedArea: `${chosenWard.name}, ${provName}`,
-      }));
-    }
-  };
-
   // Đồng bộ khi prop user thay đổi từ bên ngoài hoặc qua storage
   useEffect(() => {
     if (user) {
@@ -1032,8 +895,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           position: localProfile.position,
           organizationName: localProfile.organizationName,
           areaName: isAdmin ? 'Toàn quốc' : (serverUser?.authority?.areaName || currentUserObj.authority?.areaName || localProfile.managedArea),
-          provinceCode: isAdmin ? undefined : (serverUser?.authority?.provinceCode ?? currentUserObj.authority?.provinceCode ?? (selectedProvinceCode || undefined)),
-          wardCode: isAdmin ? undefined : (serverUser?.authority?.wardCode ?? currentUserObj.authority?.wardCode ?? (selectedWardCode !== 'ALL' ? selectedWardCode : undefined)),
+          provinceCode: isAdmin ? undefined : (serverUser?.authority?.provinceCode ?? currentUserObj.authority?.provinceCode),
+          wardCode: isAdmin ? undefined : (serverUser?.authority?.wardCode ?? currentUserObj.authority?.wardCode),
           mapUrl: serverUser?.authority?.mapUrl ?? localProfile.mapUrl,
           latitude: serverUser?.authority?.latitude ?? localProfile.latitude ?? undefined,
           longitude: serverUser?.authority?.longitude ?? localProfile.longitude ?? undefined,
@@ -1534,51 +1397,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <label className="sos-profile-section-label">
                         <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
                         <span>Địa bàn phụ trách quản lý:</span>
-                        <span className="sos-profile-area-locked-badge">
-                          <i className="bi bi-lock-fill"></i> Cố định theo phân quyền
-                        </span>
                       </label>
-
-                      <div className="sos-profile-area-dropdowns">
-                        <div className="sos-profile-area-col">
-                          <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
-                          <select
-                            value={selectedProvinceCode}
-                            onChange={handleProvinceChange}
-                            disabled={true}
-                            title="Tỉnh/Thành phố được khóa theo tài khoản địa phương"
-                          >
-                            <option value="">
-                              {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
-                            </option>
-                            {provinces.map((p) => (
-                              <option key={p.code} value={p.code}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="sos-profile-area-col">
-                          <span className="sos-profile-sublabel">
-                            Phường / Xã:
-                            {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
-                          </span>
-                          <select
-                            value={selectedWardCode}
-                            onChange={handleWardChange}
-                            disabled={true}
-                            title="Phường/Xã được khóa theo tài khoản địa phương"
-                          >
-                            <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
-                            {wards.map((w) => (
-                              <option key={w.code} value={w.code}>
-                                {w.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
 
                       <div className="sos-profile-managed-area">
                         <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
@@ -1587,7 +1406,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           required
                           readOnly
                           disabled={true}
-                          value={localProfile.managedArea}
+                          value={(() => {
+                            const baseArea = localProfile.managedArea || '';
+                            const cityFromDept = user?.authority?.department?.match(/\(([^)]+)\)/)?.[1]?.trim();
+                            if (
+                              baseArea &&
+                              cityFromDept &&
+                              !baseArea.toLowerCase().includes(cityFromDept.toLowerCase())
+                            ) {
+                              return `${baseArea}, ${cityFromDept}`;
+                            }
+                            return baseArea;
+                          })()}
                           placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
                           title="Địa bàn phân quyền cố định, liên hệ Ban chỉ huy nếu cần điều chỉnh"
                         />

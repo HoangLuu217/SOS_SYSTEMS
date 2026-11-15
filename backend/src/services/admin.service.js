@@ -372,7 +372,7 @@ class AdminService {
         const loginUrl = `${clientUrl}/login`;
 
         const sender = process.env.EMAIL_FROM || 'auth@rescuesos.hoangluu.id.vn';
-        const fromAddress = sender.includes('<') ? sender : `SOS Systems <${sender}>`;
+        const fromAddress = sender.includes('<') ? sender : `Cứu Hộ Cứu Nạn <${sender}>`;
 
         const cityName =
           data.city ||
@@ -401,7 +401,7 @@ class AdminService {
         const mailOptions = {
           from: fromAddress,
           to: email.trim().toLowerCase(),
-          subject: `[SOS SYSTEMS] Cấp tài khoản Cán bộ & Quyền điều phối tác chiến ${areaLabel} (${cityName})`,
+          subject: `[CỨU HỘ CỨU NẠN] Cấp tài khoản Cán bộ & Quyền điều phối tác chiến ${areaLabel} (${cityName})`,
           attachments,
           html: `
             <div style="background-color: #f1f5f9; padding: 32px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
