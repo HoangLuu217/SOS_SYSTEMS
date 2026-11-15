@@ -40,6 +40,11 @@ const bloodDonationRegistrationSchema = new mongoose.Schema(
       enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'A', 'B', 'AB', 'O', 'UNKNOWN'],
       default: 'UNKNOWN',
     },
+    donatedVolumeMl: {
+      type: Number,
+      default: null,
+      min: [0, 'Lượng máu hiến phải lớn hơn hoặc bằng 0'],
+    },
     weightKg: {
       type: Number,
       default: null,

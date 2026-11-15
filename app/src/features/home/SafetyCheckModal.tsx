@@ -36,6 +36,8 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [safetyCheck, setSafetyCheck] = useState<SafetyCheckItem | null>(null);
   const [allChecks, setAllChecks] = useState<SafetyCheckItem[]>([]);
+  const [closedChecks, setClosedChecks] = useState<SafetyCheckItem[]>([]);
+  const [viewMode, setViewMode] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
   const [responsesMap, setResponsesMap] = useState<Record<string, SafetyCheckResponseItem>>({});
   const [myResponse, setMyResponse] = useState<SafetyCheckResponseItem | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -73,17 +75,20 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
     let isMounted = true;
     setLoading(true);
+    setViewMode('ACTIVE');
 
     const loadData = async () => {
       try {
         // 1. Luôn lấy đầy đủ danh sách đợt kiểm tra an toàn đang mở
         const activeRes = await safetyCheckApi.getActiveSafetyCheck();
         let checksList: SafetyCheckItem[] = [];
+        let closedList: SafetyCheckItem[] = [];
         const respMap: Record<string, SafetyCheckResponseItem> = {};
 
         if (activeRes.success && activeRes.data) {
           const primary = activeRes.data.activeCheck;
           checksList = activeRes.data.activeChecks || (primary ? [primary] : []);
+          closedList = activeRes.data.closedChecks || [];
           if (activeRes.data.myResponses) {
             activeRes.data.myResponses.forEach((r) => {
               respMap[String(r.safetyCheckId)] = r;
@@ -116,6 +121,7 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
         if (isMounted) {
           setAllChecks(checksList);
+          setClosedChecks(closedList);
           setResponsesMap(respMap);
           applySelectedCheck(selected, respMap);
           setLoading(false);
@@ -289,13 +295,41 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>Xác Nhận An Toàn</Text>
                 <Text style={styles.headerSubtitle}>
-                  {allChecks.length > 0
-                    ? `${allChecks.length} đợt kiểm tra • ${
-                        unrespondedCount > 0 ? `${unrespondedCount} chưa xác nhận` : 'Đã xác nhận tất cả'
-                      }`
-                    : 'Kiểm tra an toàn khu vực'}
+                  {viewMode === 'HISTORY'
+                    ? `Lịch sử các đợt đã đóng (${closedChecks.length})`
+                    : allChecks.length > 0
+                      ? `${allChecks.length} đợt kiểm tra • ${
+                          unrespondedCount > 0 ? `${unrespondedCount} chưa xác nhận` : 'Đã xác nhận tất cả'
+                        }`
+                      : 'Kiểm tra an toàn khu vực'}
                 </Text>
               </View>
+              {closedChecks.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.historyHeaderBtn,
+                    viewMode === 'HISTORY' && styles.historyHeaderBtnActive,
+                  ]}
+                  onPress={() =>
+                    setViewMode((prev) => (prev === 'HISTORY' ? 'ACTIVE' : 'HISTORY'))
+                  }
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={viewMode === 'HISTORY' ? 'arrow-back' : 'time-outline'}
+                    size={15}
+                    color={viewMode === 'HISTORY' ? '#0284C7' : '#475569'}
+                  />
+                  <Text
+                    style={[
+                      styles.historyHeaderBtnText,
+                      viewMode === 'HISTORY' && { color: '#0284C7' },
+                    ]}
+                  >
+                    {viewMode === 'HISTORY' ? 'Quay lại' : 'Lịch sử'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.closeButton}
                 onPress={onClose}
@@ -311,14 +345,95 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
               <ActivityIndicator size="large" color="#16A34A" />
               <Text style={styles.loadingText}>Đang tải...</Text>
             </View>
+          ) : viewMode === 'HISTORY' ? (
+            <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionTitle}>
+                Lịch sử đợt kiểm tra an toàn ({closedChecks.length})
+              </Text>
+              {closedChecks.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="time-outline" size={44} color="#94A3B8" />
+                  <Text style={styles.emptyTitle}>Chưa có lịch sử</Text>
+                  <Text style={styles.emptyDesc}>Chưa có đợt kiểm tra an toàn nào đã đóng.</Text>
+                </View>
+              ) : (
+                <View style={{ gap: 10, paddingBottom: 16 }}>
+                  {closedChecks.map((item) => {
+                    const resp = responsesMap[String(item._id)];
+                    return (
+                      <View key={item._id} style={styles.historyCard}>
+                        <View style={styles.historyCardTop}>
+                          <Text style={styles.historyCardTitle}>{item.title}</Text>
+                          <View style={styles.closedBadge}>
+                            <Text style={styles.closedBadgeText}>Đã đóng</Text>
+                          </View>
+                        </View>
+                        {item.description ? (
+                          <Text style={styles.historyCardDesc}>{item.description}</Text>
+                        ) : null}
+                        <View style={styles.historyCardMetaRow}>
+                          <Text style={styles.historyCardMeta}>
+                            📍 {item.areaName || item.areaId?.name || 'Toàn khu vực'}
+                          </Text>
+                          {resp ? (
+                            <View
+                              style={[
+                                styles.statusTag,
+                                resp.status === 'SAFE' ? styles.statusTagSafe : styles.statusTagHelp,
+                              ]}
+                            >
+                              <Ionicons
+                                name={resp.status === 'SAFE' ? 'checkmark-circle' : 'alert-circle'}
+                                size={12}
+                                color={resp.status === 'SAFE' ? '#15803D' : '#DC2626'}
+                              />
+                              <Text
+                                style={[
+                                  styles.statusTagText,
+                                  { color: resp.status === 'SAFE' ? '#15803D' : '#DC2626' },
+                                ]}
+                              >
+                                {resp.status === 'SAFE' ? 'Đã báo an toàn' : 'Đã báo cần cứu hộ'}
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={[styles.statusTag, styles.statusTagPending]}>
+                              <Text style={[styles.statusTagText, { color: '#64748B' }]}>
+                                Chưa phản hồi
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {resp?.message ? (
+                          <Text style={styles.historyCardNote}>Ghi chú: {resp.message}</Text>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
           ) : allChecks.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="checkmark-done-circle" size={48} color="#16A34A" />
               <Text style={styles.emptyTitle}>Khu vực an toàn</Text>
               <Text style={styles.emptyDesc}>Hiện không có đợt kiểm tra an toàn nào đang mở.</Text>
-              <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
-                <Text style={styles.doneBtnText}>Đóng</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {closedChecks.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.historyEmptyBtn}
+                    onPress={() => setViewMode('HISTORY')}
+                  >
+                    <Ionicons name="time-outline" size={16} color="#0284C7" />
+                    <Text style={styles.historyEmptyBtnText}>
+                      Xem lịch sử ({closedChecks.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
+                  <Text style={styles.doneBtnText}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
@@ -343,11 +458,10 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                       <View style={styles.checkItemBody}>
                         <Text
                           style={[styles.checkItemTitle, isSelected && styles.checkItemTitleActive]}
-                          numberOfLines={1}
                         >
                           {item.title}
                         </Text>
-                        <Text style={styles.checkItemMeta} numberOfLines={1}>
+                        <Text style={styles.checkItemMeta}>
                           {item.areaName || item.areaId?.name || 'Toàn khu vực'}
                         </Text>
                       </View>
@@ -387,11 +501,11 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
               {safetyCheck && (
                 <View style={styles.responseContainer}>
                   <View style={styles.selectedInfoBox}>
-                    <Text style={styles.selectedTitle} numberOfLines={1}>
+                    <Text style={styles.selectedTitle}>
                       {safetyCheck.title}
                     </Text>
                     {safetyCheck.description ? (
-                      <Text style={styles.selectedDesc} numberOfLines={2}>
+                      <Text style={styles.selectedDesc}>
                         {safetyCheck.description}
                       </Text>
                     ) : null}
@@ -1000,5 +1114,96 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  historyHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  historyHeaderBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  historyHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  historyEmptyBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  historyEmptyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  historyCard: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  historyCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  historyCardTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 20,
+  },
+  historyCardDesc: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  historyCardMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  historyCardMeta: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  historyCardNote: {
+    fontSize: 12,
+    color: '#374151',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  closedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+  },
+  closedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4B5563',
   },
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { RefreshCw, Download, ArrowUpRight, Map } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet, ArrowUpRight, Map } from 'lucide-react';
 import { onRescueTeamsUpdated } from '@/services/socketService';
 import {
   fetchSosRequests,
@@ -578,101 +578,251 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   const shelterAvailableSlots = Math.max(0, shelterStats.totalCapacity - shelterStats.totalOccupancy);
 
-  const ledgerRows: {
-    key: NavItemKey;
-    name: string;
-    totalLabel: string;
-    totalValue: number;
-    metrics: { label: string; val: number | string; warn?: boolean }[];
+  const [activeSidebarGroup, setActiveSidebarGroup] = useState<
+    'ALL' | 'OPS' | 'FORCES' | 'COMMUNITY' | 'MONITOR' | 'ADMIN'
+  >('ALL');
+
+  const sidebarReportGroups: {
+    id: 'OPS' | 'FORCES' | 'COMMUNITY' | 'MONITOR' | 'ADMIN';
+    title: string;
+    items: {
+      key: NavItemKey;
+      name: string;
+      totalLabel: string;
+      totalValue: number | string;
+      metrics: { label: string; val: number | string; warn?: boolean }[];
+    }[];
   }[] = [
     {
-      key: 'rescuers_approval' as NavItemKey,
-      name: 'Duyệt hồ sơ cứu hộ viên',
-      totalLabel: 'Tổng hồ sơ',
-      totalValue: rescuersStats.total,
-      metrics: [
-        { label: 'Chờ duyệt', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
-        { label: 'Đã xác minh', val: rescuersStats.verified },
-        { label: 'Từ chối', val: rescuersStats.rejected },
+      id: 'OPS',
+      title: 'Điều hành cứu hộ & Tác chiến',
+      items: [
+        {
+          key: 'map' as NavItemKey,
+          name: 'Bản đồ cứu hộ',
+          totalLabel: 'Điểm hoạt động',
+          totalValue: sosStats.active + shelterStats.active + hazardStats.approved,
+          metrics: [
+            { label: 'SOS đang cứu', val: sosStats.active },
+            { label: 'Điểm trú ẩn mở', val: shelterStats.active },
+            { label: 'Điểm nguy hiểm', val: hazardStats.approved },
+          ],
+        },
+        {
+          key: 'sos_requests' as NavItemKey,
+          name: 'Điều phối SOS',
+          totalLabel: 'Tổng yêu cầu',
+          totalValue: sosStats.total,
+          metrics: [
+            { label: 'Chờ xử lý', val: sosStats.pending, warn: sosStats.pending > 0 },
+            { label: 'Đang cứu', val: sosStats.active },
+            { label: 'Hoàn thành', val: sosStats.completed },
+          ],
+        },
+        {
+          key: 'chat' as NavItemKey,
+          name: 'Trao đổi tác chiến',
+          totalLabel: 'Hội thoại',
+          totalValue: chatStats.conversations,
+          metrics: [
+            { label: 'Tin chưa đọc', val: chatStats.unread, warn: chatStats.unread > 0 },
+          ],
+        },
       ],
     },
     {
-      key: 'blood_donations' as NavItemKey,
-      name: 'Hiến máu tình nguyện',
-      totalLabel: 'Đợt hiến máu',
-      totalValue: bloodDonationStats.eventsTotal,
-      metrics: [
-        { label: 'Đang mở', val: bloodDonationStats.eventsActive },
-        { label: 'Lượt đăng ký', val: bloodDonationStats.registrationsTotal },
-        { label: 'Đã xác nhận', val: bloodDonationStats.confirmedCount },
+      id: 'FORCES',
+      title: 'Lực lượng & Nguồn lực',
+      items: [
+        {
+          key: 'rescuers_approval' as NavItemKey,
+          name: 'Duyệt hồ sơ cứu hộ',
+          totalLabel: 'Tổng hồ sơ',
+          totalValue: rescuersStats.total,
+          metrics: [
+            { label: 'Chờ duyệt', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
+            { label: 'Đã xác minh', val: rescuersStats.verified },
+            { label: 'Từ chối', val: rescuersStats.rejected },
+          ],
+        },
+        {
+          key: 'rescuers' as NavItemKey,
+          name: 'Đội cứu hộ địa phương',
+          totalLabel: 'Tổng đội',
+          totalValue: rescueTeamsCount.total,
+          metrics: [
+            { label: 'Sẵn sàng', val: rescueTeamsCount.available },
+            { label: 'Đang bận', val: rescueTeamsCount.busy },
+          ],
+        },
+        {
+          key: 'resources' as NavItemKey,
+          name: 'Phương tiện & Vật tư',
+          totalLabel: 'Tổng nguồn lực',
+          totalValue: resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal,
+          metrics: [
+            { label: 'Xe sẵn sàng', val: `${resourcesStats.vehiclesAvailable}/${resourcesStats.vehiclesTotal}` },
+            { label: 'Vật tư / Thiết bị', val: resourcesStats.equipmentsTotal },
+          ],
+        },
       ],
     },
     {
-      key: 'chat' as NavItemKey,
-      name: 'Trao đổi tác chiến',
-      totalLabel: 'Hội thoại',
-      totalValue: chatStats.conversations,
-      metrics: [
-        { label: 'Tin chưa đọc', val: chatStats.unread, warn: chatStats.unread > 0 },
+      id: 'COMMUNITY',
+      title: 'Thông báo & Cộng đồng',
+      items: [
+        ...(isAdmin
+          ? [
+              {
+                key: 'notifications' as NavItemKey,
+                name: 'Gửi thông báo',
+                totalLabel: 'Đã phát',
+                totalValue: broadcastStats.total,
+                metrics: [
+                  { label: 'Khẩn cấp', val: broadcastStats.instant },
+                  { label: 'Hệ thống', val: broadcastStats.system },
+                  { label: 'Tự động', val: broadcastStats.autoGenerated },
+                ],
+              },
+            ]
+          : []),
+        {
+          key: 'safety_checks' as NavItemKey,
+          name: 'Kiểm tra an toàn',
+          totalLabel: 'Tổng đợt',
+          totalValue: safetyCheckStats.total,
+          metrics: [
+            { label: 'Đang mở', val: safetyCheckStats.active },
+            { label: 'An toàn', val: safetyCheckStats.safeCount },
+            { label: 'Cần cứu hộ', val: safetyCheckStats.needHelpCount, warn: safetyCheckStats.needHelpCount > 0 },
+          ],
+        },
+        {
+          key: 'blood_donations' as NavItemKey,
+          name: 'Hiến máu tình nguyện',
+          totalLabel: 'Đợt hiến máu',
+          totalValue: bloodDonationStats.eventsTotal,
+          metrics: [
+            { label: 'Đang mở', val: bloodDonationStats.eventsActive },
+            { label: 'Lượt đăng ký', val: bloodDonationStats.registrationsTotal },
+            { label: 'Đã xác nhận', val: bloodDonationStats.confirmedCount },
+          ],
+        },
+        ...(isAdmin
+          ? [
+              {
+                key: 'weather' as NavItemKey,
+                name: 'Bản tin thời tiết',
+                totalLabel: 'Tổng bản tin',
+                totalValue: weatherStats.total,
+                metrics: [
+                  { label: 'Phát hành', val: weatherStats.approved },
+                  { label: 'Chờ duyệt', val: weatherStats.pending, warn: weatherStats.pending > 0 },
+                  { label: 'Lưu trữ', val: weatherStats.archived },
+                ],
+              },
+            ]
+          : []),
+        {
+          key: 'shelters' as NavItemKey,
+          name: 'Điểm trú ẩn',
+          totalLabel: 'Tổng điểm',
+          totalValue: shelterStats.total,
+          metrics: [
+            { label: 'Đang mở', val: shelterStats.active },
+            { label: 'Đang lưu trú', val: shelterStats.totalOccupancy },
+            { label: 'Chỗ trống', val: shelterAvailableSlots },
+          ],
+        },
+        {
+          key: 'hazard_reports' as NavItemKey,
+          name: 'Điểm nguy hiểm',
+          totalLabel: 'Tổng báo cáo',
+          totalValue: hazardStats.total,
+          metrics: [
+            { label: 'Đã duyệt', val: hazardStats.approved },
+            { label: 'Chờ duyệt', val: hazardStats.pending, warn: hazardStats.pending > 0 },
+            { label: 'Mức cao', val: hazardStats.highSeverity },
+          ],
+        },
       ],
     },
     {
-      key: 'operation_logs' as NavItemKey,
-      name: 'Nhật ký hoạt động',
-      totalLabel: 'Bản ghi',
-      totalValue: logsStats.total,
-      metrics: [
-        { label: 'Trạng thái', val: 'Đang ghi nhận' },
+      id: 'MONITOR',
+      title: 'Báo cáo & Giám sát',
+      items: [
+        {
+          key: 'reports' as NavItemKey,
+          name: 'Báo cáo & Thống kê',
+          totalLabel: 'Phạm vi',
+          totalValue: isAdmin ? 'Toàn hệ thống' : userAreaName,
+          metrics: [
+            { label: 'Tổng SOS', val: sosStats.total },
+            { label: 'Tổng người cần cứu', val: sosStats.totalPeople },
+          ],
+        },
+        {
+          key: 'operation_logs' as NavItemKey,
+          name: 'Nhật ký hoạt động',
+          totalLabel: 'Bản ghi',
+          totalValue: logsStats.total,
+          metrics: [{ label: 'Trạng thái', val: 'Đang ghi nhận' }],
+        },
       ],
     },
     ...(isAdmin
       ? [
           {
-            key: 'notifications' as NavItemKey,
-            name: 'Gửi thông báo',
-            totalLabel: 'Đã phát',
-            totalValue: broadcastStats.total,
-            metrics: [
-              { label: 'Khẩn cấp', val: broadcastStats.instant },
-              { label: 'Hệ thống', val: broadcastStats.system },
-              { label: 'Tự động', val: broadcastStats.autoGenerated },
-            ],
-          },
-          {
-            key: 'weather' as NavItemKey,
-            name: 'Bản tin thời tiết',
-            totalLabel: 'Tổng bản tin',
-            totalValue: weatherStats.total,
-            metrics: [
-              { label: 'Phát hành', val: weatherStats.approved },
-              { label: 'Chờ duyệt', val: weatherStats.pending, warn: weatherStats.pending > 0 },
-              { label: 'Lưu trữ', val: weatherStats.archived },
-            ],
-          },
-          {
-            key: 'citizens' as NavItemKey,
-            name: 'Tài khoản người dân',
-            totalLabel: 'Người dân',
-            totalValue: citizensStats.total,
-            metrics: [
-              { label: 'Hoạt động', val: citizensStats.active },
-              { label: 'Tạm khóa', val: citizensStats.locked },
-            ],
-          },
-          {
-            key: 'areas' as NavItemKey,
-            name: 'Đơn vị hành chính & Cán bộ',
-            totalLabel: 'Đơn vị',
-            totalValue: areasStats.total,
-            metrics: [
-              { label: 'Tỉnh/TP', val: areasStats.provinces },
-              { label: 'Phường/Xã', val: areasStats.wards },
-              { label: 'Cán bộ', val: authoritiesStats.total },
+            id: 'ADMIN' as const,
+            title: 'Quản trị hệ thống',
+            items: [
+              {
+                key: 'citizens' as NavItemKey,
+                name: 'Người dân',
+                totalLabel: 'Tài khoản',
+                totalValue: citizensStats.total,
+                metrics: [
+                  { label: 'Hoạt động', val: citizensStats.active },
+                  { label: 'Tạm khóa', val: citizensStats.locked },
+                ],
+              },
+              {
+                key: 'rescuers_admin' as NavItemKey,
+                name: 'Xác minh cứu hộ',
+                totalLabel: 'Tổng hồ sơ',
+                totalValue: rescuersStats.total,
+                metrics: [
+                  { label: 'Chờ xác minh', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
+                  { label: 'Đã xác minh', val: rescuersStats.verified },
+                ],
+              },
+              {
+                key: 'authorities' as NavItemKey,
+                name: 'Cán bộ & Tổ chức',
+                totalLabel: 'Cán bộ',
+                totalValue: authoritiesStats.total,
+                metrics: [{ label: 'Phạm vi', val: 'Toàn hệ thống' }],
+              },
+              {
+                key: 'areas' as NavItemKey,
+                name: 'Khu vực hành chính',
+                totalLabel: 'Đơn vị',
+                totalValue: areasStats.total,
+                metrics: [
+                  { label: 'Tỉnh/TP', val: areasStats.provinces },
+                  { label: 'Phường/Xã', val: areasStats.wards },
+                ],
+              },
             ],
           },
         ]
       : []),
   ];
+
+  const visibleSidebarGroups =
+    activeSidebarGroup === 'ALL'
+      ? sidebarReportGroups
+      : sidebarReportGroups.filter((g) => g.id === activeSidebarGroup);
 
   return (
     <div className="rpt-page">
@@ -709,9 +859,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <Map size={14} />
             <span>Bản đồ</span>
           </button>
-          <button type="button" className="rpt-action-btn" onClick={handleExportSummaryCsv}>
-            <Download size={14} />
-            <span>Xuất CSV</span>
+          <button
+            type="button"
+            className="rpt-action-btn rpt-excel-btn"
+            onClick={handleExportSummaryCsv}
+            title="Xuất báo cáo thống kê đa sheet (.xlsx) kèm định dạng biểu mẫu"
+          >
+            <FileSpreadsheet size={15} />
+            <span>Xuất Excel</span>
           </button>
           <button
             type="button"
@@ -964,35 +1119,63 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </section>
       </div>
 
-      {/* 4. DANH MỤC THỐNG KÊ CÁC TAB CÒN LẠI (BẢNG ĐỐI SOÁT 2 CỘT GỌN MẮT) */}
+      {/* 4. PHÂN HỆ QUẢN LÝ THEO SIDEBAR (CHIA TAB GỌN ĐẸP, ÍT MÀU) */}
       <section className="rpt-box">
-        <header className="rpt-box-head">
+        <header className="rpt-box-head rpt-sidebar-head">
           <div>
-            <h3 className="rpt-box-title">Tổng hợp các phân hệ quản lý khác</h3>
-            <p className="rpt-box-desc">Số liệu chi tiết và liên kết truy cập nhanh tới từng trang</p>
+            <h3 className="rpt-box-title">Tổng hợp theo từng mục Sidebar</h3>
+            <p className="rpt-box-desc">
+              Chọn nhóm nghiệp vụ để xem đầy đủ số liệu và mở nhanh từng trang quản lý
+            </p>
+          </div>
+          <div className="rpt-tabs">
+            {[
+              { id: 'ALL' as const, label: 'Tất cả' },
+              { id: 'OPS' as const, label: 'Điều hành & Tác chiến' },
+              { id: 'FORCES' as const, label: 'Lực lượng & Nguồn lực' },
+              { id: 'COMMUNITY' as const, label: 'Thông báo & Cộng đồng' },
+              { id: 'MONITOR' as const, label: 'Báo cáo & Giám sát' },
+              ...(isAdmin ? [{ id: 'ADMIN' as const, label: 'Quản trị hệ thống' }] : []),
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`rpt-tab-pill ${activeSidebarGroup === tab.id ? 'is-active' : ''}`}
+                onClick={() => setActiveSidebarGroup(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </header>
 
-        <div className="rpt-ledger">
-          {ledgerRows.map((row) => (
-            <div key={row.key} className="rpt-ledger-item">
-              <div className="rpt-ledger-main">
-                <div className="rpt-ledger-name">{row.name}</div>
-                <div className="rpt-ledger-metrics">
-                  <span>
-                    {row.totalLabel}: <b>{row.totalValue}</b>
-                  </span>
-                  {row.metrics.map((m) => (
-                    <span key={m.label}>
-                      · {m.label}:{' '}
-                      <b className={m.warn ? 'is-warn' : ''}>{m.val}</b>
-                    </span>
-                  ))}
-                </div>
+        <div className="rpt-groups-stack">
+          {visibleSidebarGroups.map((group) => (
+            <div key={group.id} className="rpt-group-block">
+              <div className="rpt-group-title">{group.title}</div>
+              <div className="rpt-ledger">
+                {group.items.map((row) => (
+                  <div key={row.key} className="rpt-ledger-item">
+                    <div className="rpt-ledger-main">
+                      <div className="rpt-ledger-name">{row.name}</div>
+                      <div className="rpt-ledger-metrics">
+                        <span>
+                          {row.totalLabel}: <b>{row.totalValue}</b>
+                        </span>
+                        {row.metrics.map((m) => (
+                          <span key={m.label}>
+                            · {m.label}:{' '}
+                            <b className={m.warn ? 'is-warn' : ''}>{m.val}</b>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <button type="button" className="rpt-tab-link" onClick={() => jumpTo(row.key)}>
+                      Mở <ArrowUpRight size={14} />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <button type="button" className="rpt-tab-link" onClick={() => jumpTo(row.key)}>
-                Mở <ArrowUpRight size={13} />
-              </button>
             </div>
           ))}
         </div>

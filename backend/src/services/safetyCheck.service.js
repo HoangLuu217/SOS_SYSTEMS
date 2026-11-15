@@ -795,33 +795,52 @@ class SafetyCheckService {
       } catch (_) {}
     }
 
-    // Lấy tất cả các đợt kiểm tra an toàn đang mở phù hợp với người dùng
-    const activeChecks = await SafetyCheck.find({
-      status: 'ACTIVE',
-      $or: areaConditions,
-    })
-      .sort({ createdAt: -1 })
-      .populate('createdBy', 'fullName phone roles avatarUrl')
-      .populate('areaId', 'name code type')
-      .lean();
+    // Lấy tất cả các đợt kiểm tra an toàn đang mở và các đợt đã đóng gần đây phù hợp với người dùng
+    const [activeChecks, closedChecks] = await Promise.all([
+      SafetyCheck.find({
+        status: 'ACTIVE',
+        $or: areaConditions,
+      })
+        .sort({ createdAt: -1 })
+        .populate('createdBy', 'fullName phone roles avatarUrl')
+        .populate('areaId', 'name code type')
+        .lean(),
+      SafetyCheck.find({
+        status: 'CLOSED',
+        $or: areaConditions,
+      })
+        .sort({ endTime: -1, createdAt: -1 })
+        .limit(30)
+        .populate('createdBy', 'fullName phone roles avatarUrl')
+        .populate('areaId', 'name code type')
+        .lean(),
+    ]);
 
-    if (!activeChecks || activeChecks.length === 0) {
-      return { activeCheck: null, myResponse: null, activeChecks: [], myResponses: [] };
-    }
+    const combinedCheckIds = [...activeChecks, ...closedChecks].map((c) => c._id);
 
     // Lấy phản hồi của user đối với các đợt kiểm tra này (nếu đã phản hồi)
     let myResponses = [];
     const responseMap = {};
 
-    if (currentUser?._id) {
+    if (currentUser?._id && combinedCheckIds.length > 0) {
       myResponses = await SafetyCheckResponse.find({
-        safetyCheckId: { $in: activeChecks.map((c) => c._id) },
+        safetyCheckId: { $in: combinedCheckIds },
         userId: currentUser._id,
       }).lean();
 
       myResponses.forEach((r) => {
         responseMap[r.safetyCheckId.toString()] = r;
       });
+    }
+
+    if (!activeChecks || activeChecks.length === 0) {
+      return {
+        activeCheck: null,
+        myResponse: null,
+        activeChecks: [],
+        closedChecks: closedChecks || [],
+        myResponses,
+      };
     }
 
     // Xác định đợt kiểm tra ưu tiên nhất (primary active check):
@@ -852,6 +871,7 @@ class SafetyCheckService {
       activeCheck: primaryCheck,
       myResponse: myPrimaryResponse,
       activeChecks,
+      closedChecks: closedChecks || [],
       myResponses,
     };
   }
