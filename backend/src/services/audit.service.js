@@ -1,23 +1,45 @@
 const { AuditLog, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
+const DESCENDANT_AREA_CACHE_TTL_MS = 60 * 1000;
+const descendantAreaCache = new Map();
+
 class AuditService {
   /**
-   * Helper: Lấy danh sách ID các khu vực con & cháu trực thuộc một khu vực
+   * Helper: Lấy danh sách ID các khu vực con & cháu trực thuộc một khu vực (cache 60s)
    * @param {ObjectId|string} rootAreaId
    * @returns {Promise<Array<ObjectId>>}
    */
   async getDescendantAreaIds(rootAreaId) {
     if (!rootAreaId) return [];
+    const cacheKey = String(rootAreaId);
+    const cached = descendantAreaCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.ids;
+    }
+
     try {
-      const children = await AdministrativeArea.find({ parentId: rootAreaId, status: 'ACTIVE' }).select('_id');
+      const children = await AdministrativeArea.find({ parentId: rootAreaId, status: 'ACTIVE' })
+        .select('_id')
+        .lean();
       const childIds = children.map((c) => c._id);
-      if (childIds.length === 0) return [];
+      let result = [];
+      if (childIds.length > 0) {
+        const grandChildren = await AdministrativeArea.find({
+          parentId: { $in: childIds },
+          status: 'ACTIVE',
+        })
+          .select('_id')
+          .lean();
+        const grandChildIds = grandChildren.map((g) => g._id);
+        result = [...childIds, ...grandChildIds];
+      }
 
-      const grandChildren = await AdministrativeArea.find({ parentId: { $in: childIds }, status: 'ACTIVE' }).select('_id');
-      const grandChildIds = grandChildren.map((g) => g._id);
-
-      return [...childIds, ...grandChildIds];
+      descendantAreaCache.set(cacheKey, {
+        ids: result,
+        expiresAt: Date.now() + DESCENDANT_AREA_CACHE_TTL_MS,
+      });
+      return result;
     } catch (err) {
       console.warn('[AuditService] Không thể lấy khu vực trực thuộc:', err.message);
       return [];
@@ -37,7 +59,7 @@ class AuditService {
    */
   async log({ actorId = null, actorRole = null, action, entityType, entityId = null, areaId = null, metadata = {} }) {
     try {
-      await AuditLog.create({
+      const created = await AuditLog.create({
         actorId,
         actorRole,
         action,
@@ -46,6 +68,20 @@ class AuditService {
         areaId,
         metadata,
       });
+      if (entityType === 'RescueTeam') {
+        try {
+          const { getIO } = require('../socket');
+          const io = getIO();
+          if (io) {
+            io.emit('audit:created', {
+              id: String(created._id),
+              entityType,
+              entityId: entityId ? String(entityId) : null,
+              action,
+            });
+          }
+        } catch (_) {}
+      }
     } catch (err) {
       // Audit log không được làm fail nghiệp vụ chính — chỉ ghi warning
       console.warn('[AuditService] Không thể ghi audit log:', err.message);
@@ -108,7 +144,8 @@ class AuditService {
         .populate('areaId', 'name code type')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       AuditLog.countDocuments(filter),
     ]);
 
@@ -129,7 +166,8 @@ class AuditService {
   async getAuditLogById(id) {
     const log = await AuditLog.findById(id)
       .populate('actorId', 'fullName phone email roles')
-      .populate('areaId', 'name code type');
+      .populate('areaId', 'name code type')
+      .lean();
 
     if (!log) {
       throw new ApiError(404, 'Không tìm thấy bản ghi audit log này');

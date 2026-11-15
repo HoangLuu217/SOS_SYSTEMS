@@ -22,12 +22,16 @@ async function connectDatabase() {
     throw new ApiError(503, 'Máy chủ chưa cấu hình biến môi trường MONGODB_URI.');
   }
 
+  const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
   if (!globalCache.promise) {
     globalCache.promise = mongoose
       .connect(mongoUri, {
         serverSelectionTimeoutMS: 8000,
         socketTimeoutMS: 45000,
-        maxPoolSize: 10,
+        maxPoolSize: isServerless ? 2 : 15,
+        minPoolSize: isServerless ? 0 : 2,
+        maxIdleTimeMS: isServerless ? 10000 : 120000,
       })
       .then((mongooseInstance) => {
         globalCache.conn = mongooseInstance.connection;

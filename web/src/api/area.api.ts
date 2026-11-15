@@ -1,8 +1,39 @@
 import { fetchWithAuth } from './client';
 import type { AdministrativeAreaItem, AuthorityOrgItem } from '@/types/dashboard';
 
-export async function fetchAdministrativeAreas(): Promise<{ success: boolean; data: AdministrativeAreaItem[] }> {
-  return fetchWithAuth('/administrative-areas', { method: 'GET' });
+const AREAS_CACHE_TTL_MS = 15 * 1000;
+let cachedAreasResponse: { timestamp: number; value: { success: boolean; data: AdministrativeAreaItem[] } } | null = null;
+let areasInFlightPromise: Promise<{ success: boolean; data: AdministrativeAreaItem[] }> | null = null;
+
+export function invalidateAdministrativeAreasCache() {
+  cachedAreasResponse = null;
+}
+
+export async function fetchAdministrativeAreas(options?: {
+  force?: boolean;
+}): Promise<{ success: boolean; data: AdministrativeAreaItem[] }> {
+  const now = Date.now();
+  if (!options?.force && cachedAreasResponse && now - cachedAreasResponse.timestamp < AREAS_CACHE_TTL_MS) {
+    return cachedAreasResponse.value;
+  }
+  if (!options?.force && areasInFlightPromise) {
+    return areasInFlightPromise;
+  }
+
+  areasInFlightPromise = fetchWithAuth<{ success: boolean; data: AdministrativeAreaItem[] }>('/administrative-areas', {
+    method: 'GET',
+  })
+    .then((res) => {
+      if (res?.success && Array.isArray(res.data)) {
+        cachedAreasResponse = { timestamp: Date.now(), value: res };
+      }
+      return res;
+    })
+    .finally(() => {
+      areasInFlightPromise = null;
+    });
+
+  return areasInFlightPromise;
 }
 
 export async function fetchAuthorityOrganizations(): Promise<{ success: boolean; data: AuthorityOrgItem[] }> {

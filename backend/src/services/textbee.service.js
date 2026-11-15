@@ -89,7 +89,7 @@ class TextBeeService {
    * @param {string} otpCode - Mã xác thực 6 số
    */
   async sendOtp(phone, otpCode) {
-    const message = `[CUU HO CUU NAN] Ma xac thuc OTP cua ban la: ${otpCode}. Ma co hieu luc trong 5 phut. Khong chia se ma cho bat ky ai.`;
+    const message = `Cuu Ho Cuu Nan: Ma xac nhan cua ban la ${otpCode}, hieu luc trong 5 phut.`;
     return this.sendSms(phone, message);
   }
 }

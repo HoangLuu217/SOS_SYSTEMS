@@ -29,6 +29,7 @@ import type {
 } from '@/types/domainD';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 import { domainDService } from '@/services/domainDService';
+import { getSocket } from '@/services/socketService';
 import { useApp } from '@/context/AppContext';
 import { fetchEquipments, type EquipmentItem } from '@/api/equipment.api';
 import { fetchDispatchRecommendationsApi } from '@/api/sos.api';
@@ -96,20 +97,29 @@ export const DispatchWorkflow = ({
   const [smartRecs, setSmartRecs] = useState<DispatchRecommendationsData | null>(null);
   const [isLoadingAdvisor, setIsLoadingAdvisor] = useState<boolean>(false);
   const [dispatchTab, setDispatchTab] = useState<'AI' | 'TEAMS'>('AI');
+  const [realtimeSyncTick, setRealtimeSyncTick] = useState(0);
   const advisorRequestRef = useRef(0);
+  const isAdvisorInFlightRef = useRef(false);
+  const pendingOccupancyRefreshRef = useRef(false);
+  const smartRecsRef = useRef<DispatchRecommendationsData | null>(null);
+  smartRecsRef.current = smartRecs;
 
   const aiAnalyzedAt = (selectedSos as any)?.aiAssessment?.analyzedAt;
 
   const loadSmartRecommendations = useCallback(
-    async (withAi: boolean = false, forceRefresh: boolean = false) => {
+    async (withAi: boolean = false, forceRefresh: boolean = false, silent: boolean = false) => {
       const requestId = ++advisorRequestRef.current;
       const requestedSosId = selectedSos?.id;
       if (!selectedSos?.id || selectedSos.id.startsWith('sos-') || ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos.status))) {
+        isAdvisorInFlightRef.current = false;
         setSmartRecs(null);
         setIsLoadingAdvisor(false);
         return;
       }
-      if (withAi) setIsLoadingAdvisor(true);
+      if (withAi) {
+        isAdvisorInFlightRef.current = true;
+        if (!silent) setIsLoadingAdvisor(true);
+      }
       try {
         const res = await fetchDispatchRecommendationsApi(selectedSos.id, {
           ai: withAi,
@@ -123,17 +133,87 @@ export const DispatchWorkflow = ({
       } catch (err) {
         console.warn('Smart dispatch recommendation warning:', err);
       } finally {
-        if (withAi && requestId === advisorRequestRef.current) setIsLoadingAdvisor(false);
+        if (requestId === advisorRequestRef.current) {
+          if (withAi) isAdvisorInFlightRef.current = false;
+          setIsLoadingAdvisor(false);
+          if (pendingOccupancyRefreshRef.current) {
+            pendingOccupancyRefreshRef.current = false;
+            window.setTimeout(() => {
+              loadSmartRecommendations(Boolean(smartRecsRef.current?.aiAdvisor) || withAi, false, true);
+            }, 150);
+          }
+        }
       }
     },
     [selectedSos?.id, selectedSos?.status, aiAnalyzedAt, isAdmin, activeOfficer?.jurisdictionAreaId, activeOfficer?.jurisdictionAreaName]
   );
 
   useEffect(() => {
+    pendingOccupancyRefreshRef.current = false;
     setSmartRecs(null);
     loadSmartRecommendations(true);
-    return () => { advisorRequestRef.current += 1; };
+    return () => {
+      advisorRequestRef.current += 1;
+      isAdvisorInFlightRef.current = false;
+    };
   }, [loadSmartRecommendations]);
+
+  // Chữ ký tổng hợp tình trạng bận của các đội trên tất cả ca SOS để recompute & refresh gợi ý realtime khi có đội hoàn thành/hủy/bàn giao
+  const teamOccupancySignature = useMemo(() => {
+    const sosPart = (allSos || [])
+      .map((s) => `${s.id}:${s.status}:${s.shoreHandoff?.status || ''}:${s.shoreHandoffAssignment?.status || ''}`)
+      .join('|');
+    const assignPart = domainDService
+      .getAssignments()
+      .map((a) => `${a.id}:${a.status}:${a.rescueTeamId}`)
+      .join('|');
+    return `${sosPart}__${assignPart}__${realtimeSyncTick}`;
+  }, [allSos, realtimeSyncTick]);
+
+  const prevOccupancySigRef = useRef<string>('');
+  useEffect(() => {
+    if (!prevOccupancySigRef.current) {
+      prevOccupancySigRef.current = teamOccupancySignature;
+      return;
+    }
+    if (prevOccupancySigRef.current === teamOccupancySignature) return;
+    prevOccupancySigRef.current = teamOccupancySignature;
+    if (!selectedSos?.id || selectedSos.id.startsWith('sos-') || ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos.status))) {
+      return;
+    }
+    if (isAdvisorInFlightRef.current) {
+      pendingOccupancyRefreshRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      loadSmartRecommendations(Boolean(smartRecsRef.current?.aiAdvisor), false, true);
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [teamOccupancySignature, selectedSos?.id, selectedSos?.status, loadSmartRecommendations]);
+
+  // Lắng nghe sự kiện Socket.IO & custom event để đồng bộ trạng thái BẬN/SẴN SÀNG của đội tức thì không cần F5
+  useEffect(() => {
+    const bumpSync = () => setRealtimeSyncTick((t) => t + 1);
+    const socket = getSocket();
+    const socketEvents = [
+      'assignment:updated',
+      'assignment:status_updated',
+      'assignment:status_changed',
+      'assignment:completed',
+      'assignment:cancelled',
+      'sos:assignment:status_changed',
+      'sos:shore_handoff_assigned',
+      'sos:shore_handoff_completed',
+      'sos:shore_handoff_cancelled',
+      'rescue_teams_updated',
+    ];
+    socketEvents.forEach((evt) => socket.on(evt, bumpSync));
+    window.addEventListener('sos_dispatch_refresh', bumpSync);
+    return () => {
+      socketEvents.forEach((evt) => socket.off(evt, bumpSync));
+      window.removeEventListener('sos_dispatch_refresh', bumpSync);
+    };
+  }, []);
 
   const candidateByTeamId = useMemo(() => {
     const map = new Map<string, DispatchTeamCandidate>();
@@ -286,7 +366,7 @@ export const DispatchWorkflow = ({
     }
 
     return list;
-  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, selectedSos?.citizenId, candidateByTeamId, smartRecs]);
+  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, selectedSos?.citizenId, candidateByTeamId, smartRecs, teamOccupancySignature]);
 
   // Đếm số lượng đội thực tế đang sẵn sàng (không bận nhiệm vụ)
   const readyTeamsCount = useMemo(() => {
@@ -296,7 +376,7 @@ export const DispatchWorkflow = ({
         !candidateByTeamId.get(t.id)?.isBusy &&
         candidateByTeamId.get(t.id)?.dispatchEligible !== false
     ).length;
-  }, [availableTeams, selectedSos?.id, candidateByTeamId]);
+  }, [availableTeams, selectedSos?.id, candidateByTeamId, teamOccupancySignature]);
   const busyTeamsCount = availableTeams.filter(
     (t) => !!domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id) || Boolean(candidateByTeamId.get(t.id)?.isBusy)
   ).length;
@@ -596,12 +676,30 @@ export const DispatchWorkflow = ({
     const rawTeamType = smartCand?.teamType || team.teamType;
     const teamTypeLabel = rawTeamType ? teamTypeLabelMap[rawTeamType] || rawTeamType : undefined;
     const activeTask = domainDService.getActiveAssignmentForTeam(team.id, selectedSos.id);
-    const isBusy = !!activeTask || Boolean(smartCand?.isBusy);
+    const busyMissionAssignId = smartCand?.busyMission?.assignmentId;
+    const busyMissionSosCode = smartCand?.busyMission?.sosCode;
+    const smartBusyMissionClosed = Boolean(
+      (busyMissionAssignId &&
+        domainDService.getAssignments().some(
+          (a) =>
+            String(a.id) === String(busyMissionAssignId) &&
+            ['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(String(a.status || '').toUpperCase())
+        )) ||
+      (busyMissionSosCode &&
+        (allSos || []).some(
+          (s) =>
+            s.sosCode === busyMissionSosCode &&
+            ['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(String(s.status || '').toUpperCase())
+        ))
+    );
+    const isBusy = !!activeTask || (Boolean(smartCand?.isBusy) && !smartBusyMissionClosed);
     const busyMissionCode = activeTask
       ? activeTask.sosRequestId
         ? `SOS-${activeTask.sosRequestId.slice(-5)}`
         : 'Đang làm nhiệm vụ'
-      : smartCand?.busyMission?.sosCode || undefined;
+      : isBusy
+        ? smartCand?.busyMission?.sosCode || undefined
+        : undefined;
 
     const sosWardNorm = normalizeWardName(selectedSos.wardName);
     const teamWardNorm = normalizeWardName(team.wardName);

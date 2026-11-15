@@ -63,7 +63,6 @@ export function BloodDonationModal({
   const [provinceName, setProvinceName] = useState('');
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [address, setAddress] = useState('');
-  const [healthNote, setHealthNote] = useState('Sức khỏe tốt, sẵn sàng tham gia hiến máu');
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Form Xác nhận sự kiện
@@ -73,12 +72,11 @@ export function BloodDonationModal({
   const selectEventItem = useCallback(
     (ev: BloodDonationEventItem, preReg: BloodDonationRegistrationItem | null) => {
       setSelectedEvent(ev);
+      setEventChoice('CONFIRMED');
       if (ev.myResponse) {
-        setEventChoice(ev.myResponse.status === 'DECLINED' ? 'DECLINED' : 'CONFIRMED');
         setEventNote(ev.myResponse.note || '');
         if (ev.myResponse.bloodType) setBloodType(ev.myResponse.bloodType);
       } else {
-        setEventChoice('CONFIRMED');
         setEventNote('');
         if (preReg?.bloodType) setBloodType(preReg.bloodType);
       }
@@ -133,7 +131,6 @@ export function BloodDonationModal({
         setBloodType(pre?.bloodType || (user as any)?.citizen?.bloodType || 'UNKNOWN');
         setWeightKg(pre?.weightKg ? String(pre.weightKg) : '55');
         setAddress(initAddress);
-        setHealthNote(pre?.healthNote || 'Sức khỏe tốt, sẵn sàng tham gia hiến máu');
 
         // Xác định Tỉnh/Thành phố đã chọn
         if (pre?.provinceId) {
@@ -178,17 +175,10 @@ export function BloodDonationModal({
               setSelectedEvent(null);
             }
           }
-        } else if (events.length > 0 && pre) {
-          // Nếu đã đăng ký trước rồi và đang có sự kiện mới -> mở tab Sự kiện hiển thị danh sách các đợt
-          setSelectedEvent(null);
-          if (events.some((e) => !e.myResponse)) {
-            setActiveTab('EVENTS');
-          } else {
-            setActiveTab('PRE_REGISTER');
-          }
         } else {
+          // Mặc định mở thẳng danh sách các sự kiện hiến máu
           setSelectedEvent(null);
-          setActiveTab('PRE_REGISTER');
+          setActiveTab('EVENTS');
         }
       }
     } catch {
@@ -203,6 +193,37 @@ export function BloodDonationModal({
       loadData();
     }
   }, [visible, loadData]);
+
+  // Đồng bộ ngầm trạng thái sự kiện (ví dụ: khi Web đánh dấu "Đã hiến máu")
+  useEffect(() => {
+    if (!visible) return;
+    const interval = setInterval(async () => {
+      try {
+        const statusRes = await bloodDonationApi.getMyStatus();
+        if (statusRes.success && statusRes.data) {
+          const events = statusRes.data.activeEvents || [];
+          setActiveEvents(events);
+          if (statusRes.data.myPreRegistration) {
+            setMyPreRegistration(statusRes.data.myPreRegistration);
+            if (
+              statusRes.data.myPreRegistration.bloodType &&
+              statusRes.data.myPreRegistration.bloodType !== 'UNKNOWN'
+            ) {
+              setBloodType(statusRes.data.myPreRegistration.bloodType);
+            }
+          }
+          setSelectedEvent((prev) => {
+            if (!prev) return null;
+            const updated = events.find((e) => String(e._id) === String(prev._id));
+            return updated || prev;
+          });
+        }
+      } catch {
+        // ignore silent poll error
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [visible]);
 
   // Xử lý ĐK nhận thông báo đợt hiến máu theo Tỉnh/Thành phố
   const handlePreRegister = async () => {
@@ -229,7 +250,6 @@ export function BloodDonationModal({
         provinceId: provinceId || undefined,
         provinceName: provinceName || undefined,
         address: address.trim(),
-        healthNote: healthNote.trim(),
         latitude: coords?.latitude,
         longitude: coords?.longitude,
       });
@@ -346,7 +366,7 @@ export function BloodDonationModal({
     setFeedbackBanner(null);
     try {
       const res = await bloodDonationApi.respondToEvent(selectedEvent._id, {
-        status: eventChoice,
+        status: 'CONFIRMED',
         fullName: fullName.trim() || user?.fullName || 'Người dân',
         phone: phone.trim(),
         bloodType,
@@ -366,12 +386,12 @@ export function BloodDonationModal({
         setActiveEvents((prev) =>
           prev.map((item) => (item._id === updatedEv._id ? updatedEv : item))
         );
+        if (bloodType && bloodType !== 'UNKNOWN') {
+          setMyPreRegistration((prev) => (prev ? { ...prev, bloodType } : prev));
+        }
         setFeedbackBanner({
           type: 'success',
-          text:
-            eventChoice === 'CONFIRMED'
-              ? `Đã xác nhận tham gia tại "${selectedEvent.locationName}"!`
-              : 'Đã ghi nhận chưa tham gia đợt này.',
+          text: `Đã đăng ký tham gia tại "${selectedEvent.locationName}"!`,
         });
         DeviceEventEmitter.emit('blood_donation:updated');
         onUpdated?.();
@@ -421,62 +441,49 @@ export function BloodDonationModal({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>Hiến Máu Tình Nguyện</Text>
-                <Text style={styles.headerSubtitle}>
-                  ĐK nhận thông báo đợt hiến & Xác nhận điểm hiến máu
-                </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={22} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Thanh chuyển Tab */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabItem, activeTab === 'PRE_REGISTER' && styles.tabItemActive]}
-              onPress={() => {
-                setActiveTab('PRE_REGISTER');
-                setFeedbackBanner(null);
-              }}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={16}
-                color={activeTab === 'PRE_REGISTER' ? '#0284C7' : '#64748B'}
-              />
-              <Text
-                style={[styles.tabText, activeTab === 'PRE_REGISTER' && styles.tabTextActive]}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: activeTab === 'PRE_REGISTER' ? '#EFF6FF' : '#F1F5F9',
+                  borderWidth: 1,
+                  borderColor: activeTab === 'PRE_REGISTER' ? '#BFDBFE' : '#E2E8F0',
+                }}
+                onPress={() => {
+                  setActiveTab((prev) => (prev === 'PRE_REGISTER' ? 'EVENTS' : 'PRE_REGISTER'));
+                  setFeedbackBanner(null);
+                }}
+                activeOpacity={0.75}
               >
-                ĐK nhận thông báo
-              </Text>
-              {myPreRegistration?.status === 'PENDING' && (
-                <View style={styles.pendingDot} />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabItem, activeTab === 'EVENTS' && styles.tabItemActive]}
-              onPress={() => {
-                setActiveTab('EVENTS');
-                setSelectedEvent(null);
-                setFeedbackBanner(null);
-              }}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={16}
-                color={activeTab === 'EVENTS' ? '#0284C7' : '#64748B'}
-              />
-              <Text style={[styles.tabText, activeTab === 'EVENTS' && styles.tabTextActive]}>
-                Sự kiện hiến máu ({activeEvents.length})
-              </Text>
-              {unrespondedCount > 0 && (
-                <View style={styles.tabBadge}>
-                  <Text style={styles.tabBadgeText}>{unrespondedCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                <Ionicons
+                  name="settings-outline"
+                  size={16}
+                  color={activeTab === 'PRE_REGISTER' ? '#0284C7' : '#475569'}
+                />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '700',
+                    color: activeTab === 'PRE_REGISTER' ? '#0284C7' : '#475569',
+                  }}
+                >
+                  Cài đặt
+                </Text>
+                {myPreRegistration?.status === 'PENDING' && (
+                  <View style={styles.pendingDot} />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {loading ? (
@@ -523,8 +530,20 @@ export function BloodDonationModal({
               )}
 
               {activeTab === 'PRE_REGISTER' ? (
-                /* ================= TAB 1: ĐK NHẬN THÔNG BÁO ĐỢT HIẾN MÁU ================= */
+                /* ================= CÀI ĐẶT NHẬN THÔNG BÁO ĐỢT HIẾN MÁU ================= */
                 <View>
+                  <TouchableOpacity
+                    style={styles.backToListBtn}
+                    onPress={() => {
+                      setActiveTab('EVENTS');
+                      setFeedbackBanner(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-back" size={16} color="#0284C7" />
+                    <Text style={styles.backToListBtnText}>Danh sách các sự kiện hiến máu</Text>
+                  </TouchableOpacity>
+
                   {/* 1. Chọn Tỉnh / Thành phố từ Area (Dropdown gọn) */}
                   <Text style={styles.inputLabel}>
                     Tỉnh / Thành phố nhận thông báo đợt hiến *
@@ -706,7 +725,7 @@ export function BloodDonationModal({
                         Chưa có đợt hiến máu nào đang mở
                       </Text>
                       <Text style={styles.emptySubtitle}>
-                        Bạn có thể đăng ký trước ở tab "ĐK nhận thông báo" để nhận thông báo ngay
+                        Bạn có thể bấm nút "Cài đặt" ở góc trên để đăng ký nhận thông báo ngay
                         khi địa phương tổ chức sự kiện hiến máu mới.
                       </Text>
                     </View>
@@ -760,11 +779,13 @@ export function BloodDonationModal({
                                         : { color: '#D97706' },
                                   ]}
                                 >
-                                  {respStatus === 'CONFIRMED' || respStatus === 'COMPLETED'
-                                    ? 'Đã đăng ký'
-                                    : respStatus === 'DECLINED'
-                                      ? 'Từ chối'
-                                      : 'Chưa xác nhận'}
+                                  {respStatus === 'COMPLETED'
+                                    ? '✓ Đã hiến máu'
+                                    : respStatus === 'CONFIRMED'
+                                      ? 'Đã đăng ký'
+                                      : respStatus === 'DECLINED'
+                                        ? 'Từ chối'
+                                        : 'Chưa xác nhận'}
                                 </Text>
                               </View>
                               <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
@@ -814,9 +835,6 @@ export function BloodDonationModal({
                                 <Text style={styles.infoCompactText}>
                                   <Text style={styles.infoRowLabel}>Địa điểm: </Text>
                                   <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
-                                  {selectedEvent.address ? (
-                                    <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
-                                  ) : null}
                                 </Text>
                                 {Boolean((selectedEvent as any).googleMapsUrl || selectedEvent.address) && (
                                   <TouchableOpacity
@@ -897,60 +915,68 @@ export function BloodDonationModal({
                           </View>
 
                           {/* Khung xác nhận tham gia của người dân (Gọn 1 hàng) */}
-                          <Text style={[styles.sectionLabel, { marginTop: 10, marginBottom: 6 }]}>
-                            Xác nhận đăng ký tham gia:
-                          </Text>
-
-                          <View style={styles.choiceRow}>
-                            <TouchableOpacity
-                              style={[
-                                styles.choiceCard,
-                                eventChoice === 'CONFIRMED' && styles.choiceCardConfirmActive,
-                              ]}
-                              onPress={() => setEventChoice('CONFIRMED')}
+                          {selectedEvent.myResponse?.status === 'COMPLETED' ? (
+                            <View
+                              style={{
+                                marginTop: 12,
+                                padding: 14,
+                                borderRadius: 12,
+                                backgroundColor: '#ECFDF5',
+                                borderWidth: 1,
+                                borderColor: '#6EE7B7',
+                                alignItems: 'center',
+                              }}
                             >
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={18}
-                                color={eventChoice === 'CONFIRMED' ? '#0284C7' : '#94A3B8'}
-                              />
-                              <Text
-                                style={[
-                                  styles.choiceCardTitle,
-                                  eventChoice === 'CONFIRMED' && { color: '#0369A1' },
-                                ]}
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  marginBottom: 4,
+                                }}
                               >
-                                ĐĂNG KÝ THAM GIA
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.choiceCard,
-                                eventChoice === 'DECLINED' && styles.choiceCardDeclineActive,
-                              ]}
-                              onPress={() => setEventChoice('DECLINED')}
-                            >
-                              <Ionicons
-                                name="close-circle"
-                                size={18}
-                                color={eventChoice === 'DECLINED' ? '#475569' : '#94A3B8'}
-                              />
+                                <Ionicons name="checkmark-circle" size={22} color="#059669" />
+                                <Text
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: '700',
+                                    color: '#047857',
+                                  }}
+                                >
+                                  Đã hiến máu
+                                </Text>
+                              </View>
                               <Text
-                                style={[
-                                  styles.choiceCardTitle,
-                                  eventChoice === 'DECLINED' && { color: '#334155' },
-                                ]}
+                                style={{
+                                  fontSize: 13,
+                                  color: '#065F46',
+                                  textAlign: 'center',
+                                  lineHeight: 18,
+                                }}
                               >
-                                CHƯA THỂ THAM GIA
+                                Cảm ơn nghĩa cử cao đẹp của bạn! Đơn vị tổ chức đã xác nhận bạn hoàn thành hiến máu trong đợt này.
                               </Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Chọn nhanh nhóm máu nếu đồng ý tham gia */}
-                          {eventChoice === 'CONFIRMED' && (
+                              {selectedEvent.myResponse?.bloodType && (
+                                <Text
+                                  style={{
+                                    marginTop: 6,
+                                    fontSize: 12.5,
+                                    fontWeight: '600',
+                                    color: '#047857',
+                                  }}
+                                >
+                                  Nhóm máu ghi nhận:{' '}
+                                  {selectedEvent.myResponse.bloodType === 'UNKNOWN'
+                                    ? 'Chưa rõ'
+                                    : selectedEvent.myResponse.bloodType}
+                                </Text>
+                              )}
+                            </View>
+                          ) : (
                             <>
-                              <Text style={styles.inputLabel}>Nhóm máu của bạn:</Text>
+                              <Text style={[styles.inputLabel, { marginTop: 10 }]}>
+                                Nhóm máu của bạn:
+                              </Text>
                               <View style={styles.bloodGrid}>
                                 {BLOOD_TYPES.map((bt) => {
                                   const active = bloodType === bt;
@@ -975,62 +1001,57 @@ export function BloodDonationModal({
                                   );
                                 })}
                               </View>
-                            </>
-                          )}
 
-                          <Text style={styles.inputLabel}>Ghi chú thêm (tùy chọn):</Text>
-                          <TextInput
-                            style={[styles.input, { marginBottom: 6 }]}
-                            value={eventNote}
-                            onChangeText={setEventNote}
-                            placeholder="VD: Tôi sẽ đến vào khoảng 8h30 sáng..."
-                            placeholderTextColor="#94A3B8"
-                          />
-
-                          <TouchableOpacity
-                            style={[
-                              styles.submitBtn,
-                              eventChoice === 'DECLINED' && { backgroundColor: '#475569' },
-                              submitting && { opacity: 0.7 },
-                            ]}
-                            onPress={handleRespondEvent}
-                            disabled={submitting}
-                          >
-                            {submitting ? (
-                              <ActivityIndicator color="#FFFFFF" size="small" />
-                            ) : (
-                              <>
-                                <Ionicons
-                                  name={
-                                    eventChoice === 'CONFIRMED'
-                                      ? 'heart-circle'
-                                      : 'checkmark-done'
-                                  }
-                                  size={18}
-                                  color="#FFFFFF"
-                                />
-                                <Text style={styles.submitBtnText}>
-                                  {selectedEvent.myResponse
-                                    ? 'CẬP NHẬT XÁC NHẬN'
-                                    : eventChoice === 'CONFIRMED'
-                                      ? 'XÁC NHẬN THAM GIA'
-                                      : 'KHÔNG THAM GIA ĐỢT NÀY'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-
-                          {selectedEvent.myResponse && (
-                            <TouchableOpacity
-                              style={[styles.cancelOutlineBtn, submitting && { opacity: 0.7 }]}
-                              onPress={handleCancelEventRegistration}
-                              disabled={submitting}
-                            >
-                              <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
-                              <Text style={styles.cancelOutlineBtnText}>
-                                HỦY ĐĂNG KÝ ĐỢT HIẾN MÁU NÀY
+                              <Text style={[styles.inputLabel, { marginTop: 8 }]}>
+                                Ghi chú thêm (tùy chọn):
                               </Text>
-                            </TouchableOpacity>
+                              <TextInput
+                                style={[styles.input, { marginBottom: 6 }]}
+                                value={eventNote}
+                                onChangeText={setEventNote}
+                                placeholder="VD: Tôi sẽ đến vào khoảng 8h30 sáng..."
+                                placeholderTextColor="#94A3B8"
+                              />
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.submitBtn,
+                                  submitting && { opacity: 0.7 },
+                                ]}
+                                onPress={handleRespondEvent}
+                                disabled={submitting}
+                              >
+                                {submitting ? (
+                                  <ActivityIndicator color="#FFFFFF" size="small" />
+                                ) : (
+                                  <>
+                                    <Ionicons
+                                      name="heart-circle"
+                                      size={18}
+                                      color="#FFFFFF"
+                                    />
+                                    <Text style={styles.submitBtnText}>
+                                      {selectedEvent.myResponse
+                                        ? 'CẬP NHẬT ĐĂNG KÝ'
+                                        : 'XÁC NHẬN THAM GIA'}
+                                    </Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+
+                              {selectedEvent.myResponse && (
+                                <TouchableOpacity
+                                  style={[styles.cancelOutlineBtn, submitting && { opacity: 0.7 }]}
+                                  onPress={handleCancelEventRegistration}
+                                  disabled={submitting}
+                                >
+                                  <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
+                                  <Text style={styles.cancelOutlineBtnText}>
+                                    HỦY ĐĂNG KÝ ĐỢT HIẾN MÁU NÀY
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </>
                           )}
                         </View>
                       </View>
@@ -1537,22 +1558,16 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   reqBox: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
     marginTop: 2,
-    borderWidth: 1,
-    borderColor: '#FEF3C7',
   },
   reqTitle: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#B45309',
+    color: '#D97706',
   },
   reqText: {
     fontSize: 11.5,
-    color: '#92400E',
+    color: '#B45309',
     lineHeight: 16,
   },
   choiceRow: {

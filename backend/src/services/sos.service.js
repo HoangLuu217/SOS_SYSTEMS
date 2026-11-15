@@ -5,6 +5,20 @@ const sosTriageService = require('./sosTriage.service');
 const geminiService = require('./gemini.service');
 const rescueTeamService = require('./rescueTeam.service');
 
+// Cache ngắn danh sách đơn vị hành chính đang hoạt động để giảm truy vấn lặp khi dashboard poll
+let activeAreasCache = { data: null, expiresAt: 0 };
+const getCachedActiveAreas = async () => {
+  const now = Date.now();
+  if (activeAreasCache.data && activeAreasCache.expiresAt > now) {
+    return activeAreasCache.data;
+  }
+  const areas = await AdministrativeArea.find({ status: 'ACTIVE' })
+    .select('_id name code type parentId')
+    .lean();
+  activeAreasCache = { data: areas, expiresAt: now + 30000 };
+  return areas;
+};
+
 /**
  * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
  */
@@ -12,7 +26,7 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
   let fallbackProvinceId = null;
 
   if (inputAreaId && mongoose.Types.ObjectId.isValid(inputAreaId) && String(inputAreaId) !== '650c1f1e1c9d440000a1b1c1') {
-    const existing = await AdministrativeArea.findById(inputAreaId);
+    const existing = await AdministrativeArea.findById(inputAreaId).select('_id type').lean();
     if (existing) {
       if (existing.type !== 'PROVINCE') return existing._id;
       fallbackProvinceId = existing._id;
@@ -21,7 +35,7 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
 
   // 1. Ưu tiên khớp theo địa chỉ văn bản vào cấp hành chính chi tiết (WARD -> DISTRICT)
   const addressStr = String(address || '').toLowerCase();
-  const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+  const allAreas = await getCachedActiveAreas();
 
   if (addressStr) {
     const isDaNangOrQN =
@@ -76,7 +90,7 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
   if (fallbackProvinceId) return fallbackProvinceId;
 
   // 3. Fallback: Khu vực hoạt động đầu tiên trong CSDL
-  const defaultAny = allAreas[0] || (await AdministrativeArea.findOne({ status: 'ACTIVE' }));
+  const defaultAny = allAreas[0] || (await AdministrativeArea.findOne({ status: 'ACTIVE' }).select('_id').lean());
   return defaultAny ? defaultAny._id : null;
 };
 
@@ -277,9 +291,7 @@ const getSosRequests = async (query = {}, user = null) => {
 
   // Lọc theo khu vực hành chính cho LOCAL_AUTHORITY hoặc khi truyền query.areaId
   if (effectiveAreaId || rawOfficerAreaName) {
-    const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
-      .select('_id name code type parentId')
-      .lean();
+    const allAreas = await getCachedActiveAreas();
 
     const stripAreaPrefix = (str) =>
       String(str || '')
@@ -413,31 +425,69 @@ const getSosRequests = async (query = {}, user = null) => {
     };
   }
 
-  const sosList = await SosRequest.find(filter)
+  const parsedLimit = query.limit ? Math.min(1000, Math.max(1, parseInt(query.limit, 10) || 0)) : 0;
+
+  let sosQuery = SosRequest.find(filter)
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
-    .sort(query.lng ? {} : { createdAt: -1 })
+    .sort(query.lng ? {} : { createdAt: -1 });
+  if (parsedLimit > 0) {
+    sosQuery = sosQuery.limit(parsedLimit);
+  }
+  const sosList = await sosQuery
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code parentId')
     .lean();
 
   if (sosList.length > 0) {
     const sosIds = sosList.map(s => s._id);
-    const assignments = await SosAssignment.find({
-      $or: [
-        { sosRequestId: { $in: sosIds } },
-        { sosId: { $in: sosIds } },
-      ],
-      status: { $nin: ['CANCELLED', 'REJECTED'] },
-    })
-      .populate('rescueTeamId', 'name type areaId status')
-      .populate('rescuerId', 'fullName phone roles')
-      .populate('vehicleId', 'plateNumber type capacity')
-      .populate('authorityOrganizationId', 'name code')
-      .lean();
+    const recentCancelCutoff = new Date(Date.now() - 10 * 60 * 1000);
+    const [assignments, recentCancelledAssignments] = await Promise.all([
+      SosAssignment.find({
+        $or: [
+          { sosRequestId: { $in: sosIds } },
+          { sosId: { $in: sosIds } },
+        ],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      })
+        .populate('rescueTeamId', 'name type areaId status')
+        .populate('rescuerId', 'fullName phone roles')
+        .populate('vehicleId', 'plateNumber type capacity')
+        .populate('authorityOrganizationId', 'name code')
+        .lean(),
+      SosAssignment.find({
+        $or: [
+          { sosRequestId: { $in: sosIds } },
+          { sosId: { $in: sosIds } },
+        ],
+        status: { $in: ['REJECTED', 'CANCELLED'] },
+        updatedAt: { $gte: recentCancelCutoff },
+      })
+        .sort({ cancelledAt: -1, updatedAt: -1 })
+        .populate('rescueTeamId', 'name type areaId status')
+        .populate('rescuerId', 'fullName phone roles')
+        .lean(),
+    ]);
 
     const assignmentMap = new Map();
     const assignmentsListMap = new Map();
     const shoreHandoffAssignMap = new Map();
+    const lastCancelledMap = new Map();
+    recentCancelledAssignments.forEach(ca => {
+      const targetId = (ca.sosRequestId || ca.sosId)?.toString();
+      if (targetId && !lastCancelledMap.has(targetId)) {
+        lastCancelledMap.set(targetId, {
+          _id: ca._id,
+          status: ca.status,
+          missionType: ca.missionType || 'RESCUE',
+          cancelReason: ca.cancelReason || null,
+          cancelledAt: ca.cancelledAt || ca.updatedAt,
+          updatedAt: ca.updatedAt,
+          rescueTeamId: ca.rescueTeamId?._id || ca.rescueTeamId || null,
+          rescueTeamName: ca.rescueTeamId?.name || 'Đội cứu hộ',
+          rescuerName: ca.rescuerId?.fullName || null,
+        });
+      }
+    });
     assignments.forEach(a => {
       const targetId = (a.sosRequestId || a.sosId)?.toString();
       if (targetId) {
@@ -472,6 +522,10 @@ const getSosRequests = async (query = {}, user = null) => {
       const ha = shoreHandoffAssignMap.get(sId);
       if (ha) {
         s.shoreHandoffAssignment = ha;
+      }
+      const lca = lastCancelledMap.get(sId);
+      if (lca) {
+        s.lastCancelledAssignment = lca;
       }
     });
 
@@ -557,11 +611,14 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
       const openAssigns = await SosAssignment.find({
         $or: [{ sosRequestId: id }, { sosId: id }],
         status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
-      }).select('vehicleId');
-      for (const oa of openAssigns) {
-        if (oa.vehicleId && mongoose.isValidObjectId(oa.vehicleId)) {
-          await Vehicle.findByIdAndUpdate(oa.vehicleId, { status: 'AVAILABLE' });
-        }
+      })
+        .select('vehicleId')
+        .lean();
+      const vehicleIdsToRelease = openAssigns
+        .map((oa) => oa.vehicleId)
+        .filter((vId) => vId && mongoose.isValidObjectId(vId));
+      if (vehicleIdsToRelease.length > 0) {
+        await Vehicle.updateMany({ _id: { $in: vehicleIdsToRelease } }, { $set: { status: 'AVAILABLE' } });
       }
       await SosAssignment.updateMany(
         {
@@ -630,7 +687,8 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
 const getSosHistory = async (id) => {
   return await SosStatusHistory.find({ sosId: id })
     .sort({ createdAt: -1 })
-    .populate('changedBy', 'fullName roles');
+    .populate('changedBy', 'fullName roles')
+    .lean();
 };
 
 const verifyAndClassifySos = async (id, verifyData, authorityId) => {
@@ -840,7 +898,7 @@ const clearCancelledSos = async (user, sosIds = []) => {
     }
   } else if (isAuthority && !isAdmin && user.authority?.areaId) {
     // 2. Nếu dọn dẹp toàn bộ: Lấy theo khu vực cán bộ quản lý (bao gồm các phường con hoặc ca chưa gán areaId)
-    const childAreas = await AdministrativeArea.find({ parentId: user.authority.areaId }).select('_id');
+    const childAreas = await AdministrativeArea.find({ parentId: user.authority.areaId }).select('_id').lean();
     const areaIds = [user.authority.areaId, ...(childAreas || []).map((c) => c._id)];
     query.$or = [
       { areaId: { $in: areaIds } },
@@ -1161,23 +1219,24 @@ const assignShoreHandoff = async (id, data, _user) => {
     try {
       const { Notification } = require('../models');
 
-      for (const uid of targetUserIds) {
-        await Notification.create({
-          userId: uid,
-          createdBy: _user?._id || null,
-          areaId: sos.areaId || null,
+      const notifDocs = Array.from(targetUserIds).map((uid) => ({
+        userId: uid,
+        createdBy: _user?._id || null,
+        areaId: sos.areaId || null,
+        sosId: sos._id,
+        type: 'ALERT',
+        title: `🚑 ĐIỀU ĐỘNG XE TIẾP VẬN ĐÓN BỜ: #${sos.sosCode || sos._id.toString().slice(-4)}`,
+        content: `Ban chỉ huy điều xe ${vehicle?.plateNumber || ''} đến ${destinationText} tiếp nhận bàn giao nạn nhân!`,
+        priority: 'CRITICAL',
+        data: {
+          type: 'SOS_SYNC',
+          action: 'ASSIGNED',
+          assignmentId: handoffAssignment._id,
           sosId: sos._id,
-          type: 'ALERT',
-          title: `🚑 ĐIỀU ĐỘNG XE TIẾP VẬN ĐÓN BỜ: #${sos.sosCode || sos._id.toString().slice(-4)}`,
-          content: `Ban chỉ huy điều xe ${vehicle?.plateNumber || ''} đến ${destinationText} tiếp nhận bàn giao nạn nhân!`,
-          priority: 'CRITICAL',
-          data: {
-            type: 'SOS_SYNC',
-            action: 'ASSIGNED',
-            assignmentId: handoffAssignment._id,
-            sosId: sos._id,
-          },
-        });
+        },
+      }));
+      if (notifDocs.length > 0) {
+        await Notification.insertMany(notifDocs, { ordered: false });
       }
     } catch (notifErr) {
       console.warn('Notification error for shore handoff:', notifErr?.message);
@@ -1194,6 +1253,10 @@ const assignShoreHandoff = async (id, data, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1256,6 +1319,10 @@ const cancelShoreHandoff = async (id, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1308,8 +1375,14 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
         const { getIO } = require('../socket');
         const io = getIO();
         if (io) {
+          io.emit('assignment:status_updated', handoffAssignment);
           io.emit('assignment:updated', handoffAssignment);
           io.emit('assignment:completed', handoffAssignment);
+          io.emit('rescue_teams_updated', {
+            teamId: handoffAssignment.rescueTeamId?.toString?.() || handoffAssignment.rescueTeamId || null,
+            assignmentId: handoffAssignment._id.toString(),
+            status: 'COMPLETED',
+          });
         }
       }
     } catch (assignErr) {
@@ -1364,6 +1437,10 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 

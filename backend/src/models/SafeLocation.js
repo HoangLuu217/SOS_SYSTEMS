@@ -120,12 +120,6 @@ safeLocationSchema.pre('save', function () {
     if (cap === 0 && occ > 0) {
       throw new Error('Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú.');
     }
-    if (cap > 0 && occ * 100 > cap * 120) {
-      const maxAllowed = Math.floor((cap * 120) / 100);
-      throw new Error(
-        `Số người đang lưu trú (${occ}) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed} người cho sức chứa ${cap}).`
-      );
-    }
   }
 
   if (this.capacity > 0 && this.currentOccupancy >= this.capacity && this.status === 'ACTIVE') {

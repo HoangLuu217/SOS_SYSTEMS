@@ -263,9 +263,10 @@ class ChatService {
     const messages = await ChatMessage.find(channelQuery)
       .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
-      .populate('sosRequestId')
+      .populate('sosRequestId', 'sosCode status emergencyType priority address people location')
       .sort({ createdAt: 1 })
-      .limit(Math.min(limit, 300));
+      .limit(Math.min(limit, 300))
+      .lean();
 
     // Tự động chuẩn hóa các tin nhắn cũ về targetChannel nếu cần
     if (targetChannel.startsWith('area_') && messages.some((m) => m.channel !== targetChannel)) {
@@ -294,7 +295,9 @@ class ChatService {
             ...(sosIdsToFetch.length > 0 ? [{ _id: { $in: sosIdsToFetch } }] : []),
             ...(sosCodesToFetch.length > 0 ? [{ sosCode: { $in: sosCodesToFetch } }] : []),
           ],
-        }).select('_id sosCode status');
+        })
+          .select('_id sosCode status')
+          .lean();
 
         liveSosList.forEach((s) => {
           liveStatusMap.set(String(s._id), s.status);
@@ -391,7 +394,8 @@ class ChatService {
     const potentialPartners = await User.find(userFilter)
       .select('fullName phone email roles authority avatarUrl status createdAt')
       .sort({ 'roles.0': 1, fullName: 1 })
-      .limit(60);
+      .limit(60)
+      .lean();
 
     const partnerChannelMap = new Map();
     potentialPartners.forEach((p) => {
@@ -463,7 +467,9 @@ class ChatService {
     });
 
     const fetchedUsers = userIdsToFetch.size > 0
-      ? await User.find({ _id: { $in: Array.from(userIdsToFetch) } }).select('fullName phone email roles avatarUrl authority address citizen')
+      ? await User.find({ _id: { $in: Array.from(userIdsToFetch) } })
+          .select('fullName phone email roles avatarUrl authority address citizen')
+          .lean()
       : [];
 
     const userMap = new Map();

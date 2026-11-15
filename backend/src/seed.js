@@ -519,9 +519,11 @@ const seed = async () => {
     console.log('   Đơn vị: ' + org.name);
     console.log('======================================================\n');
 
+    await mongoose.disconnect().catch(() => {});
     process.exit(0);
   } catch (err) {
     console.error('❌ Lỗi khi seed dữ liệu:', err);
+    await mongoose.disconnect().catch(() => {});
     process.exit(1);
   }
 };

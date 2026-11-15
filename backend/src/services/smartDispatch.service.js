@@ -17,6 +17,47 @@ const AI_ADVISOR_CACHE = new Map();
 const AI_ADVISOR_TTL_MS = 60 * 1000;
 const AI_ADVISOR_CACHE_MAX_ENTRIES = 300;
 
+// Cache bản đồ hành chính kèm polygon ranh giới (~691KB trên Atlas) để không tải lại mỗi lần gợi ý
+const AREA_CENTROID_CACHE_TTL_MS = 5 * 60 * 1000;
+let areaCache = { areaMap: null, areaCentroidMap: null, expiresAt: 0, promise: null };
+
+async function getCachedDispatchAreas() {
+  const now = Date.now();
+  if (areaCache.areaMap && areaCache.areaCentroidMap && areaCache.expiresAt > now) {
+    return { areaMap: areaCache.areaMap, areaCentroidMap: areaCache.areaCentroidMap };
+  }
+  if (areaCache.promise) {
+    return areaCache.promise;
+  }
+
+  areaCache.promise = (async () => {
+    try {
+      const activeAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
+        .select('_id name code type parentId boundary')
+        .lean();
+      const areaMap = new Map();
+      const areaCentroidMap = new Map();
+      for (const area of activeAreas) {
+        areaMap.set(String(area._id), area);
+        const centroid = extractAreaCentroid(area);
+        if (centroid) areaCentroidMap.set(String(area._id), centroid);
+      }
+      areaCache = {
+        areaMap,
+        areaCentroidMap,
+        expiresAt: Date.now() + AREA_CENTROID_CACHE_TTL_MS,
+        promise: null,
+      };
+      return { areaMap, areaCentroidMap };
+    } catch (err) {
+      areaCache.promise = null;
+      throw err;
+    }
+  })();
+
+  return areaCache.promise;
+}
+
 function cacheAdvisorResult(key, data) {
   const now = Date.now();
   for (const [cacheKey, entry] of AI_ADVISOR_CACHE) {
@@ -632,7 +673,8 @@ function buildTeamCandidate({
       .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
 
-    const [teams, allVehicles, allEquipments, activeAssignments, approvedHazards, activeAreas, unassignedSos, localAuthorities] =
+    const tStart = Date.now();
+    const [teams, allVehicles, allEquipments, activeAssignments, approvedHazards, areaData, unassignedSos, localAuthorities] =
       await Promise.all([
         RescueTeam.find({ status: 'ACTIVE', operationalStatus: { $ne: 'INACTIVE' } })
           .populate('leaderId', 'fullName phone rescuer currentLocation currentLocationUpdatedAt updatedAt')
@@ -650,7 +692,7 @@ function buildTeamCandidate({
           .populate('sosRequestId', 'sosCode priority status')
           .lean(),
         HazardReport.find({ status: 'APPROVED' }).select('title hazardType severity location').lean(),
-        AdministrativeArea.find({ status: 'ACTIVE' }).select('_id name code type parentId boundary').lean(),
+        getCachedDispatchAreas(),
         SosRequest.find({
           status: { $in: ['PENDING', 'VERIFIED'] },
         })
@@ -665,14 +707,9 @@ function buildTeamCandidate({
             .lean()
           : Promise.resolve([]),
       ]);
+    const dbMs = Date.now() - tStart;
 
-    const areaMap = new Map();
-    const areaCentroidMap = new Map();
-    for (const area of activeAreas) {
-      areaMap.set(String(area._id), area);
-      const centroid = extractAreaCentroid(area);
-      if (centroid) areaCentroidMap.set(String(area._id), centroid);
-    }
+    const { areaMap, areaCentroidMap } = areaData;
 
     const jurisdictionScope = buildJurisdictionScope({
       sos,
@@ -869,6 +906,13 @@ function buildTeamCandidate({
       }
     }
 
+    const totalMs = Date.now() - tStart;
+    if (options.includeAiAdvisor) {
+      console.log(
+        `🤖 [SmartDispatch] ${sos.sosCode || sosId}: Tổng ${totalMs}ms (DB ${dbMs}ms) -> ${aiAdvisorStatus}${aiAdvisor?.model ? ` [${aiAdvisor.model}]` : ''}`
+      );
+    }
+
     return {
       sosId: String(sos._id),
       sosCode: sos.sosCode,
@@ -884,5 +928,6 @@ function buildTeamCandidate({
 
   module.exports = {
     getDispatchRecommendations,
+    warmAreaCache: getCachedDispatchAreas,
   };
 

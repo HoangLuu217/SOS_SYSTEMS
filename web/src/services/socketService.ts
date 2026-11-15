@@ -2,10 +2,22 @@ import { io, Socket } from 'socket.io-client';
 import type { ChatMessageItem, ChatSSEPayload } from '@/types/chat';
 
 let socket: Socket | null = null;
+const joinedChannels = new Set<string>();
+let registeredUserId: string | null = null;
 
 const getSocketUrl = (): string => {
-  if (import.meta.env.VITE_BACKEND_URL) {
-    return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  const isRemoteHost =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  if (backendUrl && !(isRemoteHost && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(backendUrl))) {
+    return backendUrl.replace(/\/+$/, '');
+  }
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
+    return apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined') {
     return window.location.port === '5173'
@@ -23,8 +35,8 @@ export const getSocket = (): Socket => {
     const socketUrl = getSocketUrl();
 
     socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
+      transports: ['polling', 'websocket'],
+      withCredentials: false,
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,
@@ -35,6 +47,12 @@ export const getSocket = (): Socket => {
 
     socket.on('connect', () => {
       console.log('⚡ [Socket.IO Web] Đã kết nối thành công tới máy chủ Realtime:', socket?.id);
+      if (registeredUserId) {
+        socket?.emit('register_user', registeredUserId);
+      }
+      joinedChannels.forEach((ch) => {
+        socket?.emit('join_channel', ch);
+      });
     });
 
     socket.on('connect_error', (err) => {
@@ -87,7 +105,10 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
   const handler = (data: any) => {
     const id = data?._id || data?.sosCode || '';
     const status = data?.status || '';
-    const signature = `${id}-${status}`;
+    const assignStatus = data?.assignment?.status || '';
+    const handoffStatus = data?.shoreHandoff?.status || '';
+    const handoffAssignStatus = data?.shoreHandoffAssignment?.status || '';
+    const signature = `${id}-${status}-${assignStatus}-${handoffStatus}-${handoffAssignStatus}`;
     const now = Date.now();
 
     // Chống trùng lặp do backend phát đồng thời cả 'sos:updated' và 'sos:status_changed'
@@ -146,6 +167,7 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
   s.on('assignment:created', handler);
   s.on('assignment:new', handler);
   s.on('assignment:cancelled', handler);
+  s.on('assignment:completed', handler);
 
   return () => {
     s.off('assignment:status_updated', handler);
@@ -153,6 +175,7 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
     s.off('assignment:created', handler);
     s.off('assignment:new', handler);
     s.off('assignment:cancelled', handler);
+    s.off('assignment:completed', handler);
   };
 };
 
@@ -163,8 +186,23 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
  */
 export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
-    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới Realtime:', data);
+    const id = data?._id || data?.userId || '';
+    const updatedAt = data?.updatedAt || data?.rescuer?.verificationStatus || '';
+    const signature = `${id}-${updatedAt}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'rescuer:application_submitted' và 'rescuer:pending_updated'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
+    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới/cập nhật Realtime:', data);
     callback(data);
   };
 
@@ -184,7 +222,22 @@ export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => v
  */
 export const onRescuerVerificationChanged = (callback: (data: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
+    const id = data?.userId || data?._id || '';
+    const status = data?.verificationStatus || data?.status || '';
+    const signature = `${id}-${status}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'rescuer:verification_status_changed' và 'rescuer:verified'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
     console.log('✅ [Socket.IO Web] Trạng thái cứu hộ viên thay đổi Realtime:', data);
     callback(data);
   };
@@ -206,13 +259,11 @@ export const onRescuerVerificationChanged = (callback: (data: any) => void): (()
  * Tham gia vào phòng chat của một kênh
  */
 export function joinChannelRoom(channel: string) {
+  if (!channel) return;
+  joinedChannels.add(channel);
   const s = getSocket();
   if (s.connected) {
     s.emit('join_channel', channel);
-  } else {
-    s.once('connect', () => {
-      s.emit('join_channel', channel);
-    });
   }
 }
 
@@ -220,6 +271,8 @@ export function joinChannelRoom(channel: string) {
  * Rời khỏi phòng chat của một kênh
  */
 export function leaveChannelRoom(channel: string) {
+  if (!channel) return;
+  joinedChannels.delete(channel);
   const s = getSocket();
   if (s.connected) {
     s.emit('leave_channel', channel);
@@ -230,13 +283,11 @@ export function leaveChannelRoom(channel: string) {
  * Đăng ký ID người dùng để nhận tin nhắn trực tiếp
  */
 export function registerUserSocket(userId: string) {
+  if (!userId) return;
+  registeredUserId = userId;
   const s = getSocket();
   if (s.connected) {
     s.emit('register_user', userId);
-  } else {
-    s.once('connect', () => {
-      s.emit('register_user', userId);
-    });
   }
 }
 
@@ -316,5 +367,40 @@ export const onRescueTeamsUpdated = (callback: (data: any) => void): (() => void
   s.on('rescue_teams_updated', callback);
   return () => {
     s.off('rescue_teams_updated', callback);
+  };
+};
+
+/**
+ * Lắng nghe cập nhật phương tiện cứu hộ theo thời gian thực
+ */
+export const onVehicleUpdated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('vehicle:updated', callback);
+  return () => {
+    s.off('vehicle:updated', callback);
+  };
+};
+
+/**
+ * Lắng nghe cập nhật trang thiết bị / vật tư theo thời gian thực
+ */
+export const onEquipmentUpdated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('equipment:updated', callback);
+  s.on('equipment:change', callback);
+  return () => {
+    s.off('equipment:updated', callback);
+    s.off('equipment:change', callback);
+  };
+};
+
+/**
+ * Lắng nghe nhật ký sự kiện (AuditLog) mới được ghi nhận theo thời gian thực
+ */
+export const onAuditCreated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('audit:created', callback);
+  return () => {
+    s.off('audit:created', callback);
   };
 };

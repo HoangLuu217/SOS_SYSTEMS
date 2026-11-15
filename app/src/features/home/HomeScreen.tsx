@@ -814,7 +814,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const isAuthority =
           user?.roles?.includes('ADMIN') ||
           user?.roles?.includes('LOCAL_AUTHORITY') ||
-          user?.roles?.includes('RESCUER');
+          (user?.roles?.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
         if (isAuthority) {
           setConfirmModal({
             visible: true,

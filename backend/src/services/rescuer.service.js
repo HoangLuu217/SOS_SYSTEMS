@@ -40,6 +40,7 @@ class RescuerService {
           }
         : {
             idNumber: user.rescuer?.idNumber || null,
+            isCccdVerified: Boolean(user.rescuer?.isCccdVerified),
             skills: user.rescuer?.skills || [],
             experience: user.rescuer?.experience || null,
             vehicleType: user.rescuer?.vehicleType || null,
@@ -105,9 +106,13 @@ class RescuerService {
       if (!user.citizen.areaName) user.citizen.areaName = String(data.areaName).trim();
     }
 
-    // Đảm bảo verificationStatus luôn là PENDING nếu chưa từng được duyệt
-    if (!user.rescuer.verificationStatus || user.rescuer.verificationStatus === 'NOT_REGISTERED') {
+    // Đảm bảo verificationStatus luôn trở về PENDING khi đăng ký mới hoặc nộp lại sau khi bị từ chối/yêu cầu bổ sung
+    if (
+      !user.rescuer.verificationStatus ||
+      ['NOT_REGISTERED', 'REJECTED', 'REQUIRES_UPDATE'].includes(user.rescuer.verificationStatus)
+    ) {
       user.rescuer.verificationStatus = 'PENDING';
+      user.rescuer.availabilityStatus = 'OFFLINE';
     }
 
     // Cho phép cập nhật thêm thông tin hiển thị cơ bản nếu có
@@ -127,6 +132,7 @@ class RescuerService {
         const applicantPayload = {
           _id: user._id.toString(),
           fullName: user.fullName,
+          avatarUrl: user.avatarUrl,
           phone: user.phone,
           email: user.email,
           address: user.address,
@@ -141,6 +147,10 @@ class RescuerService {
 
         io.emit('rescuer:application_submitted', applicantPayload);
         io.emit('rescuer:pending_updated', applicantPayload);
+        io.emit('rescue_teams_updated', {
+          action: 'MEMBER_PROFILE_UPDATED',
+          rescuerId: user._id.toString(),
+        });
         console.log(`📢 [Socket.IO] Phát sự kiện hồ sơ cứu hộ mới: ${user.fullName} (${user._id})`);
       }
     } catch (socketErr) {
@@ -271,6 +281,22 @@ class RescuerService {
       }
     }
 
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        const payload = {
+          action: 'MEMBER_AVAILABILITY_CHANGED',
+          rescuerId: user._id.toString(),
+          availabilityStatus: user.rescuer.availabilityStatus,
+        };
+        io.emit('rescuer:availability_changed', payload);
+        io.emit('rescue_teams_updated', payload);
+      }
+    } catch (socketErr) {
+      console.warn('⚠️ Lỗi phát socket cập nhật availability:', socketErr.message);
+    }
+
     return {
       userId: user._id,
       availabilityStatus: user.rescuer.availabilityStatus,
@@ -321,7 +347,8 @@ class RescuerService {
       .select('-passwordHash')
       .populate('rescuer.areaId', 'name level provinceCode districtCode parentId')
       .populate('areaId', 'name level provinceCode districtCode parentId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return users;
   }
@@ -374,7 +401,8 @@ class RescuerService {
       const notifContent = isApproved
         ? 'Chúc mừng bạn! Hồ sơ đăng ký Cứu hộ viên đã được chính quyền phê duyệt. Bạn đã có thể nhận lệnh điều phối và gia nhập đội cứu hộ.'
         : 'Hồ sơ đăng ký Cứu hộ viên của bạn chưa đáp ứng đủ điều kiện hoặc đã bị từ chối.';
-      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}`;
+      const eventTimestamp = Date.now();
+      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}_${eventTimestamp}`;
 
       const notifDoc = await Notification.create({
         userId: user._id,
@@ -388,7 +416,7 @@ class RescuerService {
           verificationStatus,
           userId: userIdStr,
           broadcastId,
-          timestamp: Date.now(),
+          timestamp: eventTimestamp,
         },
       });
 
@@ -459,6 +487,8 @@ class RescuerService {
             data: {
               type: 'RESCUER_VERIFICATION',
               verificationStatus,
+              broadcastId,
+              timestamp: eventTimestamp,
             },
           });
         }

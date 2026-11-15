@@ -217,6 +217,11 @@ class RescueTeamService {
       members: Array.from(memberMap.values()),
     });
 
+    this._emitTeamRealtimeUpdate(team, {
+      action: 'TEAM_CREATED',
+      targetUserIds: this._collectTeamUserIds(team),
+    });
+
     return team.populate([
       { path: 'leaderId', select: 'fullName phone email rescuer' },
       { path: 'authorityId', select: 'name code phone type' },
@@ -226,6 +231,174 @@ class RescueTeamService {
         populate: { path: 'parentId', select: 'name code type' },
       },
     ]);
+  }
+
+  /**
+   * Chuẩn hóa và đính kèm phương tiện, trang thiết bị, nhiệm vụ và nhật ký hoạt động cho danh sách đội
+   */
+  async _attachTeamDetails(teams = [], { light = false } = {}) {
+    if (!Array.isArray(teams) || teams.length === 0) return [];
+
+    const teamIds = teams.map((t) => t._id);
+    const { Equipment, SosAssignment, AuditLog } = require('../models');
+
+    const [vehicles, equipments, teamAssignments, teamAuditLogs] = await Promise.all([
+      Vehicle.find({ teamId: { $in: teamIds } }).lean(),
+      Equipment.find({ teamId: { $in: teamIds } }).lean(),
+      light
+        ? Promise.resolve([])
+        : SosAssignment.find({
+            $or: [
+              { rescueTeamId: { $in: teamIds } },
+              { teamId: { $in: teamIds } },
+            ],
+          })
+            .populate('sosRequestId', 'sosCode emergencyType people address status description')
+            .populate('rescuerId', 'fullName phone')
+            .populate('vehicleId', 'plateNumber type')
+            .sort({ assignedAt: -1, createdAt: -1 })
+            .limit(Math.max(50, teamIds.length * 25))
+            .lean(),
+      light
+        ? Promise.resolve([])
+        : AuditLog.find({
+            entityType: 'RescueTeam',
+            entityId: { $in: teamIds },
+          })
+            .populate('actorId', 'fullName roles')
+            .sort({ createdAt: -1 })
+            .limit(Math.max(50, teamIds.length * 25))
+            .lean(),
+    ]);
+
+    const vehicleMap = {};
+    vehicles.forEach((v) => {
+      if (!v.teamId) return;
+      const tId = v.teamId.toString();
+      if (!vehicleMap[tId]) vehicleMap[tId] = [];
+      vehicleMap[tId].push(v);
+    });
+
+    const equipmentMap = {};
+    equipments.forEach((e) => {
+      if (!e.teamId) return;
+      const tId = e.teamId.toString();
+      if (!equipmentMap[tId]) equipmentMap[tId] = [];
+      equipmentMap[tId].push(e);
+    });
+
+    const assignmentMap = {};
+    teamAssignments.forEach((a) => {
+      const tId = (a.rescueTeamId || a.teamId)?.toString();
+      if (!tId) return;
+      if (!assignmentMap[tId]) assignmentMap[tId] = [];
+      const sos = a.sosRequestId && typeof a.sosRequestId === 'object' ? a.sosRequestId : null;
+      const sosCode =
+        a.dispatchCode ||
+        sos?.sosCode ||
+        (a.missionType === 'RELIEF_DISPATCH'
+          ? 'Điều phối tiếp tế'
+          : a.missionType === 'SHORE_HANDOFF'
+            ? 'Tiếp vận đón bờ'
+            : `SOS #${String(sos?._id || a.sosRequestId || a._id).slice(-4)}`);
+      assignmentMap[tId].push({
+        _id: a._id,
+        id: String(a._id),
+        sosRequestId: sos?._id || a.sosRequestId || null,
+        sosCode,
+        location: a.destination || sos?.address || '',
+        status: a.status || 'PENDING',
+        priority: a.priority || 'MEDIUM',
+        assignedAt: a.assignedAt || a.createdAt || null,
+        completedAt: a.completedAt || null,
+        cancelledAt: a.cancelledAt || null,
+        missionType:
+          a.missionType === 'RELIEF_DISPATCH'
+            ? 'Xuất cấp cứu trợ'
+            : a.missionType === 'SHORE_HANDOFF'
+              ? 'Tiếp vận đón bờ'
+              : sos?.emergencyType || 'Cứu hộ SOS',
+        description: a.note || sos?.description || (a.recipientName ? `Người nhận: ${a.recipientName}` : ''),
+        note: a.note || '',
+        peopleCount: sos?.people ?? 0,
+        rescuerName: a.rescuerId?.fullName || null,
+        vehiclePlate: a.vehicleId?.plateNumber || null,
+      });
+    });
+
+    const AUDIT_ACTION_LABELS = {
+      CREATE_RESCUE_TEAM: 'Thành lập đội cứu hộ',
+      UPDATE_RESCUE_TEAM: 'Cập nhật thông tin / trạng thái đội',
+      DELETE_RESCUE_TEAM: 'Giải thể đội cứu hộ',
+      TEAM_ADD_MEMBER: 'Kết nạp / Ứng tuyển thành viên',
+      TEAM_UPDATE_MEMBER_STATUS: 'Phê duyệt / Từ chối thành viên',
+      TEAM_REMOVE_MEMBER: 'Loại thành viên khỏi biên chế',
+      TEAM_CHANGE_LEADER: 'Chuyển giao quyền Đội trưởng',
+    };
+
+    const auditMap = {};
+    teamAuditLogs.forEach((log) => {
+      if (!log.entityId) return;
+      const tId = String(log.entityId);
+      if (!auditMap[tId]) auditMap[tId] = [];
+      const meta = log.metadata || {};
+      let detail = '';
+      if (log.action === 'UPDATE_RESCUE_TEAM' && Array.isArray(meta.updatedFields)) {
+        detail = `Trường cập nhật: ${meta.updatedFields.join(', ')}`;
+      } else if (log.action === 'TEAM_UPDATE_MEMBER_STATUS' && meta.status) {
+        detail = meta.status === 'APPROVED' ? 'Đã phê duyệt gia nhập đội' : 'Đã từ chối đơn gia nhập đội';
+      } else if (meta.teamName) {
+        detail = `Đội: ${meta.teamName}`;
+      }
+      auditMap[tId].push({
+        id: String(log._id),
+        action: AUDIT_ACTION_LABELS[log.action] || log.action,
+        actor: log.actorId?.fullName || log.actorRole || 'Hệ thống',
+        detail,
+        createdAt: log.createdAt,
+        _sortTime: log.createdAt ? new Date(log.createdAt).getTime() : 0,
+      });
+    });
+
+    return teams.map((team) => {
+      const obj = team.toObject ? team.toObject() : { ...team };
+      const tId = team._id.toString();
+      const allTeamAssignments = assignmentMap[tId] || [];
+      const teamActiveAssignments = allTeamAssignments.filter(
+        (a) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(a.status)
+      );
+      const firstActive = teamActiveAssignments[0];
+
+      const assignmentLogs = allTeamAssignments.map((a) => ({
+        id: `assign-${a.id}`,
+        action:
+          a.status === 'COMPLETED'
+            ? `Hoàn thành nhiệm vụ ${a.sosCode}`
+            : a.status === 'CANCELLED' || a.status === 'REJECTED'
+              ? `Hủy/Từ chối nhiệm vụ ${a.sosCode}`
+              : `Tiếp nhận nhiệm vụ ${a.sosCode}`,
+        actor: a.rescuerName || 'Ban chỉ huy điều phối',
+        detail: [a.missionType, a.location].filter(Boolean).join(' • '),
+        createdAt: a.completedAt || a.cancelledAt || a.assignedAt,
+        _sortTime: (a.completedAt || a.cancelledAt || a.assignedAt)
+          ? new Date(a.completedAt || a.cancelledAt || a.assignedAt).getTime()
+          : 0,
+      }));
+
+      const mergedLogs = [...(auditMap[tId] || []), ...assignmentLogs]
+        .sort((x, y) => y._sortTime - x._sortTime)
+        .slice(0, 30)
+        .map(({ _sortTime, ...rest }) => rest);
+
+      obj.vehicles = vehicleMap[tId] || [];
+      obj.equipments = equipmentMap[tId] || [];
+      obj.assignments = allTeamAssignments;
+      obj.activityLogs = mergedLogs;
+      obj.activeMissionCount = teamActiveAssignments.length;
+      obj.hasActiveMission = teamActiveAssignments.length > 0 || obj.operationalStatus === 'ON_MISSION';
+      obj.activeMissionCode = firstActive?.sosCode || null;
+      return obj;
+    });
   }
 
   /**
@@ -248,18 +421,22 @@ class RescueTeamService {
       const mongoose = require('mongoose');
       let targetArea = null;
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        targetArea = await AdministrativeArea.findById(query.areaId)
+          .select('_id name code type parentId')
+          .lean();
       }
       if (!targetArea) {
         targetArea = await AdministrativeArea.findOne({
           $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
+        })
+          .select('_id name code type parentId')
+          .lean();
       }
 
       if (targetArea) {
         const relevantAreaIds = [targetArea._id];
         // Nếu là Quận/Huyện: bao gồm tất cả các Phường/Xã trực thuộc
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id').lean();
         childWards.forEach((w) => relevantAreaIds.push(w._id));
 
         // Nếu là Phường/Xã: bao gồm Quận/Huyện cấp trên
@@ -287,6 +464,8 @@ class RescueTeamService {
       }
     }
 
+    const isLight = query.light === 'true' || query.includeLogs === 'false';
+
     const [teams, total] = await Promise.all([
       RescueTeam.find(filter)
         .populate('leaderId', 'fullName phone email rescuer status currentLocation')
@@ -302,67 +481,12 @@ class RescueTeamService {
         })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       RescueTeam.countDocuments(filter),
     ]);
 
-    // Đính kèm các phương tiện, trang thiết bị & trạng thái nhiệm vụ hiện tại của từng đội từ DB MongoDB
-    const teamIds = teams.map((t) => t._id);
-    const { Equipment, SosAssignment } = require('../models');
-    const [vehicles, equipments, activeAssignments] = await Promise.all([
-      Vehicle.find({ teamId: { $in: teamIds } }),
-      Equipment.find({ teamId: { $in: teamIds } }),
-      SosAssignment.find({
-        $or: [
-          { rescueTeamId: { $in: teamIds } },
-          { teamId: { $in: teamIds } },
-        ],
-        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
-      })
-        .populate('sosRequestId', 'sosCode emergencyType')
-        .select('rescueTeamId teamId status missionType sosRequestId')
-        .lean(),
-    ]);
-
-    const vehicleMap = {};
-    vehicles.forEach((v) => {
-      const tId = v.teamId.toString();
-      if (!vehicleMap[tId]) vehicleMap[tId] = [];
-      vehicleMap[tId].push(v);
-    });
-
-    const equipmentMap = {};
-    equipments.forEach((e) => {
-      if (e.teamId) {
-        const tId = e.teamId.toString();
-        if (!equipmentMap[tId]) equipmentMap[tId] = [];
-        equipmentMap[tId].push(e);
-      }
-    });
-
-    const activeAssignmentMap = {};
-    activeAssignments.forEach((a) => {
-      const tId = (a.rescueTeamId || a.teamId)?.toString();
-      if (!tId) return;
-      if (!activeAssignmentMap[tId]) activeAssignmentMap[tId] = [];
-      activeAssignmentMap[tId].push(a);
-    });
-
-    const enrichedTeams = teams.map((team) => {
-      const obj = team.toObject ? team.toObject() : { ...team };
-      const tId = team._id.toString();
-      const teamActiveAssignments = activeAssignmentMap[tId] || [];
-      const firstActive = teamActiveAssignments[0];
-      obj.vehicles = vehicleMap[tId] || [];
-      obj.equipments = equipmentMap[tId] || [];
-      obj.activeMissionCount = teamActiveAssignments.length;
-      obj.hasActiveMission = teamActiveAssignments.length > 0 || obj.operationalStatus === 'ON_MISSION';
-      obj.activeMissionCode =
-        firstActive?.dispatchCode ||
-        firstActive?.sosRequestId?.sosCode ||
-        (firstActive?.missionType === 'RELIEF_DISPATCH' ? 'Điều phối tiếp tế' : null);
-      return obj;
-    });
+    const enrichedTeams = await this._attachTeamDetails(teams, { light: isLight });
 
     return {
       teams: enrichedTeams,
@@ -376,7 +500,7 @@ class RescueTeamService {
   }
 
   /**
-   * Xem chi tiết 1 Đội Cứu Hộ (kèm danh sách thành viên & phương tiện sở hữu)
+   * Xem chi tiết 1 Đội Cứu Hộ (kèm danh sách thành viên, phương tiện, trang thiết bị, nhiệm vụ & nhật ký)
    */
   async getTeamById(id) {
     const team = await RescueTeam.findById(id)
@@ -396,18 +520,8 @@ class RescueTeamService {
       throw new ApiError(404, 'Không tìm thấy Đội cứu hộ này');
     }
 
-    // Lấy danh sách phương tiện & trang thiết bị trực thuộc đội từ DB MongoDB
-    const { Equipment } = require('../models');
-    const [vehicles, equipments] = await Promise.all([
-      Vehicle.find({ teamId: id }),
-      Equipment.find({ teamId: id }),
-    ]);
-
-    return {
-      ...team.toObject(),
-      vehicles,
-      equipments,
-    };
+    const [enrichedTeam] = await this._attachTeamDetails([team]);
+    return enrichedTeam;
   }
 
   /**

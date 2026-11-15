@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
-const { User } = require('../models');
+const { User, OtpCode } = require('../models');
 const ApiError = require('../utils/apiError');
 const {
   generateTokens,
@@ -105,8 +105,64 @@ const sendResendEmail = async ({ to, subject, html, text, attachments = [] }) =>
   }
 };
 
-// Bộ nhớ đệm lưu trữ OTP tạm thời (hạn 5 phút)
+// Bộ nhớ đệm lưu trữ OTP tạm thời (hạn 5 phút) kết hợp MongoDB để không bị mất khi server khởi động lại
 const otpStore = new Map();
+
+const normalizeOtpPhone = (rawPhone) => {
+  const digits = String(rawPhone || '').trim().replace(/[^0-9]/g, '');
+  if (digits.startsWith('84') && digits.length >= 11) {
+    return '0' + digits.slice(2);
+  }
+  return digits;
+};
+
+const saveOtpRecord = async (key, otp, ttlMs) => {
+  const expiresAtMs = Date.now() + ttlMs;
+  otpStore.set(key, { otp, expiresAt: expiresAtMs });
+  try {
+    await OtpCode.findOneAndUpdate(
+      { key },
+      { otp, expiresAt: new Date(expiresAtMs) },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    console.warn('[OtpCode Save Warning]:', err.message);
+  }
+};
+
+const getOtpRecord = async (key) => {
+  const memRecord = otpStore.get(key);
+  if (memRecord && memRecord.expiresAt >= Date.now()) {
+    return memRecord;
+  }
+  if (memRecord) {
+    otpStore.delete(key);
+  }
+  try {
+    const dbRecord = await OtpCode.findOne({ key }).lean();
+    if (!dbRecord) return null;
+    const expiresAtMs = new Date(dbRecord.expiresAt).getTime();
+    if (expiresAtMs < Date.now()) {
+      await OtpCode.deleteOne({ key }).catch(() => {});
+      return null;
+    }
+    const hydrated = { otp: dbRecord.otp, expiresAt: expiresAtMs };
+    otpStore.set(key, hydrated);
+    return hydrated;
+  } catch (err) {
+    console.warn('[OtpCode Read Warning]:', err.message);
+    return null;
+  }
+};
+
+const deleteOtpRecord = async (key) => {
+  otpStore.delete(key);
+  try {
+    await OtpCode.deleteOne({ key });
+  } catch (err) {
+    console.warn('[OtpCode Delete Warning]:', err.message);
+  }
+};
 
 class AuthService {
   /**
@@ -160,16 +216,16 @@ class AuthService {
     // 3. Nếu có OTP xác thực qua email đi kèm, kiểm tra mã OTP
     if (otp && normalizedEmail) {
       const cleanOtp = String(otp).trim();
-      const record = otpStore.get(normalizedEmail);
+      const record = await getOtpRecord(normalizedEmail);
       if (!record || record.expiresAt < Date.now()) {
-        otpStore.delete(normalizedEmail);
+        await deleteOtpRecord(normalizedEmail);
         throw new ApiError(400, 'Mã OTP không chính xác hoặc đã hết hạn.');
       }
       if (record.otp !== cleanOtp) {
         throw new ApiError(400, 'Mã OTP không chính xác. Vui lòng kiểm tra lại 6 chữ số.');
       }
       // Hợp lệ: xóa mã OTP khỏi store
-      otpStore.delete(normalizedEmail);
+      await deleteOtpRecord(normalizedEmail);
     }
 
     // 4. Băm mật khẩu bằng bcrypt (10 rounds)
@@ -815,16 +871,16 @@ class AuthService {
 
     const isEmail = String(rawTarget).includes('@');
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 phút
+    const ttlMs = 5 * 60 * 1000; // 5 phút
 
     // TRƯỜNG HỢP 1: GỬI QUA SMS BẰNG TEXTBEE ANDROID GATEWAY
     if (!isEmail) {
-      const cleanPhone = String(rawTarget).trim().replace(/[^0-9]/g, '');
+      const cleanPhone = normalizeOtpPhone(rawTarget);
       if (cleanPhone.length < 10) {
         throw new ApiError(400, 'Số điện thoại không hợp lệ (cần ít nhất 10 số).');
       }
 
-      otpStore.set(cleanPhone, { otp, expiresAt });
+      await saveOtpRecord(cleanPhone, otp, ttlMs);
       console.log(`\n==================================================`);
       console.log(`📱 [TEXTBEE SMS GATEWAY] Gửi tin nhắn SMS tới SĐT: ${cleanPhone}`);
       console.log(`🔑 [MÃ OTP]: ${otp} (Hạn: 5 phút | Mã test: 123456)`);
@@ -855,7 +911,7 @@ class AuthService {
       throw new ApiError(409, 'Email này đã được sử dụng. Vui lòng đăng nhập hoặc chọn Quên mật khẩu.');
     }
 
-    otpStore.set(normalizedEmail, { otp, expiresAt });
+    await saveOtpRecord(normalizedEmail, otp, ttlMs);
 
     const sender = process.env.EMAIL_FROM || 'auth@rescuesos.hoangluu.id.vn';
     const fromAddress = sender.includes('<') ? sender : `Cứu Hộ Cứu Nạn <${sender}>`;
@@ -928,12 +984,12 @@ class AuthService {
     const isEmail = String(rawTarget).includes('@');
     const lookupKey = isEmail
       ? String(rawTarget).toLowerCase().trim()
-      : String(rawTarget).trim().replace(/[^0-9]/g, '');
+      : normalizeOtpPhone(rawTarget);
     const cleanOtp = String(otp).trim();
 
-    const record = otpStore.get(lookupKey);
+    const record = await getOtpRecord(lookupKey);
     if (!record || record.expiresAt < Date.now()) {
-      otpStore.delete(lookupKey);
+      await deleteOtpRecord(lookupKey);
       throw new ApiError(400, 'Mã OTP không chính xác hoặc đã hết hạn.');
     }
 
@@ -945,7 +1001,7 @@ class AuthService {
       return { success: true, message: 'Xác thực mã OTP thành công!' };
     }
 
-    otpStore.delete(lookupKey);
+    await deleteOtpRecord(lookupKey);
 
     // Tìm hoặc tạo tài khoản User
     const query = isEmail ? { email: lookupKey } : { phone: lookupKey };

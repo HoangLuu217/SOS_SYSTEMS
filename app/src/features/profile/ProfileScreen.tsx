@@ -48,7 +48,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     if (!isActive) return;
     const onBackPress = () => {
       if (currentScreen !== 'overview') {
-        setCurrentScreen('overview');
+        handleBackToOverview();
         return true;
       }
       return false;

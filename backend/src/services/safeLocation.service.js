@@ -5,8 +5,6 @@ const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('..
 const { sanitizeImages } = require('../utils/validation.util');
 const eventBus = require('./eventBus');
 
-const MAX_SHELTER_OCCUPANCY_PERCENT = 120;
-
 function validateCapacityAndOccupancy(capacity, currentOccupancy) {
   const cap = Number(capacity);
   const occ = Number(currentOccupancy);
@@ -19,13 +17,6 @@ function validateCapacityAndOccupancy(capacity, currentOccupancy) {
   }
   if (cap === 0 && occ > 0) {
     throw new ApiError(400, 'Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú.');
-  }
-  if (cap > 0 && occ * 100 > cap * MAX_SHELTER_OCCUPANCY_PERCENT) {
-    const maxAllowed = Math.floor((cap * MAX_SHELTER_OCCUPANCY_PERCENT) / 100);
-    throw new ApiError(
-      400,
-      `Số người đang lưu trú (${occ}) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed} người cho sức chứa ${cap}).`
-    );
   }
 }
 
@@ -63,7 +54,7 @@ class SafeLocationService {
     // 1. Nếu có truyền areaId hợp lệ từ DB (ví dụ Admin hoặc Cán bộ chọn trực tiếp khu vực trong area), ưu tiên lấy area đó
     let area = null;
     if (areaId && mongoose.isValidObjectId(areaId)) {
-      area = await AdministrativeArea.findById(areaId);
+      area = await AdministrativeArea.findById(areaId).select('_id name code type').lean();
     }
 
     // 2. Nếu chưa có area hoặc chưa chọn cụ thể, tự động xác định qua tọa độ GPS
@@ -79,7 +70,9 @@ class SafeLocationService {
           { code: codeCandidate },
           { name: new RegExp(cleanAreaId, 'i') },
         ],
-      });
+      })
+        .select('_id name code type')
+        .lean();
       if (!area && !cleanAreaId.startsWith('area-')) {
         try {
           area = await AdministrativeArea.create({
@@ -92,7 +85,9 @@ class SafeLocationService {
     }
     if (!area && address) {
       const addressStr = String(address || '').toLowerCase();
-      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
+        .select('_id name code type')
+        .lean();
       const matched = allAreas.find((a) => {
         if (!a.name) return false;
         const cleanName = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã|thành phố|tỉnh)\s+/i, '').trim();
@@ -101,7 +96,9 @@ class SafeLocationService {
       if (matched) area = matched;
     }
     if (!area) {
-      area = await AdministrativeArea.findOne({ code: 'DANANG' }) || await AdministrativeArea.findOne();
+      area =
+        (await AdministrativeArea.findOne({ code: 'DANANG' }).select('_id name code type').lean()) ||
+        (await AdministrativeArea.findOne().select('_id name code type').lean());
     }
     if (!area) {
       area = await AdministrativeArea.create({
@@ -204,7 +201,8 @@ class SafeLocationService {
         .populate('createdBy', 'fullName phone email')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       SafeLocation.countDocuments(filter),
     ]);
 
@@ -252,7 +250,8 @@ class SafeLocationService {
     const safeLocations = await SafeLocation.find(geoFilter)
       .populate('areaId', 'name code type')
       .populate('createdBy', 'fullName phone email')
-      .limit(Math.min(50, parseInt(limit, 10)));
+      .limit(Math.min(50, parseInt(limit, 10)))
+      .lean();
 
     return safeLocations;
   }
@@ -263,7 +262,8 @@ class SafeLocationService {
   async getSafeLocationById(id) {
     const safeLocation = await SafeLocation.findById(id)
       .populate('areaId', 'name code type level')
-      .populate('createdBy', 'fullName phone email avatarUrl');
+      .populate('createdBy', 'fullName phone email avatarUrl')
+      .lean();
 
     if (!safeLocation) {
       throw new ApiError(404, 'Không tìm thấy địa điểm an toàn này');
@@ -303,12 +303,14 @@ class SafeLocationService {
     if (updateData.areaId) {
       let area = null;
       if (mongoose.isValidObjectId(updateData.areaId)) {
-        area = await AdministrativeArea.findById(updateData.areaId);
+        area = await AdministrativeArea.findById(updateData.areaId).select('_id').lean();
       }
       if (!area) {
         area = await AdministrativeArea.findOne({
           $or: [{ code: updateData.areaId }, { name: new RegExp(updateData.areaId, 'i') }],
-        });
+        })
+          .select('_id')
+          .lean();
       }
       if (area) {
         safeLocation.areaId = area._id;

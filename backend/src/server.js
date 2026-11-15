@@ -250,7 +250,29 @@ const startServer = async () => {
       console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
       console.log(`🧹 Auto-cleanup: Bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày sẽ tự động được xóa vĩnh viễn định kỳ.`);
       console.log(`🩸 Blood Donation Reminders: Tự động gửi nhắc nhở (cách 1 ngày & sắp đến giờ) đang hoạt động ngầm mỗi 10 phút.`);
+      // Làm nóng cache bản đồ hành chính (polygon ranh giới) ngay khi server khởi động
+      const smartDispatchService = require('./services/smartDispatch.service');
+      smartDispatchService.warmAreaCache().catch(() => {});
     });
+
+    const mongoose = require('mongoose');
+    let isShuttingDown = false;
+    const gracefulShutdown = async (signal) => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+      console.log(`\n🛑 Nhận tín hiệu ${signal}, đang đóng HTTP server & kết nối MongoDB...`);
+      try {
+        await new Promise((resolve) => server.close(resolve));
+        await mongoose.connection.close(false);
+        console.log('✅ Đã đóng kết nối MongoDB an toàn.');
+        process.exit(0);
+      } catch (shutdownErr) {
+        console.error('⚠️ Lỗi khi đóng kết nối MongoDB:', shutdownErr);
+        process.exit(1);
+      }
+    };
+    process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);
     process.exit(1);
