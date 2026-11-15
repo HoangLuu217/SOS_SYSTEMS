@@ -134,7 +134,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     RESOLVED: number;
   }>({ TOTAL: 0, PENDING: 0, APPROVED: 0, REJECTED: 0, RESOLVED: 0 });
   const [hazardFilter, setHazardFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
-  const [managementScope, setManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
   const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
   const [hazardSearchText, setHazardSearchText] = useState('');
   const [hazardPage, setHazardPage] = useState<number>(1);
@@ -259,6 +258,39 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setAreas(propAreas);
     }
   }, [propAreas.length]);
+
+  // Tự động mở modal chi tiết điểm nguy hiểm khi điều hướng từ bản đồ sang (/authority/hazard_reports/:id hoặc /admin/hazard_reports/:id)
+  useEffect(() => {
+    if (hazardReports.length === 0) return;
+    let targetId = '';
+    try {
+      const raw = sessionStorage.getItem('sos_open_detail_id');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.key === 'hazard_reports' && parsed?.id) {
+          targetId = String(parsed.id);
+          sessionStorage.removeItem('sos_open_detail_id');
+        }
+      }
+    } catch {}
+    if (!targetId) {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'hazard_reports' || p === 'danger_points');
+      if (idx !== -1 && parts[idx + 1]) {
+        targetId = parts[idx + 1];
+      }
+    }
+    if (!targetId) return;
+    const matched = hazardReports.find((r) => r._id === targetId);
+    if (matched) {
+      setDetailHazard(matched);
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'hazard_reports' || p === 'danger_points');
+      if (idx !== -1 && parts[idx + 1]) {
+        window.history.replaceState(null, '', `/${parts.slice(0, idx + 1).join('/')}`);
+      }
+    }
+  }, [hazardReports]);
 
   const { daNangProvince, daNangProvinceId, daNangWards, canonicalAreaIdMap } = useMemo(
     () => getDaNangAreaScope(areas),
@@ -437,17 +469,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         : targetArea?.name || accountAreaDisplayName.split(',')[0]
     ).trim();
 
-    // Tên tỉnh/thành phố hiển thị trên tab cấp thành phố (lấy động theo cây đơn vị hành chính)
-    const cityTabLabel = (() => {
-      if (userAreaNameFromAuth && userAreaNameFromAuth.includes(',')) {
-        return userAreaNameFromAuth.split(',').slice(-1)[0].trim();
-      }
-      if (areaHierarchy.provinceName) return areaHierarchy.provinceName;
-      const prov = areas.find((a) => a.type === 'PROVINCE');
-      if (prov) return prov.name;
-      return 'Thành phố Đà Nẵng';
-    })();
-
     // 3. HÀM KIỂM TRA ĐIỂM NGUY HIỂM CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
     const isHazardInOfficerJurisdiction = (r: HazardReportItem): boolean => {
       if (isAdmin) return true;
@@ -603,12 +624,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const localReports = hazardReports.filter((r) => isHazardInOfficerJurisdiction(r));
 
-    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ lọc theo Địa phương vs Tổng khu vực
+    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ chỉ xem địa phương mình
     const baseScopedReports = isAdmin
       ? (selectedAdminProvince === 'ALL'
           ? hazardReports
           : hazardReports.filter((r) => isHazardInProvince(r, selectedAdminProvince)))
-      : (managementScope === 'LOCAL' ? localReports : hazardReports);
+      : localReports;
 
     // Lọc theo Tab trạng thái và Tìm kiếm từ khóa
     const filteredReports = baseScopedReports.filter((r) => {
@@ -1428,6 +1449,50 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       });
     };
 
+    const actionButtons = (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="sos-btn-flat"
+          onClick={handleExportHazardsCsv}
+          style={{
+            padding: '8px 14px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          title="Xuất danh sách điểm nguy hiểm đang lọc ra file CSV"
+        >
+          <Download size={15} />
+          <span>Xuất CSV</span>
+        </button>
+
+        <button
+          type="button"
+          className="sos-btn-flat primary"
+          onClick={handleOpenCreateHazardModal}
+          style={{
+            padding: '8px 16px',
+            fontSize: '13px',
+            backgroundColor: '#0284c7',
+            color: '#ffffff',
+            borderColor: '#0284c7',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <PlusCircle size={15} />
+          <span>Tạo Điểm Nguy Hiểm</span>
+        </button>
+      </div>
+    );
+
     return (
       <div
         className="sos-views-container"
@@ -1440,192 +1505,116 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           gap: '12px',
         }}
       >
-        {/* 1. TIÊU ĐỀ TRANG & ĐỊA BÀN PHỤ TRÁCH (CỐ ĐỊNH) */}
-        <div
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '14px 20px',
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-            flexWrap: 'wrap',
-            gap: '12px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MapPin size={16} color="#0284c7" />
-            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
-              {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
-            </span>
-            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-              {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : accountAreaWithCity}
-            </strong>
+        {/* 1. TIÊU ĐỀ TRANG & ĐỊA BÀN PHỤ TRÁCH (Chỉ hiển thị cho Admin) */}
+        {isAdmin && (
+          <div
+            style={{
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px 20px',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MapPin size={16} color="#0284c7" />
+              <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+                Phạm vi quản trị:
+              </span>
+              <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+                {daNangProvince?.name || 'Thành phố Đà Nẵng'}
+              </strong>
+            </div>
+
+            {actionButtons}
           </div>
+        )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* 2. CHỌN PHẠM VI XEM (Chỉ hiển thị cho Admin) */}
+        {isAdmin && (
+          <div className="sos-scope-tabs" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <button
               type="button"
-              className="sos-btn-flat"
-              onClick={handleExportHazardsCsv}
-              style={{
-                padding: '8px 14px',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
+              className="sos-scope-tab active"
+              onClick={() => {
+                setSelectedAdminProvince('ALL');
+                setHazardPage(1);
               }}
-              title="Xuất danh sách điểm nguy hiểm đang lọc ra file CSV"
+              title="Hiển thị tất cả điểm nguy hiểm tại Đà Nẵng"
             >
-              <Download size={15} />
-              <span>Xuất CSV</span>
+              <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
+              <span className="sos-scope-badge">{baseScopedReports.length}</span>
             </button>
 
-            <button
-              type="button"
-              className="sos-btn-flat primary"
-              onClick={handleOpenCreateHazardModal}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
-                borderColor: '#0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <PlusCircle size={15} />
-              <span>Tạo Điểm Nguy Hiểm</span>
-            </button>
-
-            <button
-              type="button"
-              className="sos-btn-flat"
-              onClick={() => onOpenMap()}
-              style={{ padding: '8px 16px', fontSize: '13px' }}
-            >
-              <MapPin size={15} />
-              <span>Mở Bản Đồ Tác Chiến</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. CHỌN PHẠM VI XEM: ADMIN (1 TAB TOÀN QUỐC + DROPDOWN CHỌN TỈNH/THÀNH) VS CÁN BỘ ĐỊA PHƯƠNG (2 TAB) */}
-        <div className="sos-scope-tabs" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          {isAdmin ? (
-            <>
-              <button
-                type="button"
-                className="sos-scope-tab active"
-                onClick={() => {
-                  setSelectedAdminProvince('ALL');
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+                Lọc theo Phường / Xã (Đà Nẵng):
+              </span>
+              <SearchableSelect
+                ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
+                searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                value={selectedAdminProvince}
+                onChange={(val) => {
+                  setSelectedAdminProvince(val);
                   setHazardPage(1);
                 }}
-                title="Hiển thị tất cả điểm nguy hiểm tại Đà Nẵng"
-              >
-                <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
-                <span className="sos-scope-badge">{baseScopedReports.length}</span>
-              </button>
+                triggerStyle={{
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#0f172a',
+                  fontWeight: 500,
+                  minWidth: '240px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+                options={[
+                  {
+                    value: 'ALL',
+                    label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
+                    keywords: 'tat ca toan thanh pho da nang',
+                  },
+                  ...daNangWards.map((a) => ({
+                    value: a.name,
+                    label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
+                    badgeText: a.code || undefined,
+                    keywords: `${a.name} ${a.code || ''}`,
+                  })),
+                ]}
+              />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
-                <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                  Lọc theo Phường / Xã (Đà Nẵng):
-                </span>
-                <SearchableSelect
-                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                  searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
-                  value={selectedAdminProvince}
-                  onChange={(val) => {
-                    setSelectedAdminProvince(val);
+              {selectedAdminProvince !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAdminProvince('ALL');
                     setHazardPage(1);
                   }}
-                  triggerStyle={{
-                    padding: '6px 12px',
-                    fontSize: '13px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    fontWeight: 500,
-                    minWidth: '240px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  title="Quay lại xem Toàn Đà Nẵng"
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: '12px',
+                    color: '#0284c7',
+                    backgroundColor: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
                   }}
-                  options={[
-                    {
-                      value: 'ALL',
-                      label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
-                      keywords: 'tat ca toan thanh pho da nang',
-                    },
-                    ...daNangWards.map((a) => ({
-                      value: a.name,
-                      label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
-                      badgeText: a.code || undefined,
-                      keywords: `${a.name} ${a.code || ''}`,
-                    })),
-                  ]}
-                />
-
-                {selectedAdminProvince !== 'ALL' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAdminProvince('ALL');
-                      setHazardPage(1);
-                    }}
-                    title="Quay lại xem Toàn Đà Nẵng"
-                    style={{
-                      padding: '5px 10px',
-                      fontSize: '12px',
-                      color: '#0284c7',
-                      backgroundColor: '#f0f9ff',
-                      border: '1px solid #bae6fd',
-                      borderRadius: '5px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                    }}
-                  >
-                    ✕ Xem Toàn Đà Nẵng
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={`sos-scope-tab ${managementScope === 'LOCAL' ? 'active' : ''}`}
-                onClick={() => {
-                  setManagementScope('LOCAL');
-                  setHazardPage(1);
-                }}
-              >
-                <span>{localTabLabel}</span>
-                <span className="sos-scope-badge">{localReports.length}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`sos-scope-tab ${managementScope === 'CITY' ? 'active' : ''}`}
-                onClick={() => {
-                  setManagementScope('CITY');
-                  setHazardPage(1);
-                }}
-              >
-                <span>{cityTabLabel}</span>
-                <span className="sos-scope-badge">{hazardReports.length}</span>
-              </button>
-            </>
-          )}
-        </div>
+                >
+                  ✕ Xem Toàn Đà Nẵng
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 3. THANH CÔNG CỤ: TAB LỌC TRẠNG THÁI & TÌM KIẾM (CỐ ĐỊNH) */}
         <div className="sos-clean-toolbar" style={{ flexShrink: 0 }}>
@@ -1673,29 +1662,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Sắp xếp:</span>
-              <select
-                className="sos-clean-sort-select"
-                value={`${hazardSortField}-${hazardSortOrder}`}
-                onChange={(e) => {
-                  const [f, o] = e.target.value.split('-') as [any, any];
-                  setHazardSortField(f);
-                  setHazardSortOrder(o);
-                  setHazardPage(1);
-                }}
-              >
-                <option value="createdAt-desc">Mới nhất trước</option>
-                <option value="createdAt-asc">Cũ nhất trước</option>
-                <option value="severity-desc">Mức độ: Nguy cấp nhất</option>
-                <option value="severity-asc">Mức độ: Thấp đến cao</option>
-                <option value="title-asc">Tên điểm (A → Z)</option>
-                <option value="title-desc">Tên điểm (Z → A)</option>
-                <option value="district-asc">Địa phương (A → Z)</option>
-                <option value="status-desc">Trạng thái: Chờ duyệt trước</option>
-              </select>
-            </div>
-
             <div className="sos-clean-search">
               <Search size={15} color="#94a3b8" />
               <input
@@ -1720,6 +1686,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 </button>
               )}
             </div>
+            {!isAdmin && actionButtons}
           </div>
         </div>
 

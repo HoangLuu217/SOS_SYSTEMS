@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import L from 'leaflet';
 import {
   AlertTriangle,
   Building2,
   Clock,
+  Edit,
   ExternalLink,
   Image as ImageIcon,
   MapPin,
@@ -19,6 +21,116 @@ import {
   getShelterOccupancyMetrics,
 } from '@/features/shelters/shelterConstants';
 
+export const escapePinHtml = (val: string): string =>
+  val
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+export const getFirstImageUrl = (images?: string[]): string => {
+  if (!Array.isArray(images)) return '';
+  const found = images.find((u) => typeof u === 'string' && u.trim().length > 0);
+  return found ? found.trim() : '';
+};
+
+export const buildAdminLocationDivIcon = ({
+  className,
+  label,
+  color,
+  symbol,
+  imageUrl,
+  isSelected = false,
+  pulse = false,
+}: {
+  className: string;
+  label: string;
+  color: string;
+  symbol: string;
+  imageUrl?: string;
+  isSelected?: boolean;
+  pulse?: boolean;
+}): L.DivIcon => {
+  const safeLabel = escapePinHtml(label || '');
+  const safeUrl = imageUrl ? escapePinHtml(imageUrl) : '';
+  const hasPhoto = Boolean(safeUrl);
+  const circleSize = hasPhoto ? (isSelected ? 38 : 34) : isSelected ? 30 : 26;
+  const labelBg = isSelected ? '#0f172a' : color;
+  const ringShadow = isSelected
+    ? `0 0 0 3px ${color}55, 0 4px 12px rgba(15,23,42,0.38)`
+    : hasPhoto
+      ? `0 0 0 2px ${color}, 0 3px 9px rgba(15,23,42,0.32)`
+      : `0 0 10px ${color}cc`;
+
+  return L.divIcon({
+    className,
+    iconSize: [130, 62],
+    iconAnchor: [65, 58],
+    html: `
+      <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
+        <div style="
+          background:${labelBg};
+          color:#ffffff;
+          font-size:10px;
+          font-weight:800;
+          padding:1.5px 6px;
+          border-radius:4px;
+          box-shadow:0 2px 6px rgba(0,0,0,0.3);
+          white-space:nowrap;
+          margin-bottom:3px;
+          max-width:126px;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          border:1px solid rgba(255,255,255,0.45);
+          position:relative;
+          z-index:3;
+        ">${safeLabel}</div>
+        <div style="position:relative;width:${circleSize}px;height:${circleSize}px;display:flex;align-items:center;justify-content:center;">
+          ${pulse ? `
+            <div style="
+              position:absolute;
+              width:${circleSize + 10}px;
+              height:${circleSize + 10}px;
+              border-radius:50%;
+              background:${color};
+              opacity:0.35;
+              animation:pulse-beacon 1.5s infinite;
+              z-index:1;
+            "></div>
+          ` : ''}
+          <div style="
+            position:relative;
+            width:${circleSize}px;
+            height:${circleSize}px;
+            background:${color};
+            border-radius:50%;
+            border:${isSelected ? '3px' : '2.5px'} solid #ffffff;
+            box-shadow:${ringShadow};
+            overflow:hidden;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:2;
+          ">
+            ${hasPhoto ? `
+              <img
+                src="${safeUrl}"
+                alt=""
+                style="width:100%;height:100%;object-fit:cover;display:block;"
+                onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}"
+              />
+              <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;">${symbol}</span>
+            ` : `
+              <span style="font-size:12px;line-height:1;">${symbol}</span>
+            `}
+          </div>
+        </div>
+      </div>
+    `,
+  });
+};
+
 export type SelectedAdminPoint =
   | { kind: 'SHELTER'; shelter: SafeLocationItem }
   | { kind: 'HAZARD'; hazard: HazardReportItem };
@@ -26,6 +138,9 @@ export type SelectedAdminPoint =
 interface AdminPointDetailPanelProps {
   point: SelectedAdminPoint | null;
   hudCollapsed: boolean;
+  topOffset?: number;
+  leftOffset?: number;
+  width?: number;
   onClose: () => void;
   onOpenPhoto: (state: PhotoLightboxState) => void;
 }
@@ -50,6 +165,9 @@ const getCleanImages = (images?: string[]): string[] =>
 export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
   point,
   hudCollapsed,
+  topOffset,
+  leftOffset,
+  width,
   onClose,
   onOpenPhoto,
 }) => {
@@ -119,16 +237,33 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
     </div>
   );
 
+  const resolvedTop = typeof topOffset === 'number' ? topOffset : hudCollapsed ? 60 : 124;
+  const resolvedLeft = typeof leftOffset === 'number' ? leftOffset : 16;
+  const resolvedWidth = typeof width === 'number' ? width : 376;
+
+  const handleJumpToDetailEdit = () => {
+    const targetId = isShelter ? point.shelter._id : point.hazard._id;
+    const targetKey = isShelter ? 'shelters' : 'hazard_reports';
+    try {
+      sessionStorage.setItem('sos_open_detail_id', JSON.stringify({ key: targetKey, id: targetId }));
+    } catch {}
+    window.dispatchEvent(
+      new CustomEvent('sos_navigate_tab', {
+        detail: { key: targetKey, subPath: targetId },
+      })
+    );
+  };
+
   return (
     <div
       style={{
         position: 'absolute',
-        top: hudCollapsed ? 60 : 124,
-        left: 16,
+        top: resolvedTop,
+        left: resolvedLeft,
         zIndex: 999,
-        width: 376,
+        width: resolvedWidth,
         maxWidth: 'calc(100% - 32px)',
-        maxHeight: hudCollapsed ? 'calc(100% - 82px)' : 'calc(100% - 144px)',
+        maxHeight: `calc(100% - ${resolvedTop + 20}px)`,
         background: 'rgba(255, 255, 255, 0.98)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
@@ -570,6 +705,30 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
               </span>
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleJumpToDetailEdit}
+            style={{
+              marginTop: 4,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${isShelter ? '#059669' : '#dc2626'}`,
+              background: isShelter ? '#10b981' : '#dc2626',
+              color: '#ffffff',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(15, 23, 42, 0.14)',
+            }}
+          >
+            <Edit size={13} />
+            {isShelter ? 'Đến trang chi tiết & chỉnh sửa điểm trú ẩn' : 'Đến trang chi tiết & chỉnh sửa điểm nguy hiểm'}
+          </button>
 
           {hasValidCoords && (
             <a

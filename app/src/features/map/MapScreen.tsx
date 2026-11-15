@@ -196,6 +196,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     };
   }
   const lastSosSigRef = useRef<string>('');
+  const lastHazardsSigRef = useRef<string>('');
+  const lastSafeSigRef = useRef<string>('');
+  const lastReliefSigRef = useRef<string>('');
 
   // Lấy Base URL để phục vụ SSE Stream và API
   useEffect(() => {
@@ -405,47 +408,36 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       .replace(/\n/g, '\\n')
       .replace(/\r/g, '');
 
-  // Bắn dữ liệu mới vào Leaflet ngay lập tức mà KHÔNG cần reload lại map
+  const injectLayerData = (
+    fnName: 'updateHazardsData' | 'updateSafeData' | 'updateReliefData',
+    data: any[] | null | undefined,
+    sigRef: { current: string }
+  ) => {
+    if (!webViewRef.current || !data) return;
+    const jsonStr = safeJsonForWebView(data);
+    if (jsonStr === sigRef.current) return;
+    sigRef.current = jsonStr;
+    try {
+      webViewRef.current.injectJavaScript(`
+        if (window.${fnName}) {
+          window.${fnName}(JSON.parse('${jsonStr}'));
+        }
+        true;
+      `);
+    } catch { }
+  };
+
+  // Bắn dữ liệu mới vào Leaflet ngay lập tức mà KHÔNG cần reload lại map (tránh giật/nháy ảnh ghim khi polling 4s)
   useEffect(() => {
-    if (webViewRef.current && hazards) {
-      try {
-        const jsonStr = safeJsonForWebView(hazards);
-        webViewRef.current.injectJavaScript(`
-          if (window.updateHazardsData) {
-            window.updateHazardsData(JSON.parse('${jsonStr}'));
-          }
-          true;
-        `);
-      } catch { }
-    }
+    injectLayerData('updateHazardsData', hazards, lastHazardsSigRef);
   }, [hazards]);
 
   useEffect(() => {
-    if (webViewRef.current && safeLocations) {
-      try {
-        const jsonStr = safeJsonForWebView(safeLocations);
-        webViewRef.current.injectJavaScript(`
-          if (window.updateSafeData) {
-            window.updateSafeData(JSON.parse('${jsonStr}'));
-          }
-          true;
-        `);
-      } catch { }
-    }
+    injectLayerData('updateSafeData', safeLocations, lastSafeSigRef);
   }, [safeLocations]);
 
   useEffect(() => {
-    if (webViewRef.current && reliefLocations) {
-      try {
-        const jsonStr = safeJsonForWebView(reliefLocations);
-        webViewRef.current.injectJavaScript(`
-          if (window.updateReliefData) {
-            window.updateReliefData(JSON.parse('${jsonStr}'));
-          }
-          true;
-        `);
-      } catch { }
-    }
+    injectLayerData('updateReliefData', reliefLocations, lastReliefSigRef);
   }, [reliefLocations]);
 
   // Đồng bộ danh sách tín hiệu SOS vào Leaflet (chỉ cập nhật khi có thay đổi thực sự để tránh giật)
@@ -477,6 +469,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       const sStr = safeJsonForWebView(safeLocations);
       const rStr = safeJsonForWebView(reliefLocations);
       const sosStr = safeJsonForWebView(activeSosList);
+      lastHazardsSigRef.current = hStr;
+      lastSafeSigRef.current = sStr;
+      lastReliefSigRef.current = rStr;
       webViewRef.current.injectJavaScript(`
         if (window.updateHazardsData) window.updateHazardsData(JSON.parse('${hStr}'));
         if (window.updateSafeData) window.updateSafeData(JSON.parse('${sStr}'));
@@ -836,6 +831,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
   };
 
   const streamUrl = baseUrl ? `${baseUrl}/hazard-reports/stream` : '';
+  const apiOrigin = baseUrl ? baseUrl.replace(/\/api\/?$/i, '') : '';
   const hasLocation = Boolean(location);
 
   const mapHtml = useMemo(() => {
@@ -975,6 +971,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
 
         var currentMapType = 'standard';
         var userCoords = { lat: ${initLat}, lng: ${initLng} };
+        var apiOrigin = ${JSON.stringify(apiOrigin)};
 
         // 1. Chế độ thu nhỏ / Tổng quan (Zoom <= 15):
         // Ẩn toàn bộ quán cà phê / cửa hàng (s.t:33|p.v:off)
@@ -1066,8 +1063,96 @@ export const MapScreen: React.FC<MapScreenProps> = ({
 
         L.marker([${initLat}, ${initLng}], { icon: myIcon }).addTo(map);
 
-        // Cấu hình Icon ghim nhỏ gọn (Compact 26px x 30px) chuẩn theo đúng 6 icon trong tab loại nguy hiểm
-        function getHazardMarkerHtml(type) {
+        function escapeHtmlAttr(val) {
+          return String(val == null ? '' : val)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        }
+
+        function resolvePointImageUrl(rawUrl) {
+          if (!rawUrl || typeof rawUrl !== 'string') return '';
+          var trimmed = rawUrl.trim();
+          if (!trimmed) return '';
+          var lower = trimmed.toLowerCase();
+          if (lower.indexOf('https://') === 0 || lower.indexOf('http://') === 0 || lower.indexOf('data:image/') === 0) {
+            return trimmed;
+          }
+          if (trimmed.indexOf('//') === 0) {
+            return 'https:' + trimmed;
+          }
+          if (trimmed.charAt(0) === '/' && apiOrigin) {
+            return apiOrigin + trimmed;
+          }
+          return apiOrigin ? (apiOrigin + '/' + trimmed) : trimmed;
+        }
+
+        function getFirstPointImageUrl(item) {
+          if (!item || typeof item !== 'object') return '';
+          var arrCandidates = [item.images, item.photos];
+          for (var i = 0; i < arrCandidates.length; i++) {
+            var arr = arrCandidates[i];
+            if (Array.isArray(arr)) {
+              for (var j = 0; j < arr.length; j++) {
+                var entry = arr[j];
+                var raw = typeof entry === 'string' ? entry : (entry && (entry.url || entry.uri));
+                var resolved = resolvePointImageUrl(raw);
+                if (resolved) return resolved;
+              }
+            }
+          }
+          var strCandidates = [item.imageUrl, item.image];
+          for (var k = 0; k < strCandidates.length; k++) {
+            var resolvedStr = resolvePointImageUrl(strCandidates[k]);
+            if (resolvedStr) return resolvedStr;
+          }
+          return '';
+        }
+
+        window.handlePinImgError = function(imgEl) {
+          if (!imgEl) return;
+          imgEl.style.display = 'none';
+          if (imgEl.nextElementSibling) {
+            imgEl.nextElementSibling.style.display = 'flex';
+          }
+        };
+
+        // Render icon ghim dùng chung: ưu tiên hiển thị ảnh địa điểm tròn (có viền trắng + viền màu + fallback icon nếu lỗi ảnh)
+        function buildLocationPinIcon(color, fallbackSvg, photoUrl) {
+          var hasPhoto = Boolean(photoUrl);
+          var circleSize = hasPhoto ? 34 : 26;
+          var arrowHalf = hasPhoto ? 5 : 4;
+          var arrowHeight = hasPhoto ? 6 : 5;
+          var totalHeight = circleSize + arrowHeight - 1;
+          var anchorX = Math.round(circleSize / 2);
+
+          var circleStyle = hasPhoto
+            ? 'width:' + circleSize + 'px;height:' + circleSize + 'px;border-radius:50%;background:' + color + ';border:2.5px solid #ffffff;box-shadow:0 0 0 2px ' + color + ', 0 3px 9px rgba(15,23,42,0.32);overflow:hidden;display:flex;align-items:center;justify-content:center;'
+            : 'width:' + circleSize + 'px;height:' + circleSize + 'px;border-radius:50%;background:' + color + ';border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.32);display:flex;align-items:center;justify-content:center;';
+
+          var circleInner = hasPhoto
+            ? '<img src="' + escapeHtmlAttr(photoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="window.handlePinImgError && window.handlePinImgError(this)" />' +
+              '<span style="display:none;align-items:center;justify-content:center;width:100%;height:100%;">' + fallbackSvg + '</span>'
+            : fallbackSvg;
+
+          var html = '<div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">' +
+            '<div style="' + circleStyle + '">' + circleInner + '</div>' +
+            '<div style="width:0;height:0;border-left:' + arrowHalf + 'px solid transparent;border-right:' + arrowHalf + 'px solid transparent;border-top:' + arrowHeight + 'px solid ' + color + ';margin-top:-1px;"></div>' +
+          '</div>';
+
+          return L.divIcon({
+            html: html,
+            className: '',
+            iconSize: [circleSize, totalHeight],
+            iconAnchor: [anchorX, totalHeight],
+            popupAnchor: [0, -totalHeight]
+          });
+        }
+
+        // Cấu hình màu & SVG theo 6 loại nguy hiểm
+        function getHazardMarkerConfig(type) {
           var config = {
             FLOOD: {
               bg: '#0284c7',
@@ -1107,45 +1192,27 @@ export const MapScreen: React.FC<MapScreenProps> = ({
             }
           };
 
-          var c = config[type] || config.OTHER;
-          return '<div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">' +
-            '<div style="background:' + c.bg + ';width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.32);">' +
-              c.svg +
-            '</div>' +
-            '<div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid ' + c.bg + ';margin-top:-1px;"></div>' +
-          '</div>';
+          return config[type] || config.OTHER;
         }
 
-        // Cấu hình Icon ghim điểm an toàn (Compact 26px x 30px)
-        function getSafeMarkerHtml(type) {
+        // Cấu hình màu & SVG điểm an toàn
+        function getSafeMarkerConfig(type) {
           var isHospital = type === 'HOSPITAL';
           var svg = isHospital
             ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
             : '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
           var bg = isHospital ? '#059669' : '#10b981';
-
-          return '<div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">' +
-            '<div style="background:' + bg + ';width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' +
-              svg +
-            '</div>' +
-            '<div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid ' + bg + ';margin-top:-1px;"></div>' +
-          '</div>';
+          return { bg: bg, svg: svg };
         }
 
-        // Cấu hình Icon ghim điểm cứu trợ (Compact 26px x 30px)
-        function getReliefMarkerHtml(type) {
+        // Cấu hình màu & SVG điểm cứu trợ
+        function getReliefMarkerConfig(type) {
           var isRescue = type === 'RESCUE_STATION';
           var svg = isRescue
             ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>'
             : '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>';
           var bg = isRescue ? '#2563eb' : '#ea580c';
-
-          return '<div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">' +
-            '<div style="background:' + bg + ';width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' +
-              svg +
-            '</div>' +
-            '<div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid ' + bg + ';margin-top:-1px;"></div>' +
-          '</div>';
+          return { bg: bg, svg: svg };
         }
 
         // Tạo 3 nhóm layer độc lập phục vụ bộ lọc
@@ -1232,97 +1299,54 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           });
         }
 
-        // Hàm render ghim điểm nguy hiểm
-        function renderHazardMarkers(hazardList) {
-          hazardLayer.clearLayers();
-          if (!Array.isArray(hazardList)) return;
+        // Hàm render ghim dùng chung cho điểm nguy hiểm / an toàn / cứu trợ
+        function renderPointMarkers(layer, list, category, getStyle) {
+          layer.clearLayers();
+          if (!Array.isArray(list)) return;
 
-          hazardList.forEach(function(h) {
-            if (h.location && h.location.coordinates && h.location.coordinates.length === 2) {
-              var lng = h.location.coordinates[0];
-              var lat = h.location.coordinates[1];
-              var hType = h.hazardType || 'OTHER';
-              var dangerPin = L.divIcon({
-                html: getHazardMarkerHtml(hType),
-                className: '',
-                iconSize: [26, 30],
-                iconAnchor: [13, 30],
-                popupAnchor: [0, -30]
+          list.forEach(function(item) {
+            if (item && item.location && item.location.coordinates && item.location.coordinates.length === 2) {
+              var lng = item.location.coordinates[0];
+              var lat = item.location.coordinates[1];
+              var style = getStyle(item);
+              var photoUrl = getFirstPointImageUrl(item);
+              var pinIcon = buildLocationPinIcon(style.bg, style.svg, photoUrl);
+              var marker = L.marker([lat, lng], {
+                icon: pinIcon,
+                zIndexOffset: photoUrl ? 50 : 0
               });
-              var marker = L.marker([lat, lng], { icon: dangerPin });
               marker.on('click', function() {
                 if (window.ReactNativeWebView) {
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'SELECT_PIN',
-                    category: 'HAZARD',
-                    data: h
+                    category: category,
+                    data: item
                   }));
                 }
               });
-              hazardLayer.addLayer(marker);
+              layer.addLayer(marker);
             }
+          });
+        }
+
+        // Hàm render ghim điểm nguy hiểm
+        function renderHazardMarkers(hazardList) {
+          renderPointMarkers(hazardLayer, hazardList, 'HAZARD', function(h) {
+            return getHazardMarkerConfig(h.hazardType || 'OTHER');
           });
         }
 
         // Hàm render ghim điểm an toàn
         function renderSafeMarkers(safeList) {
-          safeLayer.clearLayers();
-          if (!Array.isArray(safeList)) return;
-
-          safeList.forEach(function(s) {
-            if (s.location && s.location.coordinates && s.location.coordinates.length === 2) {
-              var lng = s.location.coordinates[0];
-              var lat = s.location.coordinates[1];
-              var safePin = L.divIcon({
-                html: getSafeMarkerHtml(s.type),
-                className: '',
-                iconSize: [26, 30],
-                iconAnchor: [13, 30],
-                popupAnchor: [0, -30]
-              });
-              var marker = L.marker([lat, lng], { icon: safePin });
-              marker.on('click', function() {
-                if (window.ReactNativeWebView) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'SELECT_PIN',
-                    category: 'SAFE',
-                    data: s
-                  }));
-                }
-              });
-              safeLayer.addLayer(marker);
-            }
+          renderPointMarkers(safeLayer, safeList, 'SAFE', function(s) {
+            return getSafeMarkerConfig(s.type);
           });
         }
 
         // Hàm render ghim điểm cứu trợ
         function renderReliefMarkers(reliefList) {
-          reliefLayer.clearLayers();
-          if (!Array.isArray(reliefList)) return;
-
-          reliefList.forEach(function(r) {
-            if (r.location && r.location.coordinates && r.location.coordinates.length === 2) {
-              var lng = r.location.coordinates[0];
-              var lat = r.location.coordinates[1];
-              var reliefPin = L.divIcon({
-                html: getReliefMarkerHtml(r.type),
-                className: '',
-                iconSize: [26, 30],
-                iconAnchor: [13, 30],
-                popupAnchor: [0, -30]
-              });
-              var marker = L.marker([lat, lng], { icon: reliefPin });
-              marker.on('click', function() {
-                if (window.ReactNativeWebView) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'SELECT_PIN',
-                    category: 'RELIEF',
-                    data: r
-                  }));
-                }
-              });
-              reliefLayer.addLayer(marker);
-            }
+          renderPointMarkers(reliefLayer, reliefList, 'RELIEF', function(r) {
+            return getReliefMarkerConfig(r.type);
           });
         }
 
@@ -1495,7 +1519,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     </body>
     </html>
   `;
-  }, [hasLocation, streamUrl]);
+  }, [hasLocation, streamUrl, apiOrigin]);
 
   const totalCount = hazards.length + safeLocations.length + reliefLocations.length;
   const unsupportedCount = hazards.filter(h => h.severity === 'CRITICAL' || h.severity === 'HIGH').length || 1;
@@ -1719,7 +1743,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                   {/* Badge phân loại */}
                   {selectedDetail.category === 'HAZARD' && (
                     <View style={styles.detailCategoryBadgeHazard}>
-                      <Text style={styles.detailCategoryBadgeHazardText}>⚠️ ĐIỂM NGUY HIỂM</Text>
+                      <Text style={styles.detailCategoryBadgeHazardText}>ĐIỂM NGUY HIỂM</Text>
                     </View>
                   )}
                   {selectedDetail.category === 'SAFE' && (
@@ -1774,15 +1798,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                             </Text>
                           </View>
 
-                          <View style={[styles.severityPill, { backgroundColor: severityMeta.bg }]}>
+                          <View style={styles.severityPill}>
                             <Text style={[styles.severityPillText, { color: severityMeta.color }]}>
                               Mức độ: {severityMeta.label}
                             </Text>
-                          </View>
-
-                          <View style={styles.verifiedPill}>
-                            <Feather name="check-circle" size={12} color="#059669" />
-                            <Text style={styles.verifiedPillText}>Đã phê duyệt</Text>
                           </View>
                         </View>
 
@@ -2855,16 +2874,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   detailCategoryBadgeHazard: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 2,
   },
   detailCategoryBadgeHazardText: {
     color: '#DC2626',
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
@@ -2933,29 +2951,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   severityPill: {
-    paddingHorizontal: 9,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 4,
     paddingVertical: 5,
-    borderRadius: 8,
   },
   severityPillText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-  },
-  verifiedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  verifiedPillText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#059669',
   },
   infoBox: {
     flexDirection: 'row',

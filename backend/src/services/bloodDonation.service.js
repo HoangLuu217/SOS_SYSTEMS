@@ -72,7 +72,7 @@ class BloodDonationService {
     const bloodType = data.bloodType || userDoc.citizen?.bloodType || 'UNKNOWN';
     const weightKg = data.weightKg ? Number(data.weightKg) : null;
     const lastDonationDate = (data.lastDonationDate || '').trim();
-    const healthNote = (data.healthNote || 'Sức khỏe bình thường, đủ điều kiện hiến máu').trim();
+    const healthNote = (data.healthNote || '').trim();
     const note = (data.note || '').trim();
     const address = (data.address || userDoc.address || '').trim();
 
@@ -234,6 +234,8 @@ class BloodDonationService {
       }
     }
 
+    await this.autoCloseExpiredEvents();
+
     const allActiveEvents = await BloodDonationEvent.find({
       status: 'ACTIVE',
     })
@@ -330,7 +332,7 @@ class BloodDonationService {
     const bloodType = data.bloodType || preReg?.bloodType || userDoc?.citizen?.bloodType || 'UNKNOWN';
     const weightKg = data.weightKg ? Number(data.weightKg) : preReg?.weightKg || null;
     const preferredTimeSlot = (data.preferredTimeSlot || `${event.startTime} - ${event.endTime}`).trim();
-    const healthNote = (data.healthNote || preReg?.healthNote || 'Đủ điều kiện sức khỏe').trim();
+    const healthNote = (data.healthNote || preReg?.healthNote || '').trim();
     const note = (data.note || '').trim();
     const address = (data.address || preReg?.address || userDoc?.address || event.areaName || '').trim();
 
@@ -339,6 +341,13 @@ class BloodDonationService {
       eventId: event._id,
       registrationType: 'EVENT_REGISTRATION',
     });
+
+    if (eventReg && eventReg.status === 'COMPLETED') {
+      throw new ApiError(
+        400,
+        'Bạn đã hoàn thành hiến máu ở đợt này, không thể thay đổi hoặc hủy đăng ký.'
+      );
+    }
 
     if (eventReg) {
       eventReg.status = status;
@@ -392,6 +401,14 @@ class BloodDonationService {
         address,
         status: 'PENDING',
         respondedAt: new Date(),
+      }).catch(() => {});
+    } else if (preReg && bloodType && bloodType !== 'UNKNOWN' && preReg.bloodType !== bloodType) {
+      await BloodDonationRegistration.updateOne(
+        { _id: preReg._id },
+        { $set: { bloodType } }
+      ).catch(() => {});
+      await User.findByIdAndUpdate(user._id, {
+        $set: { 'citizen.bloodType': bloodType },
       }).catch(() => {});
     }
 
@@ -461,7 +478,7 @@ class BloodDonationService {
       endTime = '11:30',
       neededBloodTypes = ['ALL'],
       targetDonors = 100,
-      organizerName = 'Ban Chỉ Huy Cứu Nạn & Hội Chữ Thập Đỏ',
+      organizerName = '',
       contactPhone = '',
       requirements = 'Mang theo CCCD/Giấy tờ tùy thân, ăn sáng nhẹ, không thức khuya hoặc dùng đồ uống có cồn trước khi hiến máu.',
       urgencyLevel = 'HIGH',
@@ -480,6 +497,32 @@ class BloodDonationService {
     }
     if (!eventDate) {
       throw new ApiError(400, 'Vui lòng chọn ngày tổ chức hiến máu.');
+    }
+
+    const parsedEventDateCheck = new Date(eventDate);
+    if (isNaN(parsedEventDateCheck.getTime())) {
+      throw new ApiError(400, 'Ngày tổ chức hiến máu không hợp lệ.');
+    }
+    const vnDateFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const eventDatePart =
+      typeof eventDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(eventDate)
+        ? eventDate.slice(0, 10)
+        : vnDateFormatter.format(parsedEventDateCheck);
+    const todayDatePart = vnDateFormatter.format(new Date());
+    if (eventDatePart < todayDatePart) {
+      throw new ApiError(400, 'Ngày tổ chức không được nằm trong quá khứ.');
+    }
+    const checkEndDateTime = this.parseEventStartDateTime(
+      eventDatePart,
+      endTime || startTime || '23:59'
+    );
+    if (checkEndDateTime && !isNaN(checkEndDateTime.getTime()) && checkEndDateTime.getTime() < Date.now()) {
+      throw new ApiError(400, 'Thời gian tổ chức của đợt hiến máu không được nằm trong quá khứ.');
     }
 
     const isAdmin = Boolean(senderUser.roles && senderUser.roles.includes('ADMIN'));
@@ -615,7 +658,11 @@ class BloodDonationService {
       endTime: endTime.trim(),
       neededBloodTypes: normalizedBloodTypes,
       targetDonors: Number(targetDonors) || 100,
-      organizerName: organizerName.trim() || 'Ban Chỉ Huy Cứu Nạn & Hội Chữ Thập Đỏ',
+      organizerName:
+        (organizerName || '').trim() ||
+        senderUser.authority?.organizationName ||
+        senderUser.authority?.department ||
+        'Ban Chỉ Huy PCTT & Hội Chữ Thập Đỏ',
       contactPhone: (contactPhone || senderUser.phone || '').trim(),
       requirements: requirements.trim(),
       urgencyLevel,
@@ -996,6 +1043,16 @@ class BloodDonationService {
       throw new ApiError(404, 'Không tìm thấy bản ghi đăng ký hiến máu.');
     }
 
+    const nextStatus = data.status || reg.status;
+    const nextBloodType = data.bloodType || reg.bloodType;
+
+    if (nextStatus === 'COMPLETED' && (!nextBloodType || nextBloodType === 'UNKNOWN')) {
+      throw new ApiError(
+        400,
+        'Nhóm máu của người hiến đang Chưa rõ. Vui lòng chọn nhóm máu thực tế trước khi xác nhận Đã hiến máu.'
+      );
+    }
+
     if (data.status) {
       reg.status = data.status;
     }
@@ -1007,9 +1064,35 @@ class BloodDonationService {
     }
     await reg.save();
 
+    // Nếu cập nhật nhóm máu thực tế, đồng bộ luôn vào hồ sơ đăng ký nhận thông báo và hồ sơ người dùng
+    if (data.bloodType && data.bloodType !== 'UNKNOWN' && reg.userId) {
+      await BloodDonationRegistration.updateMany(
+        {
+          userId: reg.userId,
+          _id: { $ne: reg._id },
+          $or: [{ registrationType: 'PRE_REGISTRATION' }, { bloodType: 'UNKNOWN' }],
+        },
+        { $set: { bloodType: data.bloodType } }
+      ).catch(() => {});
+
+      await User.findByIdAndUpdate(reg.userId, {
+        $set: { 'citizen.bloodType': data.bloodType },
+      }).catch(() => {});
+    }
+
     if (reg.eventId) {
       await this.recalculateEventStats(reg.eventId);
     }
+
+    try {
+      eventBus.emit('blood_donation_event', {
+        action: 'REGISTRATION_UPDATED',
+        registrationId: reg._id,
+        eventId: reg.eventId,
+        userId: reg.userId,
+        status: reg.status,
+      });
+    } catch (_) {}
 
     return reg;
   }
@@ -1018,6 +1101,8 @@ class BloodDonationService {
    * 8. Lấy danh sách các sự kiện hiến máu (Cho Web và App)
    */
   async listEvents(requester, query = {}) {
+    await this.autoCloseExpiredEvents();
+
     const { status, areaId, search, page = 1, limit = 50 } = query;
     const filter = {};
 
@@ -1066,6 +1151,8 @@ class BloodDonationService {
       throw new ApiError(400, 'Mã sự kiện hiến máu không hợp lệ.');
     }
 
+    await this.autoCloseExpiredEvents();
+
     const event = await BloodDonationEvent.findById(eventId)
       .populate('createdBy', 'fullName phone roles')
       .lean();
@@ -1110,6 +1197,21 @@ class BloodDonationService {
     const event = await BloodDonationEvent.findById(eventId);
     if (!event) {
       throw new ApiError(404, 'Không tìm thấy sự kiện hiến máu.');
+    }
+
+    if (status === 'ACTIVE') {
+      const endDateTime = this.parseEventStartDateTime(
+        event.eventDate,
+        event.endTime || event.startTime || '23:59'
+      );
+      if (endDateTime && !isNaN(endDateTime.getTime()) && endDateTime.getTime() < Date.now()) {
+        event.status = 'CLOSED';
+        await event.save();
+        throw new ApiError(
+          400,
+          'Thời gian của đợt hiến máu này đã nằm trong quá khứ nên tự động chuyển thành Đã đóng.'
+        );
+      }
     }
 
     event.status = status;
@@ -1179,11 +1281,48 @@ class BloodDonationService {
   }
 
   /**
+   * Helper: Tự động chuyển trạng thái các đợt hiến máu có thời gian kết thúc nằm trong quá khứ sang CLOSED (Đã đóng)
+   */
+  async autoCloseExpiredEvents() {
+    try {
+      const activeEvents = await BloodDonationEvent.find({ status: 'ACTIVE' })
+        .select('_id eventDate startTime endTime status')
+        .lean();
+      if (!activeEvents.length) return 0;
+
+      const nowMs = Date.now();
+      const expiredIds = [];
+
+      for (const ev of activeEvents) {
+        const endDateTime = this.parseEventStartDateTime(
+          ev.eventDate,
+          ev.endTime || ev.startTime || '23:59'
+        );
+        if (endDateTime && !isNaN(endDateTime.getTime()) && endDateTime.getTime() < nowMs) {
+          expiredIds.push(ev._id);
+        }
+      }
+
+      if (expiredIds.length > 0) {
+        await BloodDonationEvent.updateMany(
+          { _id: { $in: expiredIds }, status: 'ACTIVE' },
+          { $set: { status: 'CLOSED' } }
+        );
+      }
+
+      return expiredIds.length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * 12. Gửi thông báo nhắc nhở tự động cho người dân đã đăng ký hiến máu:
    *  - Cách 1 ngày (1_DAY_BEFORE): Thông báo trước ngày diễn ra sự kiện (~24 giờ)
    *  - Sắp đến giờ (UPCOMING): Thông báo trước khi sự kiện bắt đầu (~2 giờ)
    */
   async sendScheduledReminders(options = {}) {
+    await this.autoCloseExpiredEvents();
     const { eventId, forceType } = options;
     const now = new Date();
 
