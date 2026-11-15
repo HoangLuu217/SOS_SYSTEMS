@@ -1,13 +1,8 @@
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../config/cloudinary');
-
-const localUploadsDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(localUploadsDir)) {
-  fs.mkdirSync(localUploadsDir, { recursive: true });
-}
+const { ensureLocalUploadsDir } = require('../utils/uploadsDir');
 
 // Cấu hình kho lưu trữ (Storage) cho Multer: ưu tiên Cloudinary nếu có API key, ngược lại lưu trên máy chủ backend
 const storage = cloudinary.isConfigured()
@@ -20,7 +15,13 @@ const storage = cloudinary.isConfigured()
       },
     })
   : multer.diskStorage({
-      destination: (_req, _file, cb) => cb(null, localUploadsDir),
+      destination: (_req, _file, cb) => {
+        try {
+          cb(null, ensureLocalUploadsDir());
+        } catch (err) {
+          cb(err);
+        }
+      },
       filename: (_req, file, cb) => {
         const ext = path.extname(file.originalname || '') || '.jpg';
         cb(null, `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
