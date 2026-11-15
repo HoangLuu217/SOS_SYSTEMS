@@ -1,7 +1,6 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
-const { SosAssignment, RescueTeam } = require('../models');
 const { emitSosCreated, emitSosUpdated, emitSosDeleted } = require('../socket');
 
 const createSos = async (req, res, next) => {
@@ -49,36 +48,10 @@ const getSosRequests = async (req, res, next) => {
     
     // Phân quyền tra cứu danh sách SOS:
     // - ADMIN / LOCAL_AUTHORITY: Xem toàn bộ hoặc theo địa bàn
-    // - RESCUER / LEADER: Xem các ca do mình gửi HOẶC các ca được phân công cho mình / đội cứu hộ
-    // - CITIZEN: Chỉ xem các ca do chính tài khoản của mình gửi
+    // - RESCUER / LEADER / CITIZEN: Chỉ xem các ca SOS do chính tài khoản của mình gửi (nhiệm vụ cứu hộ dùng /assignments/my)
     const isDispatchAuthority = userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
     if (!isDispatchAuthority) {
-      if (userRoles.includes('RESCUER') || userRoles.includes('LEADER')) {
-        const teams = await RescueTeam.find({
-          $or: [
-            { leaderId: userId },
-            { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
-            { 'members.rescuerId': userId },
-          ],
-        }).select('_id');
-        const teamIds = teams.map((t) => t._id);
-
-        const myAssignments = await SosAssignment.find({
-          $or: [
-            { rescuerId: userId },
-            { rescueTeamId: { $in: teamIds } },
-            { teamId: { $in: teamIds } },
-          ],
-        }).select('sosRequestId sosId');
-
-        const assignedSosIds = myAssignments
-          .map((a) => a.sosRequestId || a.sosId)
-          .filter(Boolean);
-
-        query.$or = [{ citizenId: userId }, { _id: { $in: assignedSosIds } }];
-      } else {
-        query.citizenId = userId;
-      }
+      query.citizenId = userId;
     }
 
     if (query.areaId === 'ALL') {
@@ -146,6 +119,24 @@ const cancelSos = async (req, res, next) => {
 
 const completeSos = async (req, res, next) => {
   try {
+    const userRoles = req.user?.roles || [];
+    const isPrivileged = userRoles.some((r) => ['ADMIN', 'LOCAL_AUTHORITY', 'RESCUER'].includes(r));
+    if (!isPrivileged) {
+      const currentSos = await sosService.getSosRequestById(req.params.id);
+      const sosSt = currentSos?.status;
+      const assignSt = currentSos?.assignment?.status;
+      const canCitizenComplete =
+        ['ARRIVED', 'RESCUING', 'COMPLETED'].includes(sosSt) ||
+        ['ARRIVED', 'RESCUING', 'COMPLETED'].includes(assignSt);
+      if (!canCitizenComplete) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Đội cứu hộ chưa tiếp cận hiện trường nên chưa thể xác nhận hoàn thành cứu nạn. Nếu bạn đã tự thoát hiểm, vui lòng chọn Hủy yêu cầu.',
+        });
+      }
+    }
+
     const note = req.body.note || 'Đã hoàn thành cứu nạn';
     const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note);
 
@@ -339,6 +330,31 @@ const completeShoreHandoff = async (req, res, next) => {
   }
 };
 
+const submitFeedback = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.submitFeedback(req.params.id, req.body, req.user);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'CITIZEN',
+      action: 'CITIZEN_FEEDBACK',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      areaId: updatedSos?.areaId?._id || updatedSos?.areaId || null,
+      metadata: {
+        sosCode: updatedSos?.sosCode,
+        sentiment: updatedSos?.citizenFeedback?.sentiment,
+        tags: updatedSos?.citizenFeedback?.tags || [],
+      },
+    });
+
+    emitSosUpdated(updatedSos);
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSos,
   getSosRequests,
@@ -358,5 +374,5 @@ module.exports = {
 
   deleteSos,
   clearCancelledSos,
-
+  submitFeedback,
 };

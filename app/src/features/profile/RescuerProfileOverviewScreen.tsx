@@ -28,6 +28,7 @@ import { LogoSOS } from '@/components';
 import { backendApi } from '@/api';
 import type { RescueTeamData, VehicleData, RescuerVerificationStatus } from '@/types';
 import { RESCUE_SKILLS } from './ProfessionalProfileScreen';
+import { RescuerFeedbackHistoryModal } from './RescuerFeedbackHistoryModal';
 
 const APPLICANT_SKILL_LABELS: Record<string, string> = {
   ...Object.fromEntries(RESCUE_SKILLS.map((s) => [s.id, s.label])),
@@ -107,6 +108,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   const [transferLeaderTeam, setTransferLeaderTeam] = useState<RescueTeamData | null>(null);
   const [isTransferringLeader, setIsTransferringLeader] = useState<boolean>(false);
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState<number>(0);
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
 
   const selectedTeamIdRef = useRef<string | null>(null);
   const showTeamDetailRef = useRef<boolean>(false);
@@ -1355,6 +1357,24 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
           <View style={styles.menuDivider} />
 
+          {/* Item 2.5: Đánh giá từ người dân */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setShowFeedbackModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Feather name="message-square" size={18} color="#0284C7" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Đánh giá từ người dân</Text>
+              <Text style={styles.menuDesc}>Xem tất cả phản hồi sau cứu hộ</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
           {/* Item 3: Bảo mật tài khoản */}
           <TouchableOpacity
             style={styles.menuItem}
@@ -1400,6 +1420,11 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           <Text style={styles.logoutButtonText}>Đăng xuất tài khoản</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <RescuerFeedbackHistoryModal
+        visible={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+      />
 
       {/* Modal: Chọn nhanh 5 trạng thái tác chiến */}
       <Modal

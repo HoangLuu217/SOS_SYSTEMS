@@ -157,6 +157,12 @@ export interface SosAssignmentData {
       phone?: string;
       avatarUrl?: string;
     };
+    citizenFeedback?: {
+      sentiment?: 'SATISFIED' | 'NEUTRAL' | 'NEEDS_IMPROVEMENT';
+      tags?: string[];
+      comment?: string;
+      submittedAt?: string;
+    };
     shoreHandoff?: {
       status: 'NONE' | 'REQUESTED' | 'ASSIGNED' | 'COMPLETED' | 'CANCELLED';
       requestedAt?: string;

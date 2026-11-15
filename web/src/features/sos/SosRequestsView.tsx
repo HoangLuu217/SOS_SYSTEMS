@@ -1719,6 +1719,81 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 );
               })()}
 
+              {/* PHẢN HỒI TỪ NGƯỜI DÂN SAU CỨU HỘ */}
+              {(selectedSosDetail as any).citizenFeedback?.submittedAt && (() => {
+                const fb = (selectedSosDetail as any).citizenFeedback;
+                const isNeg = fb.sentiment === 'NEEDS_IMPROVEMENT';
+                const isNeutral = fb.sentiment === 'NEUTRAL';
+                const sentimentLabel = isNeg
+                  ? 'Cần cải thiện'
+                  : isNeutral
+                  ? 'Bình thường'
+                  : 'Hài lòng';
+                const pillBg = isNeg ? '#fef2f2' : isNeutral ? '#fffbeb' : '#eff6ff';
+                const pillColor = isNeg ? '#dc2626' : isNeutral ? '#d97706' : '#1d4ed8';
+                const pillBorder = isNeg ? '#fecaca' : isNeutral ? '#fde68a' : '#bfdbfe';
+                return (
+                  <div className="sos-panel-card">
+                    <div
+                      className="sos-panel-card-title"
+                      style={{ justifyContent: 'space-between', width: '100%', marginBottom: 8 }}
+                    >
+                      <span>PHẢN HỒI TỪ NGƯỜI DÂN</span>
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          padding: '2px 10px',
+                          borderRadius: 999,
+                          background: pillBg,
+                          color: pillColor,
+                          border: `1px solid ${pillBorder}`,
+                          textTransform: 'none',
+                        }}
+                      >
+                        {sentimentLabel}
+                      </span>
+                    </div>
+                    {Array.isArray(fb.tags) && fb.tags.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: fb.comment ? 8 : 0 }}>
+                        {fb.tags.map((tag: string, idx: number) => (
+                          <span
+                            key={idx}
+                            style={{
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              padding: '3px 8px',
+                              borderRadius: 999,
+                              background: '#f8fafc',
+                              color: '#334155',
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {fb.comment && (
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          color: '#334155',
+                          fontStyle: 'italic',
+                          lineHeight: 1.5,
+                          background: '#f8fafc',
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        "{fb.comment}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
 
               {/* ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN (ĐƯỢC CHUYỂN XUỐNG DƯỚI CÙNG VỚI TONE MÀU NHẸ NHÀNG, KHÔNG CHÓI) */}
               {selectedSosDetail.shoreHandoff && selectedSosDetail.shoreHandoff.status !== 'NONE' && (

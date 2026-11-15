@@ -349,6 +349,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               return 'CITIZEN';
             })(),
             shoreHandoff: item.shoreHandoff || undefined,
+            citizenFeedback: item.citizenFeedback || undefined,
             requestedSupplies: Array.isArray(item.assignment?.requestedSupplies)
               ? item.assignment.requestedSupplies
               : Array.isArray(item.requestedSupplies)

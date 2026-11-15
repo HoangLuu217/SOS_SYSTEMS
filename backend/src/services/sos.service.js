@@ -1074,6 +1074,53 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
 
 };
 
+/**
+ * Người dân gửi phản hồi / góp ý sau khi ca cứu hộ đã hoàn thành
+ */
+const submitFeedback = async (id, feedbackData = {}, user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  const isAdmin = user.roles?.includes('ADMIN');
+  const isOwner = sos.citizenId && sos.citizenId.toString() === user._id.toString();
+  if (!isOwner && !isAdmin) {
+    throw new ApiError(403, 'Chỉ người dân gửi yêu cầu SOS mới có quyền gửi phản hồi');
+  }
+
+  if (sos.status !== 'COMPLETED') {
+    throw new ApiError(400, 'Chỉ có thể gửi phản hồi sau khi yêu cầu cứu hộ đã hoàn thành');
+  }
+
+  const allowedSentiments = ['SATISFIED', 'NEUTRAL', 'NEEDS_IMPROVEMENT'];
+  const sentiment = allowedSentiments.includes(feedbackData.sentiment)
+    ? feedbackData.sentiment
+    : 'SATISFIED';
+
+  const tags = Array.isArray(feedbackData.tags)
+    ? feedbackData.tags
+        .map((t) => String(t || '').trim())
+        .filter(Boolean)
+        .slice(0, 10)
+    : [];
+
+  const comment = String(feedbackData.comment || '').trim().slice(0, 1000);
+
+  sos.citizenFeedback = {
+    sentiment,
+    tags,
+    comment,
+    submittedAt: new Date(),
+    submittedBy: user._id,
+  };
+  await sos.save();
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
+};
+
 module.exports = {
   createSosRequest,
   getSosRequests,
@@ -1091,5 +1138,5 @@ module.exports = {
 
   deleteSos,
   clearCancelledSos,
-
+  submitFeedback,
 };
