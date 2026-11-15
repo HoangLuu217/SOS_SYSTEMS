@@ -21,6 +21,12 @@ router.get('/local-authority', optionalAuthenticate, chatController.getLocalAuth
  */
 router.get('/emergency-directory', optionalAuthenticate, chatController.getEmergencyDirectory);
 
+/**
+ * @route   GET /chat/ward-options
+ * @desc    Lấy danh sách các Phường / Xã / Địa phương có cán bộ trực ban hoặc trong hệ thống
+ */
+router.get('/ward-options', optionalAuthenticate, chatController.getWardOptions);
+
 // Các routes còn lại yêu cầu đăng nhập
 router.use(authenticate);
 

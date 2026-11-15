@@ -1152,6 +1152,177 @@ class ChatService {
   }
 
   /**
+   * Lấy danh sách các Phường / Xã / Địa phương cứu hộ khả dụng kèm cán bộ trực ban phụ trách
+   */
+  async getWardOptions({ search } = {}) {
+    const { User, AuthorityOrganization, AdministrativeArea } = require('../models');
+
+    // 1. Danh sách cơ sở mặc định
+    const defaultWards = [
+      { ward: 'Phường Hải Châu', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Châu, Thành phố Đà Nẵng' },
+      { ward: 'Phường Thanh Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Thanh Khê, Thành phố Đà Nẵng' },
+      { ward: 'Phường An Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Khê, Thành phố Đà Nẵng' },
+      { ward: 'Phường Hòa Cường', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Cường, Thành phố Đà Nẵng' },
+      { ward: 'Phường Sơn Trà', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Sơn Trà, Thành phố Đà Nẵng' },
+      { ward: 'Phường An Hải', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Hải, Thành phố Đà Nẵng' },
+      { ward: 'Phường Ngũ Hành Sơn', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng' },
+      { ward: 'Phường Hải Vân', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Vân, Thành phố Đà Nẵng' },
+      { ward: 'Đặc khu Hoàng Sa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Đặc khu Hoàng Sa, Thành phố Đà Nẵng' },
+      { ward: 'Xã Duy Nghĩa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Xã Duy Nghĩa, Thành phố Đà Nẵng' },
+      { ward: 'Phường Liên Chiểu', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Liên Chiểu, Thành phố Đà Nẵng' },
+      { ward: 'Phường Hòa Khánh', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Khánh, Thành phố Đà Nẵng' },
+      { ward: 'Phường Cẩm Lệ', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Cẩm Lệ, Thành phố Đà Nẵng' },
+      { ward: 'Phường Hòa Xuân', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Xuân, Thành phố Đà Nẵng' },
+      { ward: 'Phường Điện Bàn', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Điện Bàn, Thành phố Đà Nẵng' },
+      { ward: 'Xã Hòa Vang', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Vang, Thành phố Đà Nẵng' },
+      { ward: 'Xã Hòa Tiến', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Tiến, Thành phố Đà Nẵng' },
+      { ward: 'Xã Bà Nà', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Bà Nà, Thành phố Đà Nẵng' },
+    ];
+
+    const results = [];
+    const seenWards = new Set();
+
+    const normalizeKey = (str = '') => {
+      return String(str)
+        .toLowerCase()
+        .replace(/^(phường|xã|thị trấn|quận|huyện|thị xã|tp\.?|thành phố)\s+/i, '')
+        .trim();
+    };
+
+    const addWardOption = (opt) => {
+      if (!opt || !opt.ward) return;
+      const cleanWardName = opt.ward.trim();
+      const normKey = normalizeKey(cleanWardName);
+      if (!normKey || seenWards.has(normKey)) return;
+      seenWards.add(normKey);
+
+      results.push({
+        ward: cleanWardName,
+        category: opt.category || 'Ngoại thành',
+        province: opt.province || 'Thành phố Đà Nẵng',
+        fullName: opt.fullName || `${cleanWardName}, ${opt.province || 'Thành phố Đà Nẵng'}`,
+        officerName: opt.officerName || null,
+        phone: opt.phone || null,
+      });
+    };
+
+    // 2. Quét tất cả Cán bộ LOCAL_AUTHORITY trong CSDL (bao gồm cán bộ Xã Duy Nghĩa mới tạo)
+    try {
+      const officers = await User.find({
+        roles: 'LOCAL_AUTHORITY',
+        status: { $ne: 'SUSPENDED' },
+      })
+        .select('fullName phone email roles authority address')
+        .lean();
+
+      for (const officer of officers) {
+        const area = officer.authority?.areaName || officer.address || '';
+        if (!area) continue;
+
+        const parts = area.split(',').map((s) => s.trim()).filter(Boolean);
+        let wardName = parts[0] || area;
+        let provName = parts[parts.length - 1] || 'Thành phố Đà Nẵng';
+        if (
+          !provName.toLowerCase().includes('tỉnh') &&
+          !provName.toLowerCase().includes('thành phố') &&
+          !provName.toLowerCase().includes('tp')
+        ) {
+          provName = 'Thành phố Đà Nẵng';
+        }
+
+        if (!/^(phường|xã|thị trấn|đặc khu|quận|huyện)/i.test(wardName)) {
+          wardName = `Xã ${wardName}`;
+        }
+
+        let cat = 'Ngoại thành';
+        const lower = wardName.toLowerCase();
+        if (/hải châu|thanh khê|an khê|hòa cường/i.test(lower)) {
+          cat = 'Trung tâm';
+        } else if (/sơn trà|an hải|ngũ hành sơn|hải vân|hoàng sa|ven biển|cửa đại|duy nghĩa/i.test(lower)) {
+          cat = 'Ven biển';
+        } else if (/liên chiểu|hòa khánh|cẩm lệ|hòa xuân|điện bàn/i.test(lower)) {
+          cat = 'Đô thị mới';
+        }
+
+        addWardOption({
+          ward: wardName,
+          category: cat,
+          province: provName,
+          fullName: area.includes(',') ? area : `${wardName}, ${provName}`,
+          officerName: officer.fullName,
+          phone: officer.phone,
+        });
+      }
+    } catch (err) {
+      console.warn('[Get Ward Options Officers Error]:', err.message);
+    }
+
+    // 3. Quét thêm từ AuthorityOrganization (các UBND / Ban Chỉ Huy)
+    try {
+      const orgs = await AuthorityOrganization.find({ status: 'ACTIVE' })
+        .select('name address phone')
+        .lean();
+
+      for (const org of orgs) {
+        const rawName = org.name || '';
+        const match = rawName.match(/(phường|xã|thị trấn)\s+([^,]+)/i);
+        if (match) {
+          const wardTitle = `${match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase()} ${match[2].trim()}`;
+          addWardOption({
+            ward: wardTitle,
+            category: 'Trung tâm',
+            province: 'Thành phố Đà Nẵng',
+            fullName: `${wardTitle}, Thành phố Đà Nẵng`,
+            officerName: org.name,
+            phone: org.phone,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Get Ward Options Orgs Error]:', err.message);
+    }
+
+    // 4. Quét thêm từ AdministrativeArea nếu có
+    try {
+      const adminWards = await AdministrativeArea.find({
+        type: { $in: ['WARD', 'DISTRICT'] },
+      })
+        .select('name type')
+        .limit(100)
+        .lean();
+
+      for (const aw of adminWards) {
+        addWardOption({
+          ward: aw.name,
+          category: 'Ngoại thành',
+          province: 'Thành phố Đà Nẵng',
+          fullName: `${aw.name}, Thành phố Đà Nẵng`,
+        });
+      }
+    } catch (err) {
+      // Ignore
+    }
+
+    // 5. Thêm các xã/phường mặc định vào danh sách nếu chưa có
+    for (const dw of defaultWards) {
+      addWardOption(dw);
+    }
+
+    // 6. Lọc tìm kiếm nếu người dùng gửi query search
+    if (search && String(search).trim()) {
+      const q = String(search).toLowerCase().trim();
+      return results.filter((item) =>
+        (item.ward && item.ward.toLowerCase().includes(q)) ||
+        (item.fullName && item.fullName.toLowerCase().includes(q)) ||
+        (item.category && item.category.toLowerCase().includes(q)) ||
+        (item.officerName && item.officerName.toLowerCase().includes(q))
+      );
+    }
+
+    return results;
+  }
+
+  /**
    * Đẩy thông báo ra ngoài app (Expo Push Notification) và lưu vào bảng Notification
    * khi cán bộ địa phương gửi tin nhắn cho người dân (hoặc ngược lại)
    */

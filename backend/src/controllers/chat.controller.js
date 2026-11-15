@@ -160,6 +160,20 @@ class ChatController {
       next(error);
     }
   }
+
+  /**
+   * GET /chat/ward-options
+   * Danh sách các Phường / Xã / Địa phương có cán bộ trực ban phụ trách
+   */
+  async getWardOptions(req, res, next) {
+    try {
+      const { search } = req.query;
+      const list = await chatService.getWardOptions({ search });
+      return sendSuccess(res, 200, 'Lấy danh sách phường xã cứu hộ thành công', list);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new ChatController();
