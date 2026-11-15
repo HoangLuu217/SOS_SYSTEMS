@@ -108,6 +108,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   // Modal Điều hướng Tác chiến Thực địa GrabDriver
   const [workspaceVisible, setWorkspaceVisible] = useState(false);
+  const workspaceVisibleRef = useRef(workspaceVisible);
+  useEffect(() => {
+    workspaceVisibleRef.current = workspaceVisible;
+  }, [workspaceVisible]);
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
   const activeWorkspaceMissionRef = useRef<SosAssignmentData | null>(null);
   const myTeamIdRef = useRef<string | null>(null);
@@ -158,17 +162,40 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           }
 
           // Đồng bộ ngầm nhiệm vụ đang mở trong Workspace nếu có thay đổi vật tư / trạng thái từ Web
-          if (workspaceVisible && activeWorkspaceMissionRef.current?._id) {
-            const updatedOpenMission = res.data.find(
-              (m) => String(m._id) === String(activeWorkspaceMissionRef.current?._id)
-            );
-            if (updatedOpenMission) {
-              setActiveWorkspaceMission(updatedOpenMission);
+          if (workspaceVisibleRef.current) {
+            const curOpenId = activeWorkspaceMissionRef.current?._id ? String(activeWorkspaceMissionRef.current._id) : null;
+            if (curOpenId) {
+              const updatedOpenMission = res.data.find(
+                (m) => String(m._id) === curOpenId
+              );
+              if (!updatedOpenMission || ['CANCELLED', 'REJECTED'].includes(updatedOpenMission.status)) {
+                setWorkspaceVisible(false);
+                setActiveWorkspaceMission(null);
+                dismissedMissionsRef.current.add(curOpenId);
+                DeviceEventEmitter.emit('assignment:cancelled', {
+                  assignmentId: curOpenId,
+                  reason: updatedOpenMission?.cancelReason,
+                });
+                setStatusNotice({
+                  visible: true,
+                  type: 'warning',
+                  title: 'Nhiệm Vụ Đã Bị Hủy',
+                  message: updatedOpenMission?.cancelReason
+                    ? `Ban chỉ huy địa phương đã hủy phân công nhiệm vụ này.\nLý do: ${updatedOpenMission.cancelReason}`
+                    : 'Ban chỉ huy địa phương đã hủy hoặc điều phối lại nhiệm vụ này.',
+                  actionText: 'Đã hiểu',
+                });
+              } else {
+                setActiveWorkspaceMission(updatedOpenMission);
+              }
+            } else if (activeList.length === 0) {
+              setWorkspaceVisible(false);
+              setActiveWorkspaceMission(null);
             }
           }
 
           // TỰ ĐỘNG BAY VÔ TRANG TÁC CHIẾN KHI CÓ NHIỆM VỤ ĐIỀU PHỐI (Chỉ mở nhiệm vụ đang thực hiện)
-          if (activeList.length > 0 && !workspaceVisible) {
+          if (activeList.length > 0 && !workspaceVisibleRef.current) {
             const ongoingStatuses = ['RESCUING', 'ARRIVED', 'EN_ROUTE', 'IN_PROGRESS', 'ACCEPTED'];
             const targetMission = activeList.find((m) => ongoingStatuses.includes(m.status)) || activeList[0];
             if (!dismissedMissionsRef.current.has(targetMission._id)) {
@@ -178,6 +205,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           }
         } else {
           setMissions([]);
+          if (workspaceVisibleRef.current) {
+            setWorkspaceVisible(false);
+            setActiveWorkspaceMission(null);
+          }
           if (prevCountRef.current !== 0) {
             prevCountRef.current = 0;
             onMissionsCountChange?.(0);
@@ -375,29 +406,51 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     // Lắng nghe khi Ban chỉ huy trên Web HỦY LỆNH điều động -> Mất lệnh ngay lập tức!
     const handleCancelledMission = (payload?: any) => {
       console.log('⚠️ [RescuerMissionScreen] Lệnh điều động đã bị hủy:', payload);
-      // Nếu đang mở workspace của ca bị hủy, tự động đóng ngay lập tức
-      if (activeWorkspaceMissionRef.current) {
-        const curAssignId = activeWorkspaceMissionRef.current._id;
-        const curSosId = activeWorkspaceMissionRef.current.sosRequestId?._id;
-        if (
-          !payload ||
-          !payload.assignmentId ||
-          String(payload.assignmentId) === String(curAssignId) ||
-          String(payload.sosId) === String(curSosId)
-        ) {
-          setWorkspaceVisible(false);
-          setActiveWorkspaceMission(null);
-          setStatusNotice({
-            visible: true,
-            type: 'warning',
-            title: 'Điều Động Đã Bị Hủy',
-            message: payload?.reason
-              ? `Ban chỉ huy đã thu hồi / hủy lệnh điều động ca này.\nLý do: ${payload.reason}`
-              : 'Ban chỉ huy đã thu hồi hoặc hủy bỏ lệnh điều động.',
-            actionText: 'Đã hiểu',
-          });
+      const payloadAssignId = payload?.assignmentId || payload?._id || payload?.id;
+      const payloadSosId = payload?.sosId || (typeof payload?.sosRequestId === 'object' ? payload?.sosRequestId?._id : payload?.sosRequestId);
+
+      // 1. Lọc ngay lập tức khỏi state missions để UI loại bỏ ca này tức thì
+      setMissions((prev) =>
+        prev.filter((m) => {
+          const mAssignId = String(m._id || (m as any).id || '');
+          const mSosId = String(typeof m.sosRequestId === 'object' ? m.sosRequestId?._id : (m.sosRequestId || (m as any).sosId || ''));
+          if (payloadAssignId && mAssignId === String(payloadAssignId)) return false;
+          if (payloadSosId && mSosId === String(payloadSosId)) return false;
+          return true;
+        })
+      );
+
+      // 2. Nếu đang mở workspace của ca bị hủy, tự động đóng ngay lập tức
+      const curAssignId = activeWorkspaceMissionRef.current?._id;
+      const curSosId = typeof activeWorkspaceMissionRef.current?.sosRequestId === 'object'
+        ? activeWorkspaceMissionRef.current?.sosRequestId?._id
+        : (activeWorkspaceMissionRef.current?.sosRequestId || (activeWorkspaceMissionRef.current as any)?.sosId);
+
+      const isMatch =
+        !payload ||
+        (!payloadAssignId && !payloadSosId) ||
+        (payloadAssignId && curAssignId && String(payloadAssignId) === String(curAssignId)) ||
+        (payloadSosId && curSosId && String(payloadSosId) === String(curSosId));
+
+      if (isMatch && (activeWorkspaceMissionRef.current || workspaceVisibleRef.current)) {
+        if (curAssignId) {
+          dismissedMissionsRef.current.add(String(curAssignId));
         }
+        setWorkspaceVisible(false);
+        setActiveWorkspaceMission(null);
+        setStatusNotice({
+          visible: true,
+          type: 'warning',
+          title: 'Điều Động Đã Bị Hủy',
+          message: payload?.reason
+            ? `Ban chỉ huy đã thu hồi / hủy lệnh điều động ca này.\nLý do: ${payload.reason}`
+            : 'Ban chỉ huy đã thu hồi hoặc hủy bỏ lệnh điều động.',
+          actionText: 'Đã hiểu',
+        });
       }
+
+      // Phát sự kiện để Modal con (RescuerMissionWorkspaceModal) tự đóng sub-modal và thoát
+      DeviceEventEmitter.emit('assignment:cancelled', payload);
       fetchMissions({ isSilent: true });
       DeviceEventEmitter.emit('sos:sync');
     };
@@ -410,6 +463,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         fetchMissions({ isSilent: true });
         DeviceEventEmitter.emit('sos:sync');
       }, 250);
+    };
+
+    const handleAssignmentUpdated = (payload?: any) => {
+      if (payload?.status === 'CANCELLED' || payload?.status === 'REJECTED') {
+        handleCancelledMission(payload);
+        return;
+      }
+      handleSync();
     };
 
     const handleSupplyApproved = (payload?: any) => {
@@ -430,8 +491,8 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
     s.on('assignment:cancelled', handleCancelledMission);
     s.on('assignment:deleted', handleCancelledMission);
-    s.on('assignment:updated', handleSync);
-    s.on('assignment:status_updated', handleSync);
+    s.on('assignment:updated', handleAssignmentUpdated);
+    s.on('assignment:status_updated', handleAssignmentUpdated);
     s.on('assignment:completed', handleSync);
     s.on('assignment:supply_requested', handleSync);
     s.on('assignment:supply_approved', handleSupplyApproved);
@@ -485,8 +546,8 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         s.off('assignment:assigned', handleNewMission);
         s.off('assignment:cancelled', handleCancelledMission);
         s.off('assignment:deleted', handleCancelledMission);
-        s.off('assignment:updated', handleSync);
-        s.off('assignment:status_updated', handleSync);
+        s.off('assignment:updated', handleAssignmentUpdated);
+        s.off('assignment:status_updated', handleAssignmentUpdated);
         s.off('assignment:completed', handleSync);
         s.off('assignment:supply_requested', handleSync);
         s.off('assignment:supply_approved', handleSupplyApproved);
@@ -664,6 +725,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       return;
     }
 
+    const prevMissions = missions;
+    if (targetStatus !== 'COMPLETED' && mission) {
+      setMissions((prev) =>
+        prev.map((m) =>
+          m._id === missionId ? { ...m, status: targetStatus } : m
+        )
+      );
+    }
+
     try {
       setIsSubmitting(true);
       setSubmittingMissionId(missionId);
@@ -815,6 +885,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           });
         }
       } else {
+        if (targetStatus !== 'COMPLETED') {
+          setMissions(prevMissions);
+        }
         setStatusNotice({
           visible: true,
           type: 'error',
@@ -824,6 +897,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         });
       }
     } catch (err: any) {
+      if (targetStatus !== 'COMPLETED') {
+        setMissions(prevMissions);
+      }
       setStatusNotice({
         visible: true,
         type: 'error',
@@ -2853,6 +2929,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               prev.map((m) =>
                 m._id === missionId ? { ...m, status: updatedStatus as SosAssignmentStatus } : m
               )
+            );
+            setActiveWorkspaceMission((prev) =>
+              prev && prev._id === missionId
+                ? { ...prev, status: updatedStatus as SosAssignmentStatus }
+                : prev
             );
           }
           fetchMissions({ isSilent: true });

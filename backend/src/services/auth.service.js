@@ -29,7 +29,7 @@ const getLogoPath = () => {
   return null;
 };
 
-// Khởi tạo transporter Resend SMTP - Đọc hoàn toàn từ file .env
+// Khởi tạo transporter Resend SMTP - Đọc hoàn toàn từ file .env với connectionTimeout ngắn chống treo trên Cloud
 const getResendTransporter = () => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -39,6 +39,9 @@ const getResendTransporter = () => {
     host: 'smtp.resend.com',
     port: 465,
     secure: true,
+    connectionTimeout: 2500,
+    greetingTimeout: 2500,
+    socketTimeout: 4000,
     auth: {
       user: 'resend',
       pass: apiKey,
@@ -46,7 +49,7 @@ const getResendTransporter = () => {
   });
 };
 
-// Gửi email qua Resend (Hỗ trợ cả SMTP và HTTPS REST API fallback nếu mạng chặn port)
+// Gửi email qua Resend (Ưu tiên HTTPS REST API port 443 trước để 100% không bị Cloud Firewall chặn SMTP)
 const sendResendEmail = async ({ to, subject, html, text, attachments = [] }) => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -56,25 +59,8 @@ const sendResendEmail = async ({ to, subject, html, text, attachments = [] }) =>
   const fromAddress = sender.includes('<') ? sender : `Cứu Hộ Cứu Nạn <${sender}>`;
 
   let lastError = null;
-  // 1. Thử gửi qua Resend SMTP trước
-  try {
-    const transporter = getResendTransporter();
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      to,
-      subject,
-      html,
-      text,
-      attachments,
-    });
-    console.log(`[Resend SMTP] Đã gửi email thành công tới ${to}`);
-    return { success: true, info };
-  } catch (smtpErr) {
-    console.warn(`[Resend SMTP warning]: ${smtpErr.message}. Đang thử fallback qua Resend REST API...`);
-    lastError = smtpErr;
-  }
 
-  // 2. Fallback qua Resend REST API HTTPS (port 443)
+  // 1. ƯU TIÊN 1: Gửi qua Resend REST API HTTPS (port 443) - Cực nhanh, không bị chặn bởi Cloud firewall (Render/Railway/Vercel)
   try {
     const payload = {
       from: fromAddress,
@@ -90,18 +76,38 @@ const sendResendEmail = async ({ to, subject, html, text, attachments = [] }) =>
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(6000),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Resend REST API error (${response.status}): ${errText}`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`[Resend REST API] Đã gửi email thành công tới ${to}:`, data.id);
+      return { success: true, data };
     }
-    const data = await response.json();
-    console.log(`[Resend REST API] Đã gửi email thành công tới ${to}:`, data.id);
-    return { success: true, data };
+    const errText = await response.text();
+    console.warn(`[Resend REST API error (${response.status})]: ${errText}. Đang thử SMTP fallback...`);
+    lastError = new Error(errText);
   } catch (apiErr) {
-    console.error(`[Resend REST API error]:`, apiErr.message);
-    throw new ApiError(500, `Không thể gửi email qua Resend: ${apiErr.message || lastError?.message}`);
+    console.warn(`[Resend REST API error]: ${apiErr.message}. Đang thử SMTP fallback...`);
+    lastError = apiErr;
+  }
+
+  // 2. Dự phòng: Thử gửi qua Resend SMTP nếu REST API gặp lỗi
+  try {
+    const transporter = getResendTransporter();
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to,
+      subject,
+      html,
+      text,
+      attachments,
+    });
+    console.log(`[Resend SMTP] Đã gửi email thành công tới ${to}`);
+    return { success: true, info };
+  } catch (smtpErr) {
+    console.error(`[Resend SMTP error]:`, smtpErr.message);
+    throw new ApiError(500, `Không thể gửi email qua Resend: ${lastError?.message || smtpErr.message}`);
   }
 };
 

@@ -15,8 +15,14 @@ import {
   Compass,
   XCircle,
   Clock,
-  Download
+  FileSpreadsheet
 } from 'lucide-react';
+import {
+  exportWorkbookSheets,
+  buildSheetFormHeader,
+  appendDataTable,
+  formatDateVi,
+} from '@/features/admin/exportReportsExcel';
 import type { User } from '@/types/auth';
 import type { HazardReportItem, AdministrativeAreaItem } from '@/types/dashboard';
 import {
@@ -777,17 +783,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       }
     };
 
-    const handleExportHazardsCsv = () => {
-      const escapeCsvCell = (val: unknown): string => {
-        const str = val === null || val === undefined ? '' : String(val);
-        return `"${str.replace(/"/g, '""')}"`;
-      };
+    const handleExportHazardsExcel = () => {
+      if (sortedReports.length === 0) {
+        showToast('Chưa có điểm nguy hiểm nào để xuất file Excel!', 'error');
+        return;
+      }
 
       const getStatusLabel = (status: string) => {
         if (status === 'APPROVED') return 'Đã duyệt';
         if (status === 'PENDING') return 'Chờ thẩm định';
         if (status === 'REJECTED') return 'Từ chối';
-        return status || '';
+        return status || '—';
       };
 
       const headers = [
@@ -801,47 +807,90 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         'Mô tả hiện trường',
         'Người báo cáo',
         'SĐT người báo',
-        'Vĩ độ (Lat)',
-        'Kinh độ (Lng)',
+        'Link GPS Google Maps',
+        'Link ảnh hiện trường',
         'Thời gian ghi nhận',
       ];
 
-      const rows = sortedReports.map((r, idx) => {
+      let approvedCount = 0;
+      let pendingCount = 0;
+      let rejectedCount = 0;
+      let highSeverityCount = 0;
+
+      const dataMatrix = sortedReports.map((r, idx) => {
         const typeCfg = getHazardTypeConfig(r.hazardType, r.customHazardType);
         const sevCfg = getSeverityBadge(r.severity);
         const reporterName = typeof r.reportedBy === 'object' ? (r.reportedBy?.fullName || 'Người dân') : 'Hệ thống';
-        const reporterPhone = typeof r.reportedBy === 'object' ? (r.reportedBy?.phone || '') : '';
+        const reporterPhone = typeof r.reportedBy === 'object' ? (r.reportedBy?.phone || '—') : '—';
         const coords = r.location?.coordinates;
+        const mapsLink =
+          Array.isArray(coords) && coords.length === 2
+            ? `https://www.google.com/maps/search/?api=1&query=${Number(coords[1]).toFixed(6)},${Number(coords[0]).toFixed(6)}`
+            : '—';
+        const imageList = Array.isArray(r.images) ? r.images.filter(Boolean) : [];
+        const imageLinks = imageList.length > 0 ? imageList.join('\n') : '—';
+
+        if (r.status === 'APPROVED') approvedCount += 1;
+        else if (r.status === 'PENDING') pendingCount += 1;
+        else if (r.status === 'REJECTED') rejectedCount += 1;
+        if (r.severity === 'CRITICAL' || r.severity === 'HIGH') highSeverityCount += 1;
+
         return [
-          idx + 1,
-          r.title || '',
-          typeCfg.label,
-          sevCfg.label,
-          getStatusLabel(r.status),
-          getHazardDistrictName(r),
-          r.address || '',
-          r.description || '',
-          reporterName,
-          reporterPhone,
-          Array.isArray(coords) && coords.length === 2 ? coords[1] : '',
-          Array.isArray(coords) && coords.length === 2 ? coords[0] : '',
-          formatHazardTime(r.createdAt),
+          { v: idx + 1, align: 'center' as const },
+          { v: r.title || '—', align: 'left' as const },
+          { v: typeCfg.label, align: 'center' as const },
+          { v: sevCfg.label, align: 'center' as const },
+          { v: getStatusLabel(r.status), align: 'center' as const },
+          { v: getHazardDistrictName(r), align: 'left' as const },
+          { v: r.address || '—', align: 'left' as const },
+          { v: r.description || '—', align: 'left' as const },
+          { v: reporterName, align: 'left' as const },
+          { v: reporterPhone, align: 'center' as const },
+          { v: mapsLink, align: 'left' as const },
+          { v: imageLinks, align: 'left' as const },
+          { v: formatDateVi(r.createdAt), align: 'center' as const },
         ];
       });
 
-      const csvContent =
-        '\uFEFF' +
-        [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Danh_sach_diem_nguy_hiem_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast(`Đã xuất ${sortedReports.length} điểm nguy hiểm ra file CSV!`, 'success');
+      const { rows, merges } = buildSheetFormHeader(
+        'BÁO CÁO ĐIỂM NGUY HIỂM & HIỆN TRƯỜNG THIÊN TAI — HỆ THỐNG CỨU HỘ KHẨN CẤP (SOS)',
+        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm nguy hiểm: ${sortedReports.length}`,
+        headers.length,
+        [
+          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm nguy hiểm', sortedReports.length],
+          ['Đã duyệt hiển thị', approvedCount, 'Chờ thẩm định', pendingCount],
+          ['Đã từ chối', rejectedCount, 'Mức độ Rất cao / Cao', highSeverityCount],
+        ]
+      );
+
+      appendDataTable(rows, headers, dataMatrix, [
+        'TỔNG',
+        `${sortedReports.length} điểm nguy hiểm`,
+        '',
+        `Cao/Rất cao: ${highSeverityCount}`,
+        `Duyệt: ${approvedCount} | Chờ: ${pendingCount}`,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+
+      exportWorkbookSheets(
+        [
+          {
+            name: 'Diem nguy hiem',
+            colWidths: [7, 28, 18, 18, 16, 22, 30, 34, 22, 16, 46, 46, 20],
+            rows,
+            merges,
+          },
+        ],
+        `Bao_cao_diem_nguy_hiem_${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+      showToast(`Đã xuất ${sortedReports.length} điểm nguy hiểm ra file Excel!`, 'success');
     };
 
     const notifyInvalidImageFile = () => {
@@ -1453,21 +1502,25 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <button
           type="button"
-          className="sos-btn-flat"
-          onClick={handleExportHazardsCsv}
+          onClick={handleExportHazardsExcel}
           style={{
-            padding: '8px 14px',
+            padding: '7px 12px',
+            borderRadius: 8,
+            border: '1px solid #bbf7d0',
+            background: '#f0fdf4',
+            color: '#15803d',
             fontSize: '13px',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
             fontWeight: 600,
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
-          title="Xuất danh sách điểm nguy hiểm đang lọc ra file CSV"
+          title="Xuất danh sách điểm nguy hiểm đang lọc ra file Excel có biểu mẫu"
         >
-          <Download size={15} />
-          <span>Xuất CSV</span>
+          <FileSpreadsheet size={15} />
+          <span>Xuất Excel</span>
         </button>
 
         <button

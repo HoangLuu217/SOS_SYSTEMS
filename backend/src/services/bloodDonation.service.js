@@ -290,9 +290,19 @@ class BloodDonationService {
 
     const unrespondedCount = enrichedEvents.filter((ev) => !ev.myResponse).length;
 
+    const donationHistory = await BloodDonationRegistration.find({
+      userId: user._id,
+      registrationType: 'EVENT_REGISTRATION',
+      status: 'COMPLETED',
+    })
+      .populate('eventId', 'title locationName address eventDate startTime endTime organizerName')
+      .sort({ updatedAt: -1 })
+      .lean();
+
     return {
       myPreRegistration: myPreRegistration || null,
       activeEvents: enrichedEvents,
+      donationHistory,
       unrespondedCount,
       provinces,
     };
@@ -1045,6 +1055,10 @@ class BloodDonationService {
 
     const nextStatus = data.status || reg.status;
     const nextBloodType = data.bloodType || reg.bloodType;
+    const nextVolumeMl =
+      data.donatedVolumeMl !== undefined && data.donatedVolumeMl !== null && data.donatedVolumeMl !== ''
+        ? Number(data.donatedVolumeMl)
+        : reg.donatedVolumeMl;
 
     if (nextStatus === 'COMPLETED' && (!nextBloodType || nextBloodType === 'UNKNOWN')) {
       throw new ApiError(
@@ -1053,11 +1067,26 @@ class BloodDonationService {
       );
     }
 
+    if (nextStatus === 'COMPLETED' && (!nextVolumeMl || !Number.isFinite(nextVolumeMl) || nextVolumeMl <= 0)) {
+      throw new ApiError(
+        400,
+        'Vui lòng nhập số lượng máu đã hiến (ml) hợp lệ trước khi xác nhận Đã hiến máu.'
+      );
+    }
+
     if (data.status) {
       reg.status = data.status;
     }
     if (data.bloodType) {
       reg.bloodType = data.bloodType;
+    }
+    if (data.donatedVolumeMl !== undefined) {
+      reg.donatedVolumeMl =
+        data.donatedVolumeMl === null || data.donatedVolumeMl === ''
+          ? null
+          : Number(data.donatedVolumeMl);
+    } else if (data.status && data.status !== 'COMPLETED') {
+      reg.donatedVolumeMl = null;
     }
     if (data.note !== undefined) {
       reg.note = data.note;

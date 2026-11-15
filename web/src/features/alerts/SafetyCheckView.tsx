@@ -33,11 +33,12 @@ import {
   X,
   MapPin,
   Square,
-  Download,
+  FileSpreadsheet,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import './SafetyCheckView.css';
 
@@ -377,24 +378,33 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     }
   };
 
-  // Đóng đợt kiểm tra an toàn
-  const handleCloseCheck = async (check: SafetyCheckItem) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn đóng đợt kiểm tra an toàn "${check.title}"?`)) {
-      return;
-    }
+  const [closingTarget, setClosingTarget] = useState<SafetyCheckItem | null>(null);
+  const [submittingClose, setSubmittingClose] = useState(false);
 
+  // Mở modal xác nhận đóng đợt kiểm tra an toàn
+  const handleCloseCheck = (check: SafetyCheckItem) => {
+    setClosingTarget(check);
+  };
+
+  // Xác nhận đóng đợt kiểm tra an toàn
+  const confirmCloseCheck = async () => {
+    if (!closingTarget || submittingClose) return;
+    setSubmittingClose(true);
     try {
-      const res = await closeSafetyCheckApi(check._id);
+      const res = await closeSafetyCheckApi(closingTarget._id);
       if (res.success) {
         toast.success('Đã kết thúc đợt kiểm tra an toàn.');
         loadSafetyChecks();
         window.dispatchEvent(new CustomEvent('sos_data_updated'));
-        if (viewingCheck?._id === check._id) {
+        if (viewingCheck?._id === closingTarget._id) {
           setViewingCheck({ ...viewingCheck, status: 'CLOSED' });
         }
+        setClosingTarget(null);
       }
     } catch (err: any) {
       toast.error('Lỗi khi đóng đợt: ' + err.message);
+    } finally {
+      setSubmittingClose(false);
     }
   };
 
@@ -499,7 +509,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
       'Số người',
       'Tình hình / Lời nhắn ghi chú',
       'Địa chỉ ghi nhận',
-      'Tọa độ GPS (Lat, Lng)',
+      'Link GPS Google Maps',
       'Mã SOS liên kết',
       'Thời gian phản hồi',
     ];
@@ -535,7 +545,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             const address = item.address || '—';
             const coords =
               Array.isArray(item.location?.coordinates) && item.location.coordinates.length >= 2
-                ? `${Number(item.location.coordinates[1]).toFixed(6)}, ${Number(item.location.coordinates[0]).toFixed(6)}`
+                ? `https://www.google.com/maps/search/?api=1&query=${Number(item.location.coordinates[1]).toFixed(6)},${Number(item.location.coordinates[0]).toFixed(6)}`
                 : '—';
             const sosCode =
               typeof item.sosRequestId === 'object' && item.sosRequestId?.sosCode
@@ -551,7 +561,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               { v: peopleCount, align: 'right' as const },
               { v: note, align: 'left' as const },
               { v: address, align: 'left' as const },
-              { v: coords, align: 'center' as const },
+              { v: coords, align: 'left' as const },
               { v: sosCode, align: 'center' as const },
               { v: formatDateVi(item.respondedAt), align: 'center' as const },
             ];
@@ -587,7 +597,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     const rawTabName = `${tabPrefix}${check.title || 'Kiểm tra an toàn'}`;
     return {
       name: rawTabName,
-      colWidths: [7, 25, 16, 22, 12, 35, 34, 24, 18, 20],
+      colWidths: [7, 25, 16, 22, 12, 35, 34, 46, 18, 20],
       rows,
       merges,
     };
@@ -669,13 +679,27 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
       <button
         type="button"
-        className="sos-btn-flat"
         onClick={handleExportChecksCsv}
         disabled={exportingAllChecks || filteredAndSortedChecks.length === 0}
         title="Xuất biểu mẫu Excel: mỗi đợt kiểm tra an toàn là 1 tab kèm đầy đủ người phản hồi"
+        style={{
+          padding: '7px 12px',
+          borderRadius: 8,
+          border: '1px solid #bbf7d0',
+          background: '#f0fdf4',
+          color: '#15803d',
+          fontWeight: 600,
+          fontSize: 13,
+          cursor: exportingAllChecks || filteredAndSortedChecks.length === 0 ? 'not-allowed' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          whiteSpace: 'nowrap',
+          opacity: exportingAllChecks || filteredAndSortedChecks.length === 0 ? 0.65 : 1,
+        }}
       >
-        {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <Download size={14} />}
-        <span>{exportingAllChecks ? 'Đang xuất...' : 'Xuất CSV'}</span>
+        {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <FileSpreadsheet size={14} />}
+        <span>{exportingAllChecks ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
       </button>
 
       <button
@@ -950,11 +974,11 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
           <table className="sos-clean-table">
             <thead>
               <tr>
-                <th style={{ width: '45px', textAlign: 'center', padding: '10px 8px' }}>STT</th>
+                <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px', textAlign: 'center', padding: '10px 6px' }}>STT</th>
                 <th
                   className={`sortable ${sortField === 'title' ? 'sorted' : ''}`}
                   onClick={() => handleSort('title')}
-                  style={{ width: '28%' }}
+                  style={{ width: 'auto' }}
                   title="Nhấn để sắp xếp theo tên đợt kiểm tra"
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -1395,18 +1419,32 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   type="button"
-                  className="sos-btn-flat"
                   onClick={handleExportResponsesCsv}
                   disabled={exportingSingleCheckId === viewingCheck._id}
                   title="Xuất riêng biểu mẫu đợt kiểm tra này (1 tab Excel kèm đầy đủ người phản hồi)"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #bbf7d0',
+                    background: '#f0fdf4',
+                    color: '#15803d',
+                    fontWeight: 600,
+                    fontSize: 12.5,
+                    cursor: exportingSingleCheckId === viewingCheck._id ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap',
+                    opacity: exportingSingleCheckId === viewingCheck._id ? 0.65 : 1,
+                  }}
                 >
                   {exportingSingleCheckId === viewingCheck._id ? (
                     <RefreshCw size={13} className="fa-spin" />
                   ) : (
-                    <Download size={13} />
+                    <FileSpreadsheet size={13} />
                   )}
                   <span>
-                    {exportingSingleCheckId === viewingCheck._id ? 'Đang xuất...' : 'Xuất CSV phản hồi'}
+                    {exportingSingleCheckId === viewingCheck._id ? 'Đang xuất Excel...' : 'Xuất Excel phản hồi'}
                   </span>
                 </button>
 
@@ -1934,6 +1972,92 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC NHẬN ĐÓNG ĐỢT KIỂM TRA AN TOÀN */}
+      {closingTarget && (
+        <div
+          className="sc-modal-overlay"
+          style={{ zIndex: 10010 }}
+          onClick={() => !submittingClose && setClosingTarget(null)}
+        >
+          <div
+            className="sc-modal-card"
+            style={{ maxWidth: 460 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sc-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: '#FEF2F2',
+                    color: '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>Xác nhận đóng đợt kiểm tra</h3>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    Hành động này sẽ kết thúc đợt tiếp nhận phản hồi
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="sc-modal-close"
+                onClick={() => !submittingClose && setClosingTarget(null)}
+                disabled={submittingClose}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sc-modal-body" style={{ fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
+              Bạn có chắc chắn muốn đóng đợt kiểm tra an toàn{' '}
+              <strong style={{ color: '#0F172A' }}>"{closingTarget.title}"</strong>?
+            </div>
+
+            <div className="sc-modal-footer">
+              <button
+                type="button"
+                className="sos-btn-flat"
+                onClick={() => setClosingTarget(null)}
+                disabled={submittingClose}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="sos-btn-flat"
+                style={{
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  borderColor: '#DC2626',
+                }}
+                onClick={confirmCloseCheck}
+                disabled={submittingClose}
+              >
+                {submittingClose ? (
+                  <>
+                    <RefreshCw size={14} className="fa-spin" /> Đang đóng...
+                  </>
+                ) : (
+                  <>
+                    <Square size={14} /> Đóng đợt
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

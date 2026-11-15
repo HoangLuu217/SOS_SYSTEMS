@@ -676,12 +676,17 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const handleBatchDelete = () => {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
+    const isArchivedTab = activeTab === 'archived';
     setConfirmModal({
       isOpen: true,
-      title: `Xác nhận xóa ${count} bản tin đã chọn`,
-      message: `Bạn có chắc chắn muốn xóa/lưu trữ đồng loạt ${count} bản tin đã chọn? Sau khi xóa, các bản tin này sẽ không còn hiển thị và bị gỡ bỏ khỏi ứng dụng di động.`,
+      title: isArchivedTab
+        ? `Xác nhận xóa vĩnh viễn ${count} bản tin đã chọn`
+        : `Xác nhận xóa ${count} bản tin đã chọn`,
+      message: isArchivedTab
+        ? `Các bản tin này đang nằm trong kho lưu trữ. Bạn có chắc chắn muốn xóa vĩnh viễn đồng loạt ${count} bản tin đã chọn khỏi cơ sở dữ liệu? Hành động này không thể hoàn tác.`
+        : `Bạn có chắc chắn muốn xóa/lưu trữ đồng loạt ${count} bản tin đã chọn? Sau khi xóa, các bản tin này sẽ không còn hiển thị và bị gỡ bỏ khỏi ứng dụng di động.`,
       type: 'danger',
-      confirmText: `Xóa ${count} bản tin`,
+      confirmText: isArchivedTab ? `Xóa vĩnh viễn (${count})` : `Xóa ${count} bản tin`,
       cancelText: 'Hủy bỏ',
       onConfirm: async () => {
         try {
@@ -691,14 +696,23 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           await Promise.all(
             ids.map(async (id) => {
               try {
-                await deleteWeatherArticleApi(id);
+                const article = articles.find((a) => a._id === id);
+                const shouldPermanent = isArchivedTab || article?.status === 'ARCHIVED';
+                await deleteWeatherArticleApi(id, shouldPermanent ? { permanent: true } : undefined);
                 successCount++;
               } catch (e) {
                 console.error(`Lỗi xóa ID ${id}:`, e);
               }
             })
           );
-          toast.success(`Đã xóa thành công ${successCount}/${ids.length} bản tin đã chọn!`);
+          toast.success(
+            isArchivedTab
+              ? `Đã xóa vĩnh viễn thành công ${successCount}/${ids.length} bản tin đã chọn!`
+              : `Đã xóa thành công ${successCount}/${ids.length} bản tin đã chọn!`
+          );
+          if (detailItem && ids.includes(detailItem._id)) {
+            setDetailItem(null);
+          }
           setSelectedIds(new Set());
           fetchArticles();
         } catch (err: any) {
@@ -1030,7 +1044,11 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               disabled={batchLoading}
             >
               <Trash2 size={15} />
-              {batchLoading ? 'Đang xóa...' : `Xóa ${selectedIds.size} bản tin đã chọn`}
+              {batchLoading
+                ? 'Đang xóa...'
+                : activeTab === 'archived'
+                  ? `Xóa vĩnh viễn ${selectedIds.size} bản tin đã chọn`
+                  : `Xóa ${selectedIds.size} bản tin đã chọn`}
             </button>
             <button className="btn-batch-clear" onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
