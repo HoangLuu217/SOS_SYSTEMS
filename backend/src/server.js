@@ -40,7 +40,7 @@ const startServer = async () => {
     // Đảm bảo khu vực Điện Bàn Đông & tài khoản Cán bộ canbo.dienban@rescuesos.gov.vn luôn hoạt động
     try {
       const bcrypt = require('bcryptjs');
-      const { AdministrativeArea, AuthorityOrganization, User } = require('./models');
+      const { AdministrativeArea, AuthorityOrganization, User, RescueTeam, Vehicle } = require('./models');
 
       // 1. Kiểm tra hoặc tạo khu vực Điện Bàn Đông
       let area = await AdministrativeArea.findOne({
@@ -121,6 +121,91 @@ const startServer = async () => {
           }
         );
         console.log('✅ [Sync] Đã đồng bộ & kích hoạt tài khoản: canbo.dienban@rescuesos.gov.vn (Pass: 123456)');
+      }
+
+      // 4. Đảm bảo Phường Điện Bàn Đông có đội cứu hộ & phương tiện để điều phối tác chiến
+      let dbdLeader = await User.findOne({ phone: '0905888111' });
+      if (!dbdLeader) {
+        dbdLeader = await User.create({
+          fullName: 'Trần Minh Quân',
+          phone: '0905888111',
+          email: 'quan.rescuer.dbd@sos.vn',
+          passwordHash: defaultHash,
+          roles: ['RESCUER', 'CITIZEN'],
+          status: 'ACTIVE',
+          isPhoneVerified: true,
+          address: 'Phường Điện Bàn Đông, TP Đà Nẵng',
+          currentLocation: { type: 'Point', coordinates: [108.3185, 15.8915] },
+          rescuer: {
+            idNumber: '049091008811',
+            skills: ['Lái ca-nô vượt lũ', 'Chỉ huy cứu hộ'],
+            experience: '6 năm cứu hộ vùng lũ',
+            vehicleType: 'BOAT',
+            verificationStatus: 'VERIFIED',
+            availabilityStatus: 'AVAILABLE',
+          },
+        });
+      }
+
+      let dbdMember = await User.findOne({ phone: '0905888222' });
+      if (!dbdMember) {
+        dbdMember = await User.create({
+          fullName: 'Lê Văn Hùng',
+          phone: '0905888222',
+          email: 'hung.rescuer.dbd@sos.vn',
+          passwordHash: defaultHash,
+          roles: ['RESCUER'],
+          status: 'ACTIVE',
+          isPhoneVerified: true,
+          address: 'Phường Điện Bàn Đông, TP Đà Nẵng',
+          currentLocation: { type: 'Point', coordinates: [108.3190, 15.8920] },
+          rescuer: {
+            idNumber: '049093008822',
+            skills: ['Sơ cấp cứu', 'Bơi lội cứu nạn'],
+            experience: '4 năm cứu hộ',
+            vehicleType: 'BOAT',
+            verificationStatus: 'VERIFIED',
+            availabilityStatus: 'AVAILABLE',
+          },
+        });
+      }
+
+      let teamDBD = await RescueTeam.findOne({
+        $or: [{ name: /43-DBD-01/i }, { name: /Điện Bàn Đông/i }],
+      });
+      if (!teamDBD) {
+        teamDBD = await RescueTeam.create({
+          name: 'Đội Cứu Hộ Phản Ứng Nhanh Điện Bàn Đông (43-DBD-01)',
+          type: 'FLOOD_RESCUE',
+          leaderId: dbdLeader._id,
+          authorityId: org._id,
+          areaId: area._id,
+          description: 'Đội cứu hộ cơ động địa bàn Phường Điện Bàn Đông, trang bị ca-nô và vật tư sơ cứu.',
+          status: 'ACTIVE',
+          members: [
+            { rescuerId: dbdLeader._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
+            { rescuerId: dbdMember._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
+          ],
+        });
+        console.log('✅ [Seed] Đã tạo Đội cứu hộ Điện Bàn Đông (43-DBD-01)');
+      } else if (String(teamDBD.areaId) !== String(area._id) || String(teamDBD.authorityId) !== String(org._id)) {
+        teamDBD.areaId = area._id;
+        teamDBD.authorityId = org._id;
+        teamDBD.status = 'ACTIVE';
+        await teamDBD.save();
+      }
+
+      let boatDBD = await Vehicle.findOne({ plateNumber: '43-CN-DBD1' });
+      if (!boatDBD) {
+        await Vehicle.create({
+          teamId: teamDBD._id,
+          type: 'BOAT',
+          plateNumber: '43-CN-DBD1',
+          capacity: 8,
+          status: 'AVAILABLE',
+          description: 'Ca-nô cứu hộ chuyên dụng địa bàn Phường Điện Bàn Đông, trang bị áo phao & bộ đàm.',
+        });
+        console.log('✅ [Seed] Đã tạo Phương tiện cho Đội 43-DBD-01: 43-CN-DBD1');
       }
     } catch (authErr) {
       console.warn('⚠️ Lỗi kiểm tra tài khoản canbo.dienban:', authErr.message);

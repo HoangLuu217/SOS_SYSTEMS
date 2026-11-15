@@ -57,6 +57,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const [proofPhotos, setProofPhotos] = useState<Array<{ uri: string; base64?: string }>>([]);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [feedbackModalData, setFeedbackModalData] = useState<{
+    sosCode: string;
+    citizenName: string;
+    address: string;
+    sentiment: 'SATISFIED' | 'NEUTRAL' | 'NEEDS_IMPROVEMENT';
+    comment: string;
+    submittedAt?: string;
+  } | null>(null);
   const [imagePreview, setImagePreview] = useState<{
     images: string[];
     index: number;
@@ -1113,20 +1122,47 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           : 'SOS-KHẨN')}
                     </Text>
                   </View>
-                  {['CANCELLED', 'REJECTED'].includes(item.status) ? (
-                    <View
-                      style={[
-                        styles.priorityBadge,
-                        { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-                      ]}
-                    >
-                      <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 11 }}>
-                        {item.status === 'REJECTED' ? 'ĐÃ TỪ CHỐI' : 'ĐÃ HỦY LỆNH'}
-                      </Text>
-                    </View>
-                  ) : (
-                    renderPriorityBadge(item.priority || sos?.priority)
-                  )}
+                  <View style={styles.cardHeaderRight}>
+                    {item.status === 'COMPLETED' && sos?.citizenFeedback?.submittedAt ? (
+                      <TouchableOpacity
+                        style={styles.feedbackIconBtn}
+                        onPress={() =>
+                          setFeedbackModalData({
+                            sosCode:
+                              sos?.sosCode ||
+                              `SOS-${String(sos?._id || '').slice(-4).toUpperCase()}`,
+                            citizenName: sos?.citizenId?.fullName || 'Người dân',
+                            address: sos?.address || '',
+                            sentiment:
+                              sos.citizenFeedback?.sentiment === 'NEUTRAL'
+                                ? 'NEUTRAL'
+                                : sos.citizenFeedback?.sentiment === 'NEEDS_IMPROVEMENT'
+                                ? 'NEEDS_IMPROVEMENT'
+                                : 'SATISFIED',
+                            comment: (sos.citizenFeedback?.comment || '').trim(),
+                            submittedAt: sos.citizenFeedback?.submittedAt,
+                          })
+                        }
+                        activeOpacity={0.75}
+                      >
+                        <Feather name="message-square" size={14} color="#0284C7" />
+                      </TouchableOpacity>
+                    ) : null}
+                    {['CANCELLED', 'REJECTED'].includes(item.status) ? (
+                      <View
+                        style={[
+                          styles.priorityBadge,
+                          { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+                        ]}
+                      >
+                        <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 11 }}>
+                          {item.status === 'REJECTED' ? 'ĐÃ TỪ CHỐI' : 'ĐÃ HỦY LỆNH'}
+                        </Text>
+                      </View>
+                    ) : (
+                      renderPriorityBadge(item.priority || sos?.priority)
+                    )}
+                  </View>
                 </View>
 
                 {/* Emergency Category Tag */}
@@ -2066,6 +2102,109 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         onClose={() => setImagePreview(null)}
         useModal={true}
       />
+
+      {/* 4.5 Modal xem đánh giá của người dân cho từng nhiệm vụ */}
+      <Modal
+        visible={Boolean(feedbackModalData)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFeedbackModalData(null)}
+      >
+        <View style={styles.feedbackModalOverlay}>
+          <View style={styles.feedbackModalCard}>
+            <View style={styles.feedbackModalHeader}>
+              <View style={styles.feedbackModalTitleGroup}>
+                <Text style={styles.feedbackModalTitle}>Đánh giá từ người dân</Text>
+                {feedbackModalData?.sosCode ? (
+                  <Text style={styles.feedbackModalCode}>{feedbackModalData.sosCode}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={styles.feedbackModalCloseBtn}
+                onPress={() => setFeedbackModalData(null)}
+                activeOpacity={0.7}
+              >
+                <Feather name="x" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            {feedbackModalData ? (
+              <>
+                <View style={styles.feedbackModalMetaRow}>
+                  <Text style={styles.feedbackModalCitizen}>
+                    Người gửi:{' '}
+                    <Text style={styles.feedbackModalCitizenName}>
+                      {feedbackModalData.citizenName}
+                    </Text>
+                  </Text>
+                  <View
+                    style={[
+                      styles.feedbackSentimentPill,
+                      feedbackModalData.sentiment === 'SATISFIED'
+                        ? styles.feedbackPillSatisfied
+                        : feedbackModalData.sentiment === 'NEUTRAL'
+                        ? styles.feedbackPillNeutral
+                        : styles.feedbackPillImprove,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.feedbackSentimentText,
+                        feedbackModalData.sentiment === 'SATISFIED'
+                          ? styles.feedbackTextSatisfied
+                          : feedbackModalData.sentiment === 'NEUTRAL'
+                          ? styles.feedbackTextNeutral
+                          : styles.feedbackTextImprove,
+                      ]}
+                    >
+                      {feedbackModalData.sentiment === 'SATISFIED'
+                        ? 'Hài lòng'
+                        : feedbackModalData.sentiment === 'NEUTRAL'
+                        ? 'Bình thường'
+                        : 'Cần cải thiện'}
+                    </Text>
+                  </View>
+                </View>
+
+                {feedbackModalData.address ? (
+                  <View style={styles.feedbackModalAddrRow}>
+                    <Feather name="map-pin" size={13} color="#64748B" />
+                    <Text style={styles.feedbackModalAddrText} numberOfLines={2}>
+                      {feedbackModalData.address}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.feedbackModalCommentBox}>
+                  {feedbackModalData.comment ? (
+                    <Text style={styles.feedbackModalCommentText}>
+                      "{feedbackModalData.comment}"
+                    </Text>
+                  ) : (
+                    <Text style={styles.feedbackModalEmptyComment}>
+                      Người dân không để lại lời nhắn thêm.
+                    </Text>
+                  )}
+                </View>
+
+                {feedbackModalData.submittedAt ? (
+                  <Text style={styles.feedbackModalTime}>
+                    Gửi lúc: {formatCompletedTime(feedbackModalData.submittedAt)}
+                  </Text>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.feedbackModalConfirmBtn}
+                  onPress={() => setFeedbackModalData(null)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.feedbackModalConfirmText}>Đóng</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
 
       {/* 5. Modal Tác chiến Thực địa GrabDriver */}
       <RescuerMissionWorkspaceModal
@@ -3164,4 +3303,182 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // Full Image Lightbox Preview Modal
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 99,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+  },
+  imagePreviewFull: {
+    width: '92%',
+    height: '75%',
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  feedbackIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  feedbackModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  feedbackModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  feedbackModalTitleGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  feedbackModalTitle: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  feedbackModalCode: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  feedbackModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackModalMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  feedbackModalCitizen: {
+    flex: 1,
+    fontSize: 13,
+    color: '#475569',
+  },
+  feedbackModalCitizenName: {
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  feedbackSentimentPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  feedbackPillSatisfied: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  feedbackPillNeutral: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  feedbackPillImprove: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  feedbackSentimentText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  feedbackTextSatisfied: {
+    color: '#0284C7',
+  },
+  feedbackTextNeutral: {
+    color: '#D97706',
+  },
+  feedbackTextImprove: {
+    color: '#DC2626',
+  },
+  feedbackModalAddrRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: 12,
+  },
+  feedbackModalAddrText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  feedbackModalCommentBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  feedbackModalCommentText: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: '#1E293B',
+    fontStyle: 'italic',
+  },
+  feedbackModalEmptyComment: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  feedbackModalTime: {
+    marginTop: 10,
+    fontSize: 11.5,
+    color: '#94A3B8',
+    textAlign: 'right',
+    fontWeight: '600',
+  },
+  feedbackModalConfirmBtn: {
+    marginTop: 14,
+    backgroundColor: '#0066FF',
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  feedbackModalConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 });
