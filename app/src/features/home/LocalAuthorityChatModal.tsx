@@ -267,7 +267,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
       }
 
       const socket = io(socketUrl, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         extraHeaders: {
           'Bypass-Tunnel-Reminder': 'true',
         },
