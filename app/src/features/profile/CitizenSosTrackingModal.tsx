@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
+import { findWardAuthorityByAddress } from '@/constants/wardAuthorities';
 import { PROFILE_THEME } from './theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -1044,23 +1045,31 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   </TouchableOpacity>
                 </View>
               ) : (
-                <View style={[styles.teamInfoBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', paddingVertical: 12 }]}>
-                  <View style={styles.teamMainInfo}>
-                    <Text style={[styles.teamName, { color: '#475569', fontSize: 13 }]}>⏳ Đang chờ Ban chỉ huy điều phối lực lượng</Text>
-                    <Text style={[styles.teamLeader, { color: '#64748B', fontSize: 12, marginTop: 4, lineHeight: 17 }]}>
-                      Thông tin Đội cứu hộ, Chỉ huy và SĐT liên hệ trực tiếp sẽ tự động hiển thị ngay khi lệnh xuất kích được duyệt.
-                    </Text>
-                  </View>
+                (() => {
+                  const matchedWardAuth = findWardAuthorityByAddress(sos?.address);
+                  const fallbackPhone = matchedWardAuth?.phone || '112';
+                  return (
+                    <View style={[styles.teamInfoBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', paddingVertical: 12 }]}>
+                      <View style={styles.teamMainInfo}>
+                        <Text style={[styles.teamName, { color: '#475569', fontSize: 13 }]}>⏳ Đang chờ Ban chỉ huy điều phối lực lượng</Text>
+                        <Text style={[styles.teamLeader, { color: '#64748B', fontSize: 12, marginTop: 4, lineHeight: 17 }]}>
+                          {matchedWardAuth
+                            ? `Đội cứu hộ sẽ hiển thị khi lệnh xuất kích được duyệt. Cần gấp, bấm gọi ${matchedWardAuth.ward}.`
+                            : 'Đội cứu hộ sẽ hiển thị ngay khi lệnh xuất kích được duyệt.'}
+                        </Text>
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.callRescuerBtn, { backgroundColor: '#DC2626' }]}
-                    onPress={() => Linking.openURL('tel:112')}
-                    activeOpacity={0.8}
-                  >
-                    <Feather name="phone-call" size={15} color="#FFFFFF" />
-                    <Text style={styles.callRescuerBtnText}>Gọi 112</Text>
-                  </TouchableOpacity>
-                </View>
+                      <TouchableOpacity
+                        style={[styles.callRescuerBtn, { backgroundColor: '#0066FF' }]}
+                        onPress={() => Linking.openURL(`tel:${fallbackPhone}`)}
+                        activeOpacity={0.8}
+                      >
+                        <Feather name="phone-call" size={15} color="#FFFFFF" />
+                        <Text style={styles.callRescuerBtnText}>Gọi điện</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()
               )}
 
               {/* Danh sách vật tư kho khu vực đã cấp phát thực tế */}
@@ -1123,159 +1132,172 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             </View>
 
             {/* 5. KHỐI HỒ SƠ YÊU CẦU BẠN ĐÃ GỬI (Đối soát tránh hoang mang nhầm ca) */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardHeaderIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                  <Feather name="file-text" size={18} color="#0066FF" />
-                </View>
-                <Text style={styles.cardSectionTitle}>Hồ sơ cứu nạn bạn đã gửi</Text>
-              </View>
-
-              {/* Số người & Loại tình huống */}
-              <View style={styles.requestGrid2}>
-                <View style={styles.requestMiniBox}>
-                  <Text style={styles.requestMiniLabel}>Số người gặp nạn</Text>
-                  <Text style={styles.requestMiniValueBold}>👥 {peopleCount} người</Text>
-                </View>
-                <View style={styles.requestMiniBox}>
-                  <Text style={styles.requestMiniLabel}>Loại yêu cầu</Text>
-                  <Text style={styles.requestMiniValue} numberOfLines={2}>{typeLabelText}</Text>
-                </View>
-              </View>
-
-              {/* Đánh giá mức độ nguy hiểm từ hệ thống AI & Thuật toán */}
-              {(() => {
-                const prio = sos?.priority || 'UNASSESSED';
-                const reasons: string[] = Array.isArray(sos?.riskAssessment?.reasons)
-                  ? sos.riskAssessment.reasons
-                  : Array.isArray(sos?.aiAssessment?.reasons)
-                    ? sos.aiAssessment.reasons
+            {(() => {
+              const prio = sos?.priority || 'UNASSESSED';
+              const reasons: string[] = Array.isArray(sos?.riskAssessment?.reasons)
+                ? sos.riskAssessment.reasons
+                : Array.isArray(sos?.aiAssessment?.reasons)
+                  ? sos.aiAssessment.reasons
                   : [];
-                const aiIsPending = sos?.aiAssessment?.status === 'PENDING';
-                const prioLabel =
-                  prio === 'CRITICAL'
-                    ? 'NGUY CẤP'
-                    : prio === 'HIGH'
-                      ? 'KHẨN CẤP'
+              const aiIsPending = sos?.aiAssessment?.status === 'PENDING';
+              const prioLabel =
+                prio === 'CRITICAL'
+                  ? 'NGUY CẤP'
+                  : prio === 'HIGH'
+                    ? 'KHẨN CẤP'
                     : prio === 'LOW'
-                        ? 'MỨC THẤP'
+                      ? 'MỨC THẤP'
                       : prio === 'UNASSESSED'
                         ? 'ĐANG PHÂN LOẠI'
                         : 'TRUNG BÌNH';
-                const prioColor =
-                  prio === 'CRITICAL'
-                    ? '#DC2626'
-                    : prio === 'HIGH'
-                      ? '#EA580C'
-                      : prio === 'LOW'
-                        ? '#0284C7'
-                        : '#CA8A04';
-                const prioBg =
-                  prio === 'CRITICAL'
-                    ? '#FEF2F2'
-                    : prio === 'HIGH'
-                      ? '#FFF7ED'
-                      : prio === 'LOW'
-                        ? '#F0F9FF'
-                        : '#FEFCE8';
+              const hasAiInfo =
+                reasons.length > 0 ||
+                aiIsPending ||
+                sos?.aiAssessment?.status === 'UNAVAILABLE' ||
+                sos?.aiAssessment?.status === 'FAILED' ||
+                sos?.aiAssessment?.status === 'COMPLETED';
 
-                return (
-                  <View
-                    style={{
-                      marginTop: 10,
-                      padding: 10,
-                      borderRadius: 10,
-                      backgroundColor: prioBg,
-                      borderWidth: 1,
-                      borderColor: prioColor + '33',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                        Mức SOS {sos?.priorityLockedByAuthority ? '(Cán bộ xác minh)' : '(AI đề xuất)'}:
-                      </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: prioColor }}>
+              return (
+                <View style={styles.card}>
+                  <View style={[styles.cardHeader, { justifyContent: 'space-between' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View style={[styles.cardHeaderIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                        <Feather name="file-text" size={18} color="#0066FF" />
+                      </View>
+                      <Text style={styles.cardSectionTitle}>Hồ sơ cứu nạn bạn đã gửi</Text>
+                    </View>
+                    <View
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        backgroundColor: '#EFF6FF',
+                        borderWidth: 1,
+                        borderColor: '#BFDBFE',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284C7' }}>
                         {prioLabel}
                       </Text>
                     </View>
-                    {reasons.length > 0 && (
-                      <Text style={{ fontSize: 11.5, color: '#475569', marginTop: 4, lineHeight: 16 }}>
-                        • {reasons.slice(0, 2).join('\n• ')}
-                      </Text>
-                    )}
-                    {aiIsPending && (
-                      <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 4 }}>
-                        AI đang phân tích SOS; mức ưu tiên sẽ được cập nhật khi có kết quả.
-                      </Text>
-                    )}
-                    {sos?.aiAssessment?.status === 'UNAVAILABLE' && (
-                      <Text style={{ fontSize: 10.5, color: '#92400e', marginTop: 4 }}>AI chưa khả dụng; cán bộ cần phân loại SOS.</Text>
-                    )}
-                    {sos?.aiAssessment?.status === 'FAILED' && (
-                      <Text style={{ fontSize: 10.5, color: '#b91c1c', marginTop: 4 }}>AI chưa phân tích được; cán bộ cần xem xét SOS.</Text>
-                    )}
-                    {sos?.aiAssessment?.status === 'COMPLETED' && (
-                      <Text style={{ fontSize: 10.5, color: '#4338CA', marginTop: 4 }}>
-                        AI đề xuất: {sos.aiAssessment.recommendedPriority || 'chưa phân loại'}
-                      </Text>
-                    )}
                   </View>
-                );
-              })()}
 
-              {/* Danh sách đối tượng ưu tiên */}
-              {priorityGroups && priorityGroups.length > 0 && (
-                <View style={styles.priorityBox}>
-                  <Text style={styles.priorityBoxTitle}>Đối tượng ưu tiên cần bảo vệ đặc biệt:</Text>
-                  <Text style={styles.priorityText}>
-                    {priorityGroups.join(', ')}
-                  </Text>
-                </View>
-              )}
+                  {/* Số người & Loại tình huống */}
+                  <View style={styles.requestGrid2}>
+                    <View style={styles.requestMiniBox}>
+                      <Text style={styles.requestMiniLabel}>Số người gặp nạn</Text>
+                      <Text style={styles.requestMiniValueBold}>👥 {peopleCount} người</Text>
+                    </View>
+                    <View style={styles.requestMiniBox}>
+                      <Text style={styles.requestMiniLabel}>Loại yêu cầu</Text>
+                      <Text style={styles.requestMiniValue} numberOfLines={2}>{typeLabelText}</Text>
+                    </View>
+                  </View>
 
-              {/* Địa chỉ hiện trường */}
-              <View style={styles.infoRow}>
-                <Feather name="map-pin" size={16} color="#0066FF" style={{ marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>Địa chỉ bạn đã gửi:</Text>
-                  <Text style={styles.infoTextValue}>{sos?.address || 'Đã gửi tọa độ GPS vệ tinh'}</Text>
-                </View>
-              </View>
-
-              {/* Lời nhắn / Mô tả */}
-              {sos?.description && (parsedTags.length > 0 || parsedUserNote) ? (
-                <View style={styles.descBox}>
-                  <Text style={styles.descBoxLabel}>Nội dung mô tả tình hình:</Text>
-
-                  {parsedTags.length > 0 && (
-                    <View style={styles.descTagsCol}>
-                      {parsedTags.map((tag: string, idx: number) => (
-                        <View key={idx} style={styles.descTagRow}>
-                          <View style={styles.descTagBullet} />
-                          <Text style={styles.descTagText}>{tag}</Text>
-                        </View>
-                      ))}
+                  {/* Danh sách đối tượng ưu tiên */}
+                  {priorityGroups && priorityGroups.length > 0 && (
+                    <View style={styles.infoRow}>
+                      <View style={{ width: 18, alignItems: 'center', marginTop: 2 }}>
+                        <Feather name="users" size={15} color="#0284C7" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.infoLabel}>Đối tượng ưu tiên cần bảo vệ đặc biệt:</Text>
+                        <Text style={styles.priorityText}>
+                          {priorityGroups.join(', ')}
+                        </Text>
+                      </View>
                     </View>
                   )}
 
-                  {parsedUserNote ? (
-                    <View style={[styles.descUserNoteBox, parsedTags.length > 0 && { marginTop: 8 }]}>
-                      <Text style={styles.descUserNoteLabel}>Ghi chú khẩn cấp của bạn:</Text>
-                      <Text style={styles.descUserNoteText}>{parsedUserNote}</Text>
+                  {/* Địa chỉ hiện trường */}
+                  <View style={styles.infoRow}>
+                    <View style={{ width: 18, alignItems: 'center', marginTop: 2 }}>
+                      <Feather name="map-pin" size={15} color="#0066FF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.infoLabel}>Địa chỉ bạn đã gửi:</Text>
+                      <Text style={styles.infoTextValue}>{sos?.address || 'Đã gửi tọa độ GPS vệ tinh'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Gộp chung Đề xuất AI & Nội dung mô tả tình hình vào 1 ô đồng bộ */}
+                  {(hasAiInfo || (sos?.description && (parsedTags.length > 0 || parsedUserNote))) ? (
+                    <View style={[styles.descBox, { marginTop: 12 }]}>
+                      {hasAiInfo && (
+                        <View
+                          style={
+                            sos?.description && (parsedTags.length > 0 || parsedUserNote)
+                              ? { marginBottom: 12 }
+                              : undefined
+                          }
+                        >
+                          {sos?.aiAssessment?.status === 'COMPLETED' && (
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0284C7', marginBottom: reasons.length > 0 ? 4 : 0 }}>
+                              AI đề xuất: {sos.aiAssessment.recommendedPriority || 'chưa phân loại'}
+                            </Text>
+                          )}
+                          {aiIsPending && (
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: '#0284C7', marginBottom: reasons.length > 0 ? 4 : 0 }}>
+                              AI đang phân tích SOS...
+                            </Text>
+                          )}
+                          {sos?.aiAssessment?.status === 'UNAVAILABLE' && (
+                            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: reasons.length > 0 ? 4 : 0 }}>
+                              AI chưa khả dụng; cán bộ sẽ phân loại SOS trực tiếp.
+                            </Text>
+                          )}
+                          {sos?.aiAssessment?.status === 'FAILED' && (
+                            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: reasons.length > 0 ? 4 : 0 }}>
+                              AI chưa phân tích được; cán bộ sẽ xem xét SOS trực tiếp.
+                            </Text>
+                          )}
+                          {reasons.length > 0 && (
+                            <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                              • {reasons.slice(0, 2).join('\n• ')}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      {sos?.description && (parsedTags.length > 0 || parsedUserNote) ? (
+                        <View>
+                          <Text style={styles.descBoxLabel}>Nội dung mô tả tình hình:</Text>
+
+                          {parsedTags.length > 0 && (
+                            <View style={styles.descTagsCol}>
+                              {parsedTags.map((tag: string, idx: number) => (
+                                <View key={idx} style={styles.descTagRow}>
+                                  <View style={styles.descTagBullet} />
+                                  <Text style={styles.descTagText}>{tag}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {parsedUserNote ? (
+                            <View style={[styles.descUserNoteBox, parsedTags.length > 0 && { marginTop: 8 }]}>
+                              <Text style={styles.descUserNoteLabel}>Ghi chú khẩn cấp của bạn:</Text>
+                              <Text style={styles.descUserNoteText}>{parsedUserNote}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
-                </View>
-              ) : null}
 
               {/* Số điện thoại liên hệ của người dân */}
-              <View style={styles.infoRow}>
-                <Feather name="phone" size={16} color="#16A34A" />
+              <View style={[styles.infoRow, { alignItems: 'center', marginBottom: 0 }]}>
+                <View style={{ width: 18, alignItems: 'center' }}>
+                  <Feather name="phone" size={15} color="#16A34A" />
+                </View>
                 <Text style={styles.infoLabel}>Số điện thoại của bạn:</Text>
-                <Text style={[styles.infoTextValue, { fontWeight: '700', color: '#0F172A' }]}>
+                <Text style={[styles.infoTextValue, { fontWeight: '700', color: '#0F172A', marginTop: 0 }]}>
                   {sos?.contactPhone || 'Chưa cung cấp'}
                 </Text>
               </View>
             </View>
+              );
+            })()}
 
             {/* 6. NÚT HÀNH ĐỘNG: CẬP NHẬT THÔNG TIN / XÁC NHẬN AN TOÀN */}
             {currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && currentStatus !== 'REJECTED' ? (
@@ -2363,10 +2385,10 @@ const styles = StyleSheet.create({
   },
   descBox: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#0066FF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     marginBottom: 12,
   },
   descBoxLabel: {

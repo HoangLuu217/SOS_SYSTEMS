@@ -1,0 +1,127 @@
+HUONG DAN DEPLOY SOS_SYSTEMS BANG DOCKER TREN LINUX
+===================================================
+
+Huong dan nay danh cho nhanh Git deploy-docker:
+- Web: app.hoangluu.id.vn -> Linux localhost:5173 -> web container port 80.
+- API: api.hoangluu.id.vn -> Linux localhost:5001 -> backend container port 5000.
+- MongoDB: container sos-mongodb, volume mongodb_data.
+- MongoDB Compass tren Windows ket noi qua SSH forwarding; khong public port 27017.
+
+1. CLONE REPO VA KIEM TRA DOCKER
+--------------------------------
+Neu chua clone:
+git clone --branch deploy-docker --single-branch https://github.com/HoangLuu217/SOS_SYSTEMS.git
+cd ~/SOS_SYSTEMS
+
+Neu da clone:
+cd ~/SOS_SYSTEMS
+git fetch origin
+git switch deploy-docker
+git pull --ff-only origin deploy-docker
+
+docker --version
+docker compose version
+
+2. TAO ENV BACKEND
+------------------
+cp backend/.env.example backend/.env
+nano backend/.env
+
+Dat toi thieu:
+NODE_ENV=production
+PORT=5000
+CLIENT_URL=https://app.hoangluu.id.vn
+JWT_SECRET=<chuoi-ngau-nhien-dai-va-rieng>
+JWT_REFRESH_SECRET=<chuoi-ngau-nhien-dai-khac>
+
+Compose tu ghi de MONGODB_URI de backend ket noi MongoDB container:
+mongodb://mongodb:27017/sos_systems
+Khong dung localhost cho MONGODB_URI trong Docker. Dien cac khoa dich vu khac neu can.
+Khong dung secret mau. Luu nano bang Ctrl+O, Enter; thoat bang Ctrl+X.
+
+3. BUILD VA CHAY DOCKER
+-----------------------
+Tai thu muc ~/SOS_SYSTEMS:
+docker compose up -d --build
+docker compose ps
+
+Kiem tra cac endpoint noi bo:
+curl http://localhost:5173/api/health
+curl http://localhost:5001/api/health
+Hai lenh can tra ve JSON co status OK.
+
+Xem log neu gap loi:
+docker compose logs --tail=100
+docker compose logs --tail=100 backend
+
+4. GAN DOMAIN QUA CLOUDFLARE TUNNEL
+-----------------------------------
+Tunnel cloudflared can chay tren Linux. Mo file:
+sudo nano /etc/cloudflared/config.yml
+
+Trong muc ingress, giu cac route khac dang dung va bao dam co cac route sau:
+  - hostname: ssh.hoangluu.id.vn
+    service: ssh://localhost:22
+  - hostname: api.hoangluu.id.vn
+    service: http://localhost:5001
+  - hostname: app.hoangluu.id.vn
+    service: http://localhost:5173
+
+Rule fallback phai nam cuoi:
+  - service: http_status:404
+
+Khong them HTTP ingress cho MongoDB. Luu nano: Ctrl+O, Enter; thoat: Ctrl+X.
+
+Kiem tra ingress truoc khi restart:
+sudo cloudflared tunnel ingress validate
+sudo cloudflared tunnel ingress rule https://ssh.hoangluu.id.vn
+sudo systemctl restart cloudflared
+sudo systemctl --no-pager -l status cloudflared
+
+Bao dam Cloudflare Tunnel co DNS/Public Hostname cho app va api. Truy cap:
+Web: https://app.hoangluu.id.vn
+API health: https://api.hoangluu.id.vn/api/health
+
+5. CAU HINH APP MOBILE
+----------------------
+Trong app/.env dat:
+EXPO_PUBLIC_API_URL=https://api.hoangluu.id.vn/api
+Build lai mobile app de ap dung URL moi. Socket.IO cung dung hostname API.
+
+Web khong can khai bao API URL public. Web goi /api va /socket.io cung origin app domain;
+Nginx trong container web proxy request toi backend.
+
+6. KET NOI MONGODB COMPASS TREN WINDOWS
+---------------------------------------
+MongoDB chi bind vao Linux loopback 127.0.0.1:27017. Khong public port 27017.
+Khi SSH Access hoat dong, mo PowerShell va chay:
+ssh -N -L 27018:127.0.0.1:27017 myserver
+
+De cua so PowerShell mo khi dung Compass. Connection string:
+mongodb://127.0.0.1:27018/sos_systems
+Nhan Ctrl+C de dong ket noi. Muon ket noi truc tiep khong qua SSH thi can bat MongoDB
+authentication va firewall chi cho phep IP Windows truoc khi public port.
+
+7. NEU SSH CLOUDFLARE BI LOI
+----------------------------
+Neu thay websocket: bad handshake, vao Linux bang console truc tiep/console VPS va kiem tra:
+sudo cloudflared tunnel ingress validate
+sudo cloudflared tunnel ingress rule https://ssh.hoangluu.id.vn
+sudo systemctl --no-pager -l status cloudflared
+sudo journalctl -u cloudflared -n 50 --no-pager
+sudo systemctl --no-pager -l status ssh
+
+Bao dam route ssh://localhost:22 dung va fallback http_status:404 nam cuoi.
+Chi restart cloudflared sau khi validate thanh cong:
+sudo systemctl restart cloudflared
+
+8. CAP NHAT UNG DUNG
+--------------------
+cd ~/SOS_SYSTEMS
+git pull --ff-only origin deploy-docker
+docker compose up -d --build
+docker compose ps
+
+Du lieu MongoDB duoc luu trong volume mongodb_data. Khong chay docker compose down -v
+neu muon giu database; tuy chon -v se xoa volume. Backup database thuong xuyen.
+Khong commit hoac chia se backend/.env vi file nay chua secret.
