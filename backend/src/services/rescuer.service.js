@@ -347,7 +347,8 @@ class RescuerService {
       .select('-passwordHash')
       .populate('rescuer.areaId', 'name level provinceCode districtCode parentId')
       .populate('areaId', 'name level provinceCode districtCode parentId')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return users;
   }

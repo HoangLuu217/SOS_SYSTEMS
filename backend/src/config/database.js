@@ -29,9 +29,9 @@ async function connectDatabase() {
       .connect(mongoUri, {
         serverSelectionTimeoutMS: 8000,
         socketTimeoutMS: 45000,
-        maxPoolSize: isServerless ? 2 : 5,
-        minPoolSize: 0,
-        maxIdleTimeMS: 10000,
+        maxPoolSize: isServerless ? 2 : 15,
+        minPoolSize: isServerless ? 0 : 2,
+        maxIdleTimeMS: isServerless ? 10000 : 120000,
       })
       .then((mongooseInstance) => {
         globalCache.conn = mongooseInstance.connection;

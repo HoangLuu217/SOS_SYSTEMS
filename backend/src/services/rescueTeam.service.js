@@ -236,35 +236,39 @@ class RescueTeamService {
   /**
    * Chuẩn hóa và đính kèm phương tiện, trang thiết bị, nhiệm vụ và nhật ký hoạt động cho danh sách đội
    */
-  async _attachTeamDetails(teams = []) {
+  async _attachTeamDetails(teams = [], { light = false } = {}) {
     if (!Array.isArray(teams) || teams.length === 0) return [];
 
     const teamIds = teams.map((t) => t._id);
     const { Equipment, SosAssignment, AuditLog } = require('../models');
 
     const [vehicles, equipments, teamAssignments, teamAuditLogs] = await Promise.all([
-      Vehicle.find({ teamId: { $in: teamIds } }),
-      Equipment.find({ teamId: { $in: teamIds } }),
-      SosAssignment.find({
-        $or: [
-          { rescueTeamId: { $in: teamIds } },
-          { teamId: { $in: teamIds } },
-        ],
-      })
-        .populate('sosRequestId', 'sosCode emergencyType people address status description')
-        .populate('rescuerId', 'fullName phone')
-        .populate('vehicleId', 'plateNumber type')
-        .sort({ assignedAt: -1, createdAt: -1 })
-        .limit(Math.max(50, teamIds.length * 25))
-        .lean(),
-      AuditLog.find({
-        entityType: 'RescueTeam',
-        entityId: { $in: teamIds },
-      })
-        .populate('actorId', 'fullName roles')
-        .sort({ createdAt: -1 })
-        .limit(Math.max(50, teamIds.length * 25))
-        .lean(),
+      Vehicle.find({ teamId: { $in: teamIds } }).lean(),
+      Equipment.find({ teamId: { $in: teamIds } }).lean(),
+      light
+        ? Promise.resolve([])
+        : SosAssignment.find({
+            $or: [
+              { rescueTeamId: { $in: teamIds } },
+              { teamId: { $in: teamIds } },
+            ],
+          })
+            .populate('sosRequestId', 'sosCode emergencyType people address status description')
+            .populate('rescuerId', 'fullName phone')
+            .populate('vehicleId', 'plateNumber type')
+            .sort({ assignedAt: -1, createdAt: -1 })
+            .limit(Math.max(50, teamIds.length * 25))
+            .lean(),
+      light
+        ? Promise.resolve([])
+        : AuditLog.find({
+            entityType: 'RescueTeam',
+            entityId: { $in: teamIds },
+          })
+            .populate('actorId', 'fullName roles')
+            .sort({ createdAt: -1 })
+            .limit(Math.max(50, teamIds.length * 25))
+            .lean(),
     ]);
 
     const vehicleMap = {};
@@ -417,18 +421,22 @@ class RescueTeamService {
       const mongoose = require('mongoose');
       let targetArea = null;
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        targetArea = await AdministrativeArea.findById(query.areaId)
+          .select('_id name code type parentId')
+          .lean();
       }
       if (!targetArea) {
         targetArea = await AdministrativeArea.findOne({
           $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
+        })
+          .select('_id name code type parentId')
+          .lean();
       }
 
       if (targetArea) {
         const relevantAreaIds = [targetArea._id];
         // Nếu là Quận/Huyện: bao gồm tất cả các Phường/Xã trực thuộc
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id').lean();
         childWards.forEach((w) => relevantAreaIds.push(w._id));
 
         // Nếu là Phường/Xã: bao gồm Quận/Huyện cấp trên
@@ -456,6 +464,8 @@ class RescueTeamService {
       }
     }
 
+    const isLight = query.light === 'true' || query.includeLogs === 'false';
+
     const [teams, total] = await Promise.all([
       RescueTeam.find(filter)
         .populate('leaderId', 'fullName phone email rescuer status currentLocation')
@@ -471,11 +481,12 @@ class RescueTeamService {
         })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       RescueTeam.countDocuments(filter),
     ]);
 
-    const enrichedTeams = await this._attachTeamDetails(teams);
+    const enrichedTeams = await this._attachTeamDetails(teams, { light: isLight });
 
     return {
       teams: enrichedTeams,

@@ -389,72 +389,93 @@ export const VIETNAM_34_PROVINCES_STANDARD: Array<{
     { code: 96, name: 'Tỉnh Cà Mau', type: 'tỉnh', codename: 'ca_mau', iso: 'VN-59', pop: 1194000, area: 5221.2 },
   ];
 
+let provincesMemoryCache: VietnamProvinceItem[] | null = null;
+let provincesInFlight: Promise<VietnamProvinceItem[]> | null = null;
+
 /**
  * Tầng 1: Lấy danh sách 34 Tỉnh / Thành phố mới của Việt Nam (Mô hình mới 2025)
  */
 export async function fetchVietnamProvincesService(): Promise<VietnamProvinceItem[]> {
+  if (provincesMemoryCache && provincesMemoryCache.length === 34) {
+    return provincesMemoryCache;
+  }
   const cacheKey = 'rescuesos_vietnam_34_provinces_v2';
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed: VietnamProvinceItem[] = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length === 34) {
+        provincesMemoryCache = parsed;
         return parsed;
       }
     }
+  } catch { }
 
-    // Gọi API v2 lấy danh mục 34 tỉnh thành với timeout 3.5s an toàn
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch('https://provinces.open-api.vn/api/v2/p/', {
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
-    if (res.ok) {
-      const apiData = await res.json();
-      if (Array.isArray(apiData) && apiData.length > 0) {
-        const provinces: VietnamProvinceItem[] = apiData.map((p: any) => {
-          const matchStandard = VIETNAM_34_PROVINCES_STANDARD.find((s) => s.code === p.code);
-          const isDaNang = p.code === 48 || p.name.includes('Đà Nẵng');
-          return {
-            id: `prov-${p.code}`,
-            code: p.code,
-            name: p.name,
-            placeId: `prov-${p.code}`,
-            ref: `VN-${p.code}`,
-            isoCode: matchStandard?.iso || `VN-${p.code}`,
-            divisionType: p.division_type,
-            population: matchStandard?.pop || 1200000,
-            areaKm2: matchStandard?.area || 3500.0,
-            isDaNang,
-          };
-        });
-
-        provinces.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(provinces));
-        } catch { }
-        return provinces;
-      }
-    }
-  } catch (err) {
-    console.warn('Lỗi tải 34 tỉnh thành từ API v2, sử dụng danh mục chuẩn 2025:', err);
+  if (provincesInFlight) {
+    return provincesInFlight;
   }
 
-  // Fallback danh sách chuẩn 34 tỉnh thành
-  const fallback = VIETNAM_34_PROVINCES_STANDARD.map((s) => ({
-    id: `prov-${s.code}`,
-    code: s.code,
-    name: s.name,
-    placeId: `prov-${s.code}`,
-    ref: `VN-${s.code}`,
-    isoCode: s.iso,
-    divisionType: s.type,
-    population: s.pop,
-    areaKm2: s.area,
-    isDaNang: s.code === 48,
-  }));
-  fallback.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-  return fallback;
+  provincesInFlight = (async () => {
+    try {
+      // Gọi API v2 lấy danh mục 34 tỉnh thành với timeout 3.5s an toàn
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch('https://provinces.open-api.vn/api/v2/p/', {
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
+      if (res.ok) {
+        const apiData = await res.json();
+        if (Array.isArray(apiData) && apiData.length > 0) {
+          const provinces: VietnamProvinceItem[] = apiData.map((p: any) => {
+            const matchStandard = VIETNAM_34_PROVINCES_STANDARD.find((s) => s.code === p.code);
+            const isDaNang = p.code === 48 || p.name.includes('Đà Nẵng');
+            return {
+              id: `prov-${p.code}`,
+              code: p.code,
+              name: p.name,
+              placeId: `prov-${p.code}`,
+              ref: `VN-${p.code}`,
+              isoCode: matchStandard?.iso || `VN-${p.code}`,
+              divisionType: p.division_type,
+              population: matchStandard?.pop || 1200000,
+              areaKm2: matchStandard?.area || 3500.0,
+              isDaNang,
+            };
+          });
+
+          provinces.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+          provincesMemoryCache = provinces;
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(provinces));
+          } catch { }
+          return provinces;
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi tải 34 tỉnh thành từ API v2, sử dụng danh mục chuẩn 2025:', err);
+    }
+
+    // Fallback danh sách chuẩn 34 tỉnh thành
+    const fallback = VIETNAM_34_PROVINCES_STANDARD.map((s) => ({
+      id: `prov-${s.code}`,
+      code: s.code,
+      name: s.name,
+      placeId: `prov-${s.code}`,
+      ref: `VN-${s.code}`,
+      isoCode: s.iso,
+      divisionType: s.type,
+      population: s.pop,
+      areaKm2: s.area,
+      isDaNang: s.code === 48,
+    }));
+    fallback.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    provincesMemoryCache = fallback;
+    return fallback;
+  })().finally(() => {
+    provincesInFlight = null;
+  });
+
+  return provincesInFlight;
 }
 
 /**
@@ -465,11 +486,48 @@ function sanitizeWardName(name: string): string {
   return (name || '').trim();
 }
 
+const subUnitsMemoryCache = new Map<string, ProvinceSubUnitItem[]>();
+const subUnitsInFlight = new Map<string, Promise<ProvinceSubUnitItem[]>>();
+const syncedBackendProvinceKeys = new Set<string>();
+const SYNC_BACKEND_TTL_MS = 30 * 60 * 1000;
+
+function syncProvinceUnitsToBackendOnce(provinceName: string, provCode: number, units: ProvinceSubUnitItem[]) {
+  const syncKey = `rescuesos_synced_subunits_p${provCode}`;
+  if (syncedBackendProvinceKeys.has(syncKey)) return;
+  try {
+    const lastSyncedRaw = sessionStorage.getItem(syncKey);
+    if (lastSyncedRaw && Date.now() - Number(lastSyncedRaw) < SYNC_BACKEND_TTL_MS) {
+      syncedBackendProvinceKeys.add(syncKey);
+      return;
+    }
+  } catch { }
+
+  syncedBackendProvinceKeys.add(syncKey);
+  syncAdministrativeAreasToBackend({
+    provinceName,
+    provinceCode: provCode,
+    units,
+  })
+    .then((res) => {
+      if (res?.success) {
+        try {
+          sessionStorage.setItem(syncKey, String(Date.now()));
+        } catch { }
+      } else {
+        syncedBackendProvinceKeys.delete(syncKey);
+      }
+    })
+    .catch((err) => {
+      syncedBackendProvinceKeys.delete(syncKey);
+      console.warn('Lỗi đồng bộ vào CSDL:', err);
+    });
+}
+
 /**
  * Tầng 2: Lấy danh mục các đơn vị con của 1 Tỉnh / Thành phố HOÀN TOÀN TRỰC TIẾP TỪ API
  * - Hỗ trợ đầy đủ tất cả 34 tỉnh/thành phố trên cả nước.
  * - Tự động gộp các phường tách nhỏ thành một cụm quản lý chung (như Phường An Hải, Hòa Khánh...).
- * - Dữ liệu lấy từ API được tự động lưu/đồng bộ vào CSDL MongoDB.
+ * - Dữ liệu lấy từ API được tự động lưu/đồng bộ vào CSDL MongoDB (tối đa 1 lần / phiên để tránh nghẽn).
  */
 export async function fetchProvinceSubUnitsService(
   placeId: string,
@@ -497,113 +555,129 @@ export async function fetchProvinceSubUnitsService(
   }
   const cacheKey = `rescuesos_subunits_v9_p${provCode}`;
 
+  const memCached = subUnitsMemoryCache.get(cacheKey);
+  if (memCached && memCached.length > 0) {
+    syncProvinceUnitsToBackendOnce(provinceName, provCode, memCached);
+    return memCached;
+  }
+
   try {
-    localStorage.removeItem(`rescuesos_subunits_v8_p${provCode}`);
-    localStorage.removeItem(`rescuesos_subunits_v7_p${provCode}`);
-    localStorage.removeItem(`rescuesos_subunits_v6_p${provCode}`);
-    localStorage.removeItem(`rescuesos_subunits_v3_p${provCode}`);
-    localStorage.removeItem(`rescuesos_subunits_v2_p${provCode}`);
+    if (localStorage.getItem(`rescuesos_subunits_v8_p${provCode}`) !== null) {
+      localStorage.removeItem(`rescuesos_subunits_v8_p${provCode}`);
+      localStorage.removeItem(`rescuesos_subunits_v7_p${provCode}`);
+      localStorage.removeItem(`rescuesos_subunits_v6_p${provCode}`);
+      localStorage.removeItem(`rescuesos_subunits_v3_p${provCode}`);
+      localStorage.removeItem(`rescuesos_subunits_v2_p${provCode}`);
+    }
 
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed: ProvinceSubUnitItem[] = JSON.parse(cached);
       const isOldDistrictsOnly = parsed.length <= 8 && parsed.every((u) => u.type === 'DISTRICT');
       if (Array.isArray(parsed) && parsed.length > 0 && !isOldDistrictsOnly) {
-        syncAdministrativeAreasToBackend({
-          provinceName,
-          provinceCode: provCode,
-          units: parsed,
-        }).catch(() => { });
+        subUnitsMemoryCache.set(cacheKey, parsed);
+        syncProvinceUnitsToBackendOnce(provinceName, provCode, parsed);
         return parsed;
       }
     }
   } catch { }
 
-  const units: ProvinceSubUnitItem[] = [];
-
-  // Gọi trực tiếp API Wards v2 của tỉnh thành tương ứng
-  try {
-    const url = `https://provinces.open-api.vn/api/v2/w/?province=${provCode}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
-    if (res.ok) {
-      const apiWards = await res.json();
-      if (Array.isArray(apiWards) && apiWards.length > 0) {
-        const officialWardsMap = new Map<string, any>();
-
-        apiWards.forEach((w: any) => {
-          const exactName = sanitizeWardName(w.name);
-          if (exactName && !officialWardsMap.has(exactName)) {
-            officialWardsMap.set(exactName, {
-              ...w,
-              exactName,
-            });
-          }
-        });
-
-        const codePrefix = `VN${provCode}`;
-        let wardIdx = 1;
-
-        officialWardsMap.forEach((w) => {
-          const typeLower = (w.division_type || '').toLowerCase();
-          const nameLower = (w.exactName || '').toLowerCase();
-
-          let type: 'DISTRICT' | 'WARD' | 'COMMUNE' | 'TOWN' = 'WARD';
-          if (
-            nameLower.startsWith('đặc khu') ||
-            typeLower.includes('đặc khu') ||
-            nameLower.startsWith('quận') ||
-            nameLower.startsWith('huyện') ||
-            nameLower.startsWith('thị xã')
-          ) {
-            type = 'DISTRICT';
-          } else if (nameLower.startsWith('xã') || typeLower.includes('xã')) {
-            type = 'COMMUNE';
-          } else if (nameLower.startsWith('thị trấn') || typeLower.includes('thị trấn')) {
-            type = 'TOWN';
-          }
-
-          const officialWardCode =
-            w.code !== undefined && w.code !== null && String(w.code).trim()
-              ? String(w.code).trim()
-              : `W${String(wardIdx).padStart(2, '0')}`;
-
-          units.push({
-            id: `w-${w.code}`,
-            name: w.exactName,
-            code: `${codePrefix}-${officialWardCode}`,
-            type,
-            parentName: provinceName,
-            status: 'ACTIVE',
-          });
-          wardIdx++;
-        });
-      }
-    }
-  } catch (err) {
-    console.warn(`Lỗi khi gọi API v2 lấy phường/xã của ${provinceName}:`, err);
+  const existingInFlight = subUnitsInFlight.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight;
   }
 
-  // Sắp xếp: Quận/Huyện trước, Xã/Phường sau, theo thứ tự A-Z
-  units.sort((a, b) => {
-    if (a.type === 'DISTRICT' && b.type !== 'DISTRICT') return -1;
-    if (a.type !== 'DISTRICT' && b.type === 'DISTRICT') return 1;
-    return a.name.localeCompare(b.name, 'vi');
+  const requestPromise = (async () => {
+    const units: ProvinceSubUnitItem[] = [];
+
+    // Gọi trực tiếp API Wards v2 của tỉnh thành tương ứng
+    try {
+      const url = `https://provinces.open-api.vn/api/v2/w/?province=${provCode}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+      if (res.ok) {
+        const apiWards = await res.json();
+        if (Array.isArray(apiWards) && apiWards.length > 0) {
+          const officialWardsMap = new Map<string, any>();
+
+          apiWards.forEach((w: any) => {
+            const exactName = sanitizeWardName(w.name);
+            if (exactName && !officialWardsMap.has(exactName)) {
+              officialWardsMap.set(exactName, {
+                ...w,
+                exactName,
+              });
+            }
+          });
+
+          const codePrefix = `VN${provCode}`;
+          let wardIdx = 1;
+
+          officialWardsMap.forEach((w) => {
+            const typeLower = (w.division_type || '').toLowerCase();
+            const nameLower = (w.exactName || '').toLowerCase();
+
+            let type: 'DISTRICT' | 'WARD' | 'COMMUNE' | 'TOWN' = 'WARD';
+            if (
+              nameLower.startsWith('đặc khu') ||
+              typeLower.includes('đặc khu') ||
+              nameLower.startsWith('quận') ||
+              nameLower.startsWith('huyện') ||
+              nameLower.startsWith('thị xã')
+            ) {
+              type = 'DISTRICT';
+            } else if (nameLower.startsWith('xã') || typeLower.includes('xã')) {
+              type = 'COMMUNE';
+            } else if (nameLower.startsWith('thị trấn') || typeLower.includes('thị trấn')) {
+              type = 'TOWN';
+            }
+
+            const officialWardCode =
+              w.code !== undefined && w.code !== null && String(w.code).trim()
+                ? String(w.code).trim()
+                : `W${String(wardIdx).padStart(2, '0')}`;
+
+            units.push({
+              id: `w-${w.code}`,
+              name: w.exactName,
+              code: `${codePrefix}-${officialWardCode}`,
+              type,
+              parentName: provinceName,
+              status: 'ACTIVE',
+            });
+            wardIdx++;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`Lỗi khi gọi API v2 lấy phường/xã của ${provinceName}:`, err);
+    }
+
+    // Sắp xếp: Quận/Huyện trước, Xã/Phường sau, theo thứ tự A-Z
+    units.sort((a, b) => {
+      if (a.type === 'DISTRICT' && b.type !== 'DISTRICT') return -1;
+      if (a.type !== 'DISTRICT' && b.type === 'DISTRICT') return 1;
+      return a.name.localeCompare(b.name, 'vi');
+    });
+
+    if (units.length > 0) {
+      subUnitsMemoryCache.set(cacheKey, units);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(units));
+      } catch { }
+
+      // Tự động đồng bộ vào MongoDB (tối đa 1 lần / phiên)
+      syncProvinceUnitsToBackendOnce(provinceName, provCode, units);
+    }
+
+    return units;
+  })().finally(() => {
+    subUnitsInFlight.delete(cacheKey);
   });
 
-  try {
-    localStorage.setItem(cacheKey, JSON.stringify(units));
-  } catch { }
-
-  // Tự động đồng bộ vào MongoDB
-  syncAdministrativeAreasToBackend({
-    provinceName,
-    provinceCode: provCode,
-    units,
-  }).catch((err) => console.warn('Lỗi đồng bộ vào CSDL:', err));
-
-  return units;
+  subUnitsInFlight.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 const PROVINCE_BOUNDARY_CACHE_PREFIX = 'rescuesos_province_boundary_v1_';

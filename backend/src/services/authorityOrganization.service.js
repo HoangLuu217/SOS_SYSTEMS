@@ -96,7 +96,8 @@ class AuthorityOrganizationService {
     const authorities = await AuthorityOrganization.find(filter)
       .populate('administrativeAreaId', 'name code type')
       .populate('areaId', 'name code type')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return authorities;
   }
@@ -111,7 +112,8 @@ class AuthorityOrganizationService {
 
     const authority = await AuthorityOrganization.findById(id)
       .populate('administrativeAreaId', 'name code type')
-      .populate('areaId', 'name code type');
+      .populate('areaId', 'name code type')
+      .lean();
 
     if (!authority) {
       throw new ApiError(404, 'Không tìm thấy cơ quan/tổ chức');

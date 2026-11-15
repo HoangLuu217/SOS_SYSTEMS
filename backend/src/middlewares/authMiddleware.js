@@ -2,6 +2,33 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const ApiError = require('../utils/apiError');
 
+// Cache ngắn hạn thông tin user đã xác thực để tránh query User lặp lại mỗi request polling
+const AUTH_USER_CACHE_TTL_MS = 10000;
+const AUTH_USER_CACHE_MAX = 500;
+const authUserCache = new Map();
+
+async function findAuthUserById(userId) {
+  if (!userId) return null;
+  const key = String(userId);
+  const now = Date.now();
+  const cached = authUserCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.user;
+  }
+
+  const user = await User.findById(key).select('-passwordHash -__v').lean();
+  if (user) {
+    if (authUserCache.size >= AUTH_USER_CACHE_MAX) {
+      const oldestKey = authUserCache.keys().next().value;
+      authUserCache.delete(oldestKey);
+    }
+    authUserCache.set(key, { user, expiresAt: now + AUTH_USER_CACHE_TTL_MS });
+  } else {
+    authUserCache.delete(key);
+  }
+  return user;
+}
+
 /**
  * Middleware xác thực người dùng qua:
  * 1. Header: Authorization: Bearer <token>
@@ -33,16 +60,16 @@ const authenticate = async (req, res, next) => {
       const secret = process.env.JWT_SECRET || 'sos_system_jwt_secret_key_2026';
       try {
         const decoded = jwt.verify(token, secret);
-        user = await User.findById(decoded.id || decoded._id);
+        user = await findAuthUserById(decoded.id || decoded._id);
       } catch (err) {
         if (devUserId) {
-          user = await User.findById(devUserId);
+          user = await findAuthUserById(devUserId);
         }
         if (!user) {
           try {
             const decodedPayload = jwt.decode(token);
             if (decodedPayload && (decodedPayload.id || decodedPayload._id)) {
-              user = await User.findById(decodedPayload.id || decodedPayload._id);
+              user = await findAuthUserById(decodedPayload.id || decodedPayload._id);
             }
           } catch (_) {}
         }
@@ -54,7 +81,7 @@ const authenticate = async (req, res, next) => {
         }
       }
     } else if (devUserId) {
-      user = await User.findById(devUserId);
+      user = await findAuthUserById(devUserId);
     }
 
     if (!user) {
@@ -100,20 +127,20 @@ const optionalAuthenticate = async (req, res, next) => {
       const secret = process.env.JWT_SECRET || 'sos_system_jwt_secret_key_2026';
       try {
         const decoded = jwt.verify(token, secret);
-        user = await User.findById(decoded.id || decoded._id);
+        user = await findAuthUserById(decoded.id || decoded._id);
       } catch (_) {
         try {
           const decoded = jwt.decode(token);
           if (decoded && (decoded.id || decoded._id)) {
-            user = await User.findById(decoded.id || decoded._id);
+            user = await findAuthUserById(decoded.id || decoded._id);
           }
         } catch (_) {}
         if (!user && devUserId) {
-          user = await User.findById(devUserId);
+          user = await findAuthUserById(devUserId);
         }
       }
     } else if (devUserId) {
-      user = await User.findById(devUserId);
+      user = await findAuthUserById(devUserId);
     }
 
     if (user && user.status !== 'SUSPENDED' && user.status !== 'INACTIVE') {
