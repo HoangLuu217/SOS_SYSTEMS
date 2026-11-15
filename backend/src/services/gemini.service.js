@@ -208,7 +208,6 @@ class GeminiService {
         emergencyTypes: sos.emergencyTypes,
         people: sos.people,
         priorityGroups: sos.priorityGroups,
-        operationalNeeds: sos.riskAssessment?.operationalNeeds || {},
         address: sos.address,
         description: sos.description || '',
         nearbyHazards: spatialContext.nearbyHazards || [],
@@ -307,7 +306,9 @@ class GeminiService {
 
     const compactCandidates = candidates
       .filter((c) => c.dispatchEligible && !c.isBusy)
-      .slice(0, 30)
+      // smartDispatch.service orders eligible teams by jurisdiction and distance.
+      // Keep a larger pre-ranked shortlist to reduce omitted suitable teams.
+      .slice(0, 50)
       .map((c) => ({
         teamId: c.teamId,
         teamName: c.teamName,
@@ -325,7 +326,22 @@ class GeminiService {
         nearbyHazards: c.nearbyHazards || [],
       }));
 
-    const compactWarehouseSupplies = (warehouseSupplies || []).slice(0, 25).map((item) => ({
+    const requestedSupplyCategories = new Set(
+      (sos.riskAssessment?.operationalNeeds?.recommendedEquipments || [])
+        .map((category) => String(category).toUpperCase())
+    );
+    const compactWarehouseSupplies = (warehouseSupplies || [])
+      .slice()
+      .sort((a, b) => {
+        const relevantA = requestedSupplyCategories.has(String(a.category || '').toUpperCase()) ? 1 : 0;
+        const relevantB = requestedSupplyCategories.has(String(b.category || '').toUpperCase()) ? 1 : 0;
+        if (relevantA !== relevantB) return relevantB - relevantA;
+        const stockA = Number(a.quantity ?? a.availableStock) || 0;
+        const stockB = Number(b.quantity ?? b.availableStock) || 0;
+        return stockB - stockA || String(a.category || '').localeCompare(String(b.category || ''));
+      })
+      .slice(0, 50)
+      .map((item) => ({
       supplyId: String(item._id || item.supplyId),
       name: item.name,
       category: item.category,
