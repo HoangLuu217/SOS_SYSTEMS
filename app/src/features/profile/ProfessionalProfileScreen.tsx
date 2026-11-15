@@ -13,6 +13,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -151,9 +152,7 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
   const [isLoadingWards, setIsLoadingWards] = useState<boolean>(false);
 
   const [selectedSkills, setSelectedSkills] = useState<string[]>(() =>
-    Array.isArray(initialRescuer.skills) && initialRescuer.skills.length > 0
-      ? initialRescuer.skills
-      : ['first_aid', 'water_rescue']
+    Array.isArray(initialRescuer.skills) ? initialRescuer.skills : []
   );
   const [experience, setExperience] = useState<string>(() => initialRescuer.experience || '');
   const [agreeTerms, setAgreeTerms] = useState<boolean>(() => initialRescuer.verificationStatus === 'VERIFIED');
@@ -171,7 +170,12 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
 
   // Trạng thái quét mã QR thẻ CCCD gắn chip
   const [isQrScannerOpen, setIsQrScannerOpen] = useState<boolean>(false);
-  const [isCccdQrVerified, setIsCccdQrVerified] = useState<boolean>(() => Boolean(initialRescuer.isCccdVerified));
+  const [isCccdQrVerified, setIsCccdQrVerified] = useState<boolean>(() =>
+    Boolean(
+      initialRescuer.isCccdVerified ||
+        String(initialRescuer.idNumber || '').replace(/\D/g, '').length === 12
+    )
+  );
   const [scannedCccdInfo, setScannedCccdInfo] = useState<ParsedCccdData | null>(null);
 
   const handleScanCccdSuccess = (data: ParsedCccdData) => {
@@ -206,9 +210,13 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
           const u = user as any;
           const rescuer: any = res.data.rescuer || u?.rescuer || {};
           const existingId = rescuer.idNumber || u?.idNumber || u?.citizen?.idNumber || u?.idCard;
-          if (existingId) setIdNumber(String(existingId).replace(/\D/g, ''));
-          if (rescuer.isCccdVerified) setIsCccdQrVerified(true);
-          if (Array.isArray(rescuer.skills) && rescuer.skills.length > 0) {
+          const cleanExistingId = existingId ? String(existingId).replace(/\D/g, '') : '';
+          const cleanRescuerId = rescuer.idNumber ? String(rescuer.idNumber).replace(/\D/g, '') : '';
+          if (cleanExistingId) setIdNumber(cleanExistingId);
+          if (rescuer.isCccdVerified || cleanRescuerId.length === 12) {
+            setIsCccdQrVerified(true);
+          }
+          if (Array.isArray(rescuer.skills)) {
             setSelectedSkills(rescuer.skills);
           }
           if (rescuer.experience) setExperience(rescuer.experience);
@@ -246,6 +254,29 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
     syncProfile();
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  // 1b. Lắng nghe sự kiện duyệt / cập nhật hồ sơ theo thời gian thực khi đang mở màn hình
+  useEffect(() => {
+    const handleRealtimeProfile = (payload: any) => {
+      const nextStatus =
+        payload?.verificationStatus ||
+        payload?.rescuer?.verificationStatus ||
+        payload?.user?.rescuer?.verificationStatus;
+      if (nextStatus) {
+        setVerificationStatus(nextStatus);
+        if (nextStatus === 'VERIFIED') {
+          setAgreeTerms(true);
+        }
+      }
+    };
+
+    const sub1 = DeviceEventEmitter.addListener('rescuer:verification_status_changed', handleRealtimeProfile);
+    const sub2 = DeviceEventEmitter.addListener('user:profile_updated', handleRealtimeProfile);
+    return () => {
+      sub1.remove();
+      sub2.remove();
     };
   }, []);
 
@@ -471,6 +502,11 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
         } catch {
           // ignore storage error
         }
+        DeviceEventEmitter.emit('user:profile_updated', {
+          user: res.data,
+          rescuer: res.data?.rescuer || { verificationStatus: 'PENDING' },
+          roles: res.data?.roles,
+        });
         setShowSuccessModal(true);
       } else {
         Alert.alert('Không thể lưu', res.message || 'Lỗi khi cập nhật hồ sơ.');
@@ -590,9 +626,6 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
               <Text style={styles.applicantContact} numberOfLines={1}>
                 {user?.phone || 'Chưa cập nhật SĐT'} {user?.email ? `• ${user.email}` : ''}
               </Text>
-            </View>
-            <View style={styles.applicantBadge}>
-              <Text style={styles.applicantBadgeText}>Tài khoản liên kết</Text>
             </View>
           </View>
 
@@ -1328,17 +1361,6 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  applicantBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  applicantBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#64748B',
   },
   applicantContact: {
     fontSize: 12,

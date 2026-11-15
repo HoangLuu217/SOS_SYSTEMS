@@ -376,6 +376,11 @@ class SosAssignmentService {
         io.emit('assignment:created', assignPayload);
         io.emit('assignment:new', assignPayload);
         io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_CREATED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
         for (const uid of targetUserIds) {
           io.to(`user_${uid}`).emit('assignment:assigned', assignPayload);
           io.to(`user_${uid}`).emit('sos:sync');
@@ -492,34 +497,60 @@ class SosAssignmentService {
       throw new ApiError(401, 'Vui lòng đăng nhập để xem nhiệm vụ');
     }
 
-    // Tìm các đội mà user là leader hoặc thành viên
-    let teams = await RescueTeam.find({
+    // Chỉ tìm các đội mà user là đội trưởng hoặc đã được duyệt vào đội (APPROVED)
+    const teams = await RescueTeam.find({
       $or: [
         { leaderId: userId },
-        { 'members.rescuerId': userId },
+        {
+          members: {
+            $elemMatch: {
+              rescuerId: userId,
+              status: { $nin: ['PENDING', 'REJECTED'] },
+            },
+          },
+        },
       ],
-    }).select('_id');
+    }).select('_id leaderId members');
 
-    // Fallback: nếu tài khoản Rescuer vừa chạy lại seed nên đổi ObjectId tại khu vực đã gán
-    if (teams.length === 0) {
-      const userDoc = await User.findById(userId).select('roles areaId rescuer');
-      const isRescuer =
-        userDoc?.roles?.includes('RESCUER') ||
-        userDoc?.rescuer?.verificationStatus === 'VERIFIED';
-      if (isRescuer && userDoc?.areaId) {
-        teams = await RescueTeam.find({ areaId: userDoc.areaId }).select('_id');
+    const userIdStr = userId.toString();
+    const orConditions = [{ rescuerId: userId }];
+
+    for (const team of teams) {
+      const memberEntry = (team.members || []).find(
+        (m) =>
+          m.rescuerId &&
+          m.rescuerId.toString() === userIdStr &&
+          m.status !== 'PENDING' &&
+          m.status !== 'REJECTED'
+      );
+      const memberSince = memberEntry?.approvedAt || memberEntry?.joinedAt || null;
+
+      const teamMatch = {
+        $or: [{ rescueTeamId: team._id }, { teamId: team._id }],
+      };
+
+      // Không hiển thị lịch sử nhiệm vụ cũ của đội đã kết thúc trước thời điểm thành viên gia nhập đội
+      if (memberSince) {
+        orConditions.push({
+          $and: [
+            teamMatch,
+            {
+              $or: [
+                { status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] } },
+                { createdAt: { $gte: memberSince } },
+                { assignedAt: { $gte: memberSince } },
+                { completedAt: { $gte: memberSince } },
+                { cancelledAt: { $gte: memberSince } },
+              ],
+            },
+          ],
+        });
+      } else {
+        orConditions.push(teamMatch);
       }
     }
 
-    const teamIds = teams.map((t) => t._id);
-
-    const filter = {
-      $or: [
-        { rescuerId: userId },
-        { rescueTeamId: { $in: teamIds } },
-        { teamId: { $in: teamIds } },
-      ],
-    };
+    const filter = { $or: orConditions };
 
     const assignments = await SosAssignment.find(filter)
       .populate({
@@ -739,6 +770,11 @@ class SosAssignmentService {
       if (io) {
         io.emit('assignment:status_updated', assignment);
         io.emit('assignment:updated', assignment);
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_ACCEPTED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId._id || assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
         if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
           io.emit('sos:sync', {
             type: 'RELIEF_MISSION',
@@ -1249,13 +1285,12 @@ class SosAssignmentService {
         if (targetStatus === 'COMPLETED') {
           io.emit('assignment:completed', assignment);
         }
-        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(targetStatus)) {
-          io.emit('rescue_teams_updated', {
-            teamId: assignment.rescueTeamId?.toString?.() || assignment.rescueTeamId || null,
-            assignmentId: assignment._id.toString(),
-            status: targetStatus,
-          });
-        }
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_STATUS_UPDATED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId._id || assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+          status: targetStatus,
+        });
         if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
           io.emit('sos:sync', {
             type: 'RELIEF_MISSION',
@@ -1374,6 +1409,20 @@ class SosAssignmentService {
         emitSosUpdated(sos);
       }
     }
+
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('assignment:updated', assignment);
+        io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_REASSIGNED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
+      }
+    } catch (_) {}
 
     return assignment;
   }
@@ -1528,6 +1577,11 @@ class SosAssignmentService {
         io.emit('assignment:deleted', payload);
         io.emit('assignment:updated', payload);
         io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_CANCELLED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: assignment._id.toString(),
+        });
         if (assignment.rescuerId) {
           io.to(`user_${assignment.rescuerId}`).emit('assignment:cancelled', payload);
           io.to(`user_${assignment.rescuerId}`).emit('sos:sync');

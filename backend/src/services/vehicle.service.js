@@ -3,6 +3,38 @@ const ApiError = require('../utils/apiError');
 
 class VehicleService {
   /**
+   * Phát sự kiện realtime khi phương tiện thay đổi để Đội cứu hộ & Kho phương tiện tự cập nhật
+   */
+  _emitVehicleRealtime(vehicle, action = 'UPDATED', previousTeamId = null) {
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (!io) return;
+
+      const rawTeam = vehicle?.teamId;
+      const teamId = rawTeam ? String(rawTeam._id || rawTeam) : null;
+      const prevTeamId = previousTeamId ? String(previousTeamId._id || previousTeamId) : null;
+
+      const payload = {
+        action,
+        vehicleId: vehicle?._id ? String(vehicle._id) : null,
+        teamId,
+        previousTeamId: prevTeamId,
+        vehicle,
+      };
+      io.emit('vehicle:updated', payload);
+      io.emit('rescue_teams_updated', {
+        action: `VEHICLE_${action}`,
+        teamId,
+        previousTeamId: prevTeamId,
+        vehicleId: payload.vehicleId,
+      });
+    } catch (err) {
+      console.warn('Realtime emit error in VehicleService:', err.message);
+    }
+  }
+
+  /**
    * Đăng ký phương tiện cứu hộ mới
    */
   async createVehicle(data) {
@@ -34,7 +66,9 @@ class VehicleService {
       terrainCapabilities: Array.isArray(terrainCapabilities) ? terrainCapabilities : [],
     });
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'CREATED');
+    return populated;
   }
 
   /**
@@ -163,6 +197,7 @@ class VehicleService {
     if (!vehicle) {
       throw new ApiError(404, 'Không tìm thấy phương tiện cần cập nhật');
     }
+    const previousTeamId = vehicle.teamId ? String(vehicle.teamId) : null;
 
     if (updateData.teamId !== undefined) {
       if (!updateData.teamId || updateData.teamId === 'NONE' || updateData.teamId === 'null') {
@@ -198,7 +233,9 @@ class VehicleService {
 
     await vehicle.save();
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'UPDATED', previousTeamId);
+    return populated;
   }
 
   /**
@@ -218,6 +255,7 @@ class VehicleService {
     }
 
     await Vehicle.findByIdAndDelete(id);
+    this._emitVehicleRealtime(vehicle, 'DELETED');
 
     return { message: 'Đã xóa phương tiện cứu hộ thành công' };
   }
@@ -242,7 +280,9 @@ class VehicleService {
     vehicle.status = status;
     await vehicle.save();
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'STATUS_UPDATED');
+    return populated;
   }
 }
 

@@ -20,7 +20,11 @@ class RescuerController {
    */
   async updateMyProfile(req, res, next) {
     try {
-      const isNewApplicant = !req.user.roles?.includes('RESCUER');
+      const prevVerificationStatus = req.user.rescuer?.verificationStatus;
+      const isNewApplicant =
+        !req.user.roles?.includes('RESCUER') ||
+        !prevVerificationStatus ||
+        ['NOT_REGISTERED', 'REJECTED', 'REQUIRES_UPDATE'].includes(prevVerificationStatus);
       const updated = await rescuerService.updateProfile(req.user._id, req.body);
 
       await auditService.log({

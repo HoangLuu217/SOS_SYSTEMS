@@ -37,7 +37,7 @@ class AuditService {
    */
   async log({ actorId = null, actorRole = null, action, entityType, entityId = null, areaId = null, metadata = {} }) {
     try {
-      await AuditLog.create({
+      const created = await AuditLog.create({
         actorId,
         actorRole,
         action,
@@ -46,6 +46,20 @@ class AuditService {
         areaId,
         metadata,
       });
+      if (entityType === 'RescueTeam') {
+        try {
+          const { getIO } = require('../socket');
+          const io = getIO();
+          if (io) {
+            io.emit('audit:created', {
+              id: String(created._id),
+              entityType,
+              entityId: entityId ? String(entityId) : null,
+              action,
+            });
+          }
+        } catch (_) {}
+      }
     } catch (err) {
       // Audit log không được làm fail nghiệp vụ chính — chỉ ghi warning
       console.warn('[AuditService] Không thể ghi audit log:', err.message);

@@ -7,6 +7,31 @@ const auditService = require('./audit.service');
 
 class EquipmentService {
   /**
+   * Phát sự kiện realtime khi trang thiết bị/vật tư thay đổi để Đội cứu hộ & Kho vật tư tự cập nhật
+   */
+  _emitEquipmentRealtime(equipment, action = 'UPDATED', previousTeamId = null) {
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (!io) return;
+
+      const rawTeam = equipment?.teamId;
+      const teamId = rawTeam ? String(rawTeam._id || rawTeam) : null;
+      const prevTeamId = previousTeamId ? String(previousTeamId._id || previousTeamId) : null;
+
+      io.emit('equipment:updated', equipment);
+      io.emit('rescue_teams_updated', {
+        action: `EQUIPMENT_${action}`,
+        teamId,
+        previousTeamId: prevTeamId,
+        equipmentId: equipment?._id ? String(equipment._id) : null,
+      });
+    } catch (err) {
+      console.warn('Realtime emit error in EquipmentService:', err.message);
+    }
+  }
+
+  /**
    * Nhap kho vat tu moi cho doi cuu ho
    */
   async createEquipment(data) {
@@ -46,10 +71,12 @@ class EquipmentService {
       note: note || null,
     });
 
-    return equipment.populate([
+    const populated = await equipment.populate([
       { path: 'teamId', select: 'name type areaId status' },
       { path: 'providedBy', select: 'name shortName type' },
     ]);
+    this._emitEquipmentRealtime(populated, 'CREATED');
+    return populated;
   }
 
   /**
@@ -169,6 +196,7 @@ class EquipmentService {
   async updateEquipment(id, updateData) {
     const equipment = await Equipment.findById(id);
     if (!equipment) throw new ApiError(404, 'Khong tim thay vat tu can cap nhat');
+    const previousTeamId = equipment.teamId ? String(equipment.teamId) : null;
 
     const allowed = ['name', 'category', 'supplyType', 'quantity', 'unit', 'status', 'minThreshold', 'note', 'providedBy', 'receivedAt'];
     for (const key of allowed) {
@@ -195,10 +223,12 @@ class EquipmentService {
           existingInTeam.note = existingInTeam.note ? `${existingInTeam.note} | ${mergeLog}` : mergeLog;
           await existingInTeam.save();
           await Equipment.findByIdAndDelete(equipment._id);
-          return existingInTeam.populate([
+          const populatedMerged = await existingInTeam.populate([
             { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
             { path: 'providedBy', select: 'name shortName type' },
           ]);
+          this._emitEquipmentRealtime(populatedMerged, 'UPDATED', previousTeamId);
+          return populatedMerged;
         }
       } else {
         equipment.teamId = null;
@@ -217,10 +247,12 @@ class EquipmentService {
           existingInDepot.note = existingInDepot.note ? `${existingInDepot.note} | ${mergeLog}` : mergeLog;
           await existingInDepot.save();
           await Equipment.findByIdAndDelete(equipment._id);
-          return existingInDepot.populate([
+          const populatedDepot = await existingInDepot.populate([
             { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
             { path: 'providedBy', select: 'name shortName type' },
           ]);
+          this._emitEquipmentRealtime(populatedDepot, 'UPDATED', previousTeamId);
+          return populatedDepot;
         }
       }
     }
@@ -235,10 +267,12 @@ class EquipmentService {
     }
 
     await equipment.save();
-    return equipment.populate([
+    const populated = await equipment.populate([
       { path: 'teamId', select: 'name type areaId status' },
       { path: 'providedBy', select: 'name shortName type' },
     ]);
+    this._emitEquipmentRealtime(populated, 'UPDATED', previousTeamId);
+    return populated;
   }
 
   /**
@@ -257,10 +291,12 @@ class EquipmentService {
     if (note !== undefined) equipment.note = note;
     await equipment.save();
 
-    return equipment.populate([
+    const populated = await equipment.populate([
       { path: 'teamId', select: 'name type areaId status' },
       { path: 'providedBy', select: 'name shortName' },
     ]);
+    this._emitEquipmentRealtime(populated, 'STATUS_UPDATED');
+    return populated;
   }
 
   /**
@@ -275,6 +311,7 @@ class EquipmentService {
     }
 
     await Equipment.findByIdAndDelete(id);
+    this._emitEquipmentRealtime(equipment, 'DELETED');
     return { message: 'Da xoa vat tu thanh cong' };
   }
 
@@ -349,18 +386,22 @@ class EquipmentService {
         existingInTarget.note = existingInTarget.note ? `${existingInTarget.note} | ${transferLog}` : transferLog;
         await existingInTarget.save();
         await Equipment.findByIdAndDelete(sourceEquipment._id);
-        return existingInTarget.populate([
+        const populated = await existingInTarget.populate([
           { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
           { path: 'providedBy', select: 'name shortName type' },
         ]);
+        this._emitEquipmentRealtime(populated, 'TRANSFERRED', currentTeamIdStr);
+        return populated;
       } else {
         sourceEquipment.teamId = validTargetTeamId;
         sourceEquipment.note = sourceEquipment.note ? `${sourceEquipment.note} | ${transferLog}` : transferLog;
         await sourceEquipment.save();
-        return sourceEquipment.populate([
+        const populated = await sourceEquipment.populate([
           { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
           { path: 'providedBy', select: 'name shortName type' },
         ]);
+        this._emitEquipmentRealtime(populated, 'TRANSFERRED', currentTeamIdStr);
+        return populated;
       }
     }
 
@@ -397,10 +438,12 @@ class EquipmentService {
       });
     }
 
-    return targetEquipment.populate([
+    const populated = await targetEquipment.populate([
       { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
       { path: 'providedBy', select: 'name shortName type' },
     ]);
+    this._emitEquipmentRealtime(populated, 'TRANSFERRED', currentTeamIdStr);
+    return populated;
   }
 
   /**
@@ -483,6 +526,11 @@ class EquipmentService {
       const io = getIO();
       if (io) {
         io.emit('equipment:updated', populated);
+        io.emit('rescue_teams_updated', {
+          action: 'EQUIPMENT_CONSUMED',
+          teamId: populated?.teamId ? String(populated.teamId._id || populated.teamId) : null,
+          equipmentId: populated?._id ? String(populated._id) : null,
+        });
       }
     } catch (_) {}
 
@@ -946,6 +994,10 @@ class EquipmentService {
       const io = getIO();
       if (io) {
         updatedEquipments.forEach((doc) => io.emit('equipment:updated', doc));
+        io.emit('rescue_teams_updated', {
+          action: 'EQUIPMENT_BATCH_CONSUMED',
+          teamId: teamId ? String(teamId) : null,
+        });
       }
     } catch (_) {}
 
