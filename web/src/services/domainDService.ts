@@ -277,6 +277,8 @@ class DomainDService {
       if (['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(s.status)) return false;
       const ha = s.shoreHandoffAssignment;
       if (!ha) return false;
+      const shStatus = String(s.shoreHandoff?.status || '').toUpperCase();
+      if (shStatus === 'COMPLETED' || shStatus === 'CANCELLED' || s.shoreHandoff?.completedAt) return false;
       const haStatus = String(ha.status || '').toUpperCase();
       if (!busyStatuses.includes(haStatus)) return false;
       const haTeamId = typeof ha.rescueTeamId === 'object' && ha.rescueTeamId ? ha.rescueTeamId._id : ha.rescueTeamId;
@@ -350,6 +352,15 @@ class DomainDService {
         },
       };
       this.save(STORAGE_SOS, this.sosRequests);
+
+      const haId = handoffAssign._id || handoffAssign.id;
+      if (haId && this.assignments[haId] && handoffAssign.status) {
+        this.assignments[haId] = {
+          ...this.assignments[haId],
+          status: handoffAssign.status,
+        };
+        this.save(STORAGE_ASSIGNMENTS, this.assignments);
+      }
     }
   }
 
@@ -419,8 +430,33 @@ class DomainDService {
 
   syncRealAssignment(assignment: SosAssignment): void {
     if (!assignment || !assignment.id) return;
+    // Xóa các bản ghi tạm local (assign-...) cùng ca SOS để tránh kẹt trạng thái BẬN giả sau khi đồng bộ ID thật từ server
+    if (!String(assignment.id).startsWith('assign-')) {
+      Object.keys(this.assignments).forEach((key) => {
+        const existing = this.assignments[key];
+        if (key.startsWith('assign-') && String(existing?.sosRequestId) === String(assignment.sosRequestId)) {
+          delete this.assignments[key];
+        }
+      });
+    }
     this.assignments[assignment.id] = assignment;
     this.save(STORAGE_ASSIGNMENTS, this.assignments);
+  }
+
+  pruneAssignmentsForSosIds(sosIds: string[], syncedAssignmentIds: Set<string>): void {
+    const sosIdSet = new Set(sosIds.map(String));
+    let changed = false;
+    Object.keys(this.assignments).forEach((key) => {
+      const existing = this.assignments[key];
+      if (!existing) return;
+      if (sosIdSet.has(String(existing.sosRequestId)) && !syncedAssignmentIds.has(String(key))) {
+        delete this.assignments[key];
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.save(STORAGE_ASSIGNMENTS, this.assignments);
+    }
   }
 
   updateAssignmentStatus(assignmentId: string, nextStatus: AssignmentStatus): SosAssignment {
@@ -457,11 +493,18 @@ class DomainDService {
     this.assignments[assignmentId] = { ...assign };
     this.save(STORAGE_ASSIGNMENTS, this.assignments);
 
-    // Also update SOS request status
+    // Also update SOS request status (trừ khi đội cứu hộ chính xong nhưng vẫn còn đội xe đón bờ chưa hoàn tất)
     const sosIdx = this.sosRequests.findIndex((s) => s.id === assign.sosRequestId);
     if (sosIdx !== -1) {
-      this.sosRequests[sosIdx].status = nextStatus as any;
-      this.save(STORAGE_SOS, this.sosRequests);
+      const targetSos = this.sosRequests[sosIdx];
+      const handoffStatus = String(targetSos.shoreHandoff?.status || '').toUpperCase();
+      const hasPendingShoreHandoff = Boolean(
+        handoffStatus && !['NONE', 'COMPLETED', 'CANCELLED'].includes(handoffStatus) && !targetSos.shoreHandoff?.completedAt
+      );
+      if (!(nextStatus === 'COMPLETED' && hasPendingShoreHandoff)) {
+        this.sosRequests[sosIdx].status = nextStatus as any;
+        this.save(STORAGE_SOS, this.sosRequests);
+      }
     }
 
     return this.assignments[assignmentId];
