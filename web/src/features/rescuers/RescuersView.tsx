@@ -57,6 +57,7 @@ import {
 import { domainDService } from '@/services/domainDService';
 import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged, onRescueTeamsUpdated } from '@/services/socketService';
 import {
   SPECIALIZATION_LABELS,
@@ -1517,21 +1518,30 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 {/* Bộ lọc địa bàn Đà Nẵng: Chỉ hiển thị cho Admin */}
                 {isAdmin && (
-                  <select
+                  <SearchableSelect
                     className="ra-filter-select"
+                    ariaLabel="Lọc theo địa bàn Đà Nẵng"
+                    searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
                     value={selectedAreaId}
-                    onChange={(e) => {
-                      setSelectedAreaId(e.target.value);
+                    onChange={(val) => {
+                      setSelectedAreaId(val);
                       setCurrentPage(1);
                     }}
-                  >
-                    <option value="ALL">📍 Tất cả địa bàn Đà Nẵng ({daNangAreas.length})</option>
-                    {daNangAreas.map((area) => (
-                      <option key={area._id} value={area._id}>
-                        {area.name} ({area.code})
-                      </option>
-                    ))}
-                  </select>
+                    triggerStyle={{ minWidth: '220px' }}
+                    options={[
+                      {
+                        value: 'ALL',
+                        label: `📍 Tất cả địa bàn Đà Nẵng (${daNangAreas.length})`,
+                        keywords: 'tat ca toan thanh pho da nang',
+                      },
+                      ...daNangAreas.map((area) => ({
+                        value: area._id,
+                        label: `${area.name}${area.code ? ` (${area.code})` : ''}`,
+                        badgeText: area.code || undefined,
+                        keywords: `${area.name} ${area.code || ''}`,
+                      })),
+                    ]}
+                  />
                 )}
 
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3232,40 +3242,32 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       </label>
                     </div>
 
-                    <select
-                      required
+                    <SearchableSelect
+                      ariaLabel="Chọn Chỉ Huy Đội Trưởng"
+                      placeholder="-- Chọn Cứu hộ viên --"
+                      searchPlaceholder="Tìm nhanh theo tên hoặc tên đội..."
                       value={selectedLeaderId}
-                      onChange={(e) => handleSelectLeader(e.target.value)}
-                      style={{
+                      onChange={(val) => handleSelectLeader(val)}
+                      triggerStyle={{
                         width: '100%',
                         padding: '8px 12px',
                         border: '1px solid #CBD5E1',
                         borderRadius: 6,
                         fontSize: 13,
-                        outline: 'none',
                         background: '#FFFFFF',
                         color: selectedLeaderId ? '#0F172A' : '#64748B',
-                        cursor: 'pointer',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
                       }}
-                    >
-                      <option value="">-- Chọn Cứu hộ viên --</option>
-                      {displayedLeaderCandidates.map((cand) => (
-                        <option
-                          key={cand.id}
-                          value={cand.id}
-                          disabled={!!cand.assignedTeamName}
-                          style={{
-                            color: cand.assignedTeamName ? '#94A3B8' : '#0F172A',
-                            background: cand.assignedTeamName ? '#F8FAFC' : '#FFFFFF',
-                          }}
-                        >
-                          {cand.fullName} {cand.assignedTeamName ? `(⚠️ Đã thuộc: ${cand.assignedTeamName})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: '', label: '-- Chọn Cứu hộ viên --' },
+                        ...displayedLeaderCandidates.map((cand) => ({
+                          value: cand.id,
+                          label: `${cand.fullName}${cand.assignedTeamName ? ` (⚠️ Đã thuộc: ${cand.assignedTeamName})` : ''}`,
+                          badgeText: cand.assignedTeamName ? 'Đã có đội' : 'Sẵn sàng',
+                          keywords: `${cand.fullName} ${cand.phone || ''} ${cand.assignedTeamName || ''}`,
+                          disabled: !!cand.assignedTeamName,
+                        })),
+                      ]}
+                    />
 
 
                   </div>
@@ -4212,12 +4214,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                     Chọn Cứu hộ viên kết nạp <span style={{ color: '#DC2626' }}>*</span>
                   </label>
-                  <select
+                  <SearchableSelect
+                    ariaLabel="Chọn Cứu hộ viên kết nạp"
+                    placeholder="-- Chọn cứu hộ viên sẵn sàng --"
+                    searchPlaceholder="Tìm theo tên, SĐT hoặc kỹ năng..."
                     value={selectedRescuerToAdd}
-                    onChange={(e) => setSelectedRescuerToAdd(e.target.value)}
-                    required
+                    onChange={(val) => setSelectedRescuerToAdd(val)}
                     disabled={isSubmittingAddMember}
-                    style={{
+                    triggerStyle={{
                       width: '100%',
                       padding: '10px 12px',
                       borderRadius: 8,
@@ -4225,25 +4229,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       fontSize: 13,
                       color: '#0F172A',
                       background: '#FFFFFF',
-                      outline: 'none',
                     }}
-                  >
-                    <option value="">-- Chọn cứu hộ viên sẵn sàng --</option>
-                    {availableRescuersToAdd.map((cand) => (
-                      <option
-                        key={cand.id}
-                        value={cand.id}
-                        disabled={!!cand.assignedTeamName}
-                        style={{ color: cand.assignedTeamName ? '#94A3B8' : '#0F172A' }}
-                      >
-                        {cand.fullName} ({cand.phone})
-                        {cand.assignedTeamName
-                          ? ` ⛔ [Đang thuộc: ${cand.assignedTeamName}]`
-                          : ' ✅ [Chưa có đội]'}
-                        {cand.skills ? ` - ${cand.skills}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: '', label: '-- Chọn cứu hộ viên sẵn sàng --' },
+                      ...availableRescuersToAdd.map((cand) => ({
+                        value: cand.id,
+                        label: `${cand.fullName} (${cand.phone})${cand.assignedTeamName ? ` ⛔ [Đang thuộc: ${cand.assignedTeamName}]` : ' ✅ [Chưa có đội]'}${cand.skills ? ` - ${cand.skills}` : ''}`,
+                        badgeText: cand.assignedTeamName ? 'Đã có đội' : 'Sẵn sàng',
+                        keywords: `${cand.fullName} ${cand.phone || ''} ${cand.skills || ''} ${cand.assignedTeamName || ''}`,
+                        disabled: !!cand.assignedTeamName,
+                      })),
+                    ]}
+                  />
                   <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>
                     Danh sách hiển thị các Cứu hộ viên đã duyệt. Cứu hộ viên đã có đội sẽ bị khóa chọn.
                   </span>

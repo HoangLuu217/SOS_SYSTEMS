@@ -28,8 +28,11 @@ import {
   subscribeHazardEvents,
   fetchAdministrativeAreas,
   getDaNangAreaScope,
+  matchesSelectedWardFilter,
 } from '@/api';
 import { MultiImageUploader } from '@/components/common/MultiImageUploader';
+import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import {
   appendPendingImageFiles,
   removePendingImageItem,
@@ -58,6 +61,50 @@ const HAZARD_SELECT_STYLE: React.CSSProperties = {
   background: '#ffffff',
   boxSizing: 'border-box',
 };
+
+type HazardSeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+const HAZARD_SEVERITY_OPTIONS: ReadonlyArray<{ key: HazardSeverityLevel; label: string }> = [
+  { key: 'LOW', label: 'Thấp' },
+  { key: 'MEDIUM', label: 'Trung bình' },
+  { key: 'HIGH', label: 'Cao' },
+  { key: 'CRITICAL', label: 'Cực kỳ nguy cấp' },
+];
+
+const renderSeveritySelector = (
+  selected: HazardSeverityLevel,
+  onSelect: (next: HazardSeverityLevel) => void
+) => (
+  <div>
+    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+      Mức độ nguy cấp <span style={{ color: '#dc2626' }}>*</span>
+    </label>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+      {HAZARD_SEVERITY_OPTIONS.map((s) => {
+        const isSel = selected === s.key;
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onSelect(s.key)}
+            className="sos-btn-flat"
+            style={{
+              justifyContent: 'center',
+              padding: '7px 4px',
+              fontSize: '11.5px',
+              background: isSel ? '#0284c7' : '#ffffff',
+              color: isSel ? '#ffffff' : '#334155',
+              borderColor: isSel ? '#0284c7' : '#cbd5e1',
+              fontWeight: isSel ? 700 : 500,
+            }}
+          >
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 export interface HazardReportsViewProps {
   user?: User;
@@ -94,7 +141,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [hazardSortField, setHazardSortField] = useState<'createdAt' | 'severity' | 'title' | 'district' | 'address' | 'status'>('createdAt');
   const [hazardSortOrder, setHazardSortOrder] = useState<'asc' | 'desc'>('desc');
   const [jumpInputPage, setJumpInputPage] = useState<string>('');
-  const [selectedHazardPhoto, setSelectedHazardPhoto] = useState<string | null>(null);
+  const [selectedHazardPhoto, setSelectedHazardPhoto] = useState<PhotoLightboxState | null>(null);
   const [detailHazard, setDetailHazard] = useState<HazardReportItem | null>(null);
 
   // Chọn hàng loạt (Bulk selection)
@@ -213,7 +260,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     }
   }, [propAreas.length]);
 
-  const { daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+  const { daNangProvince, daNangProvinceId, daNangWards, canonicalAreaIdMap } = useMemo(
     () => getDaNangAreaScope(areas),
     [areas]
   );
@@ -536,46 +583,22 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       if (fullText.includes('liên chiểu') || fullText.includes('lien chieu')) return 'Quận Liên Chiểu';
       if (fullText.includes('ngũ hành sơn') || fullText.includes('ngu hanh son')) return 'Quận Ngũ Hành Sơn';
       if (fullText.includes('hòa vang') || fullText.includes('hoa vang')) return 'Huyện Hòa Vang';
-      if (fullText.includes('hoàng sa') || fullText.includes('hoang sa')) return 'Huyện Hoàng Sa';
+      if (fullText.includes('hoàng sa') || fullText.includes('hoang sa')) {
+        return daNangWards.find((w) => /hoàng\s*sa/i.test(w.name))?.name || 'Đặc khu Hoàng Sa';
+      }
 
       return 'TP Đà Nẵng';
     };
 
     // Hàm xác định điểm nguy hiểm có thuộc Phường / Xã Đà Nẵng được chọn (cho Admin)
-    const isHazardInProvince = (r: HazardReportItem, selectedAreaName: string): boolean => {
-      if (!selectedAreaName || selectedAreaName === 'ALL') return true;
-      const targetClean = selectedAreaName
-        .toLowerCase()
-        .replace(/^(tỉnh|thành phố|tp\.?|phường|xã|thị trấn)\s+/i, '')
-        .trim();
-
-      const itemAreaId = typeof r.areaId === 'object' ? (r.areaId as any)?._id : r.areaId;
-      const matchedWard = daNangWards.find((w) => w.name === selectedAreaName);
-      if (matchedWard && itemAreaId && String(itemAreaId) === String(matchedWard._id)) {
-        return true;
-      }
-
-      const addr = (r.address || '').toLowerCase();
-      const title = (r.title || '').toLowerCase();
-      const desc = (r.description || '').toLowerCase();
-      const fullText = `${addr} ${title} ${desc}`;
-
-      if (fullText.includes(targetClean)) return true;
-
-      const removeAccents = (str: string) =>
-        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      if (removeAccents(fullText).includes(removeAccents(targetClean))) return true;
-
-      const areaName = (r.areaId as any)?.name || (r.areaId as any)?.districtName;
-      if (areaName && typeof areaName === 'string') {
-        const cleanArea = areaName.toLowerCase();
-        if (cleanArea.includes(targetClean) || removeAccents(cleanArea).includes(removeAccents(targetClean))) {
-          return true;
-        }
-      }
-
-      return false;
-    };
+    const isHazardInProvince = (r: HazardReportItem, selectedAreaName: string): boolean =>
+      matchesSelectedWardFilter(
+        r.areaId,
+        [r.address, r.title, r.description],
+        selectedAreaName,
+        daNangWards,
+        canonicalAreaIdMap
+      );
 
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const localReports = hazardReports.filter((r) => isHazardInOfficerJurisdiction(r));
@@ -1517,13 +1540,15 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
                   Lọc theo Phường / Xã (Đà Nẵng):
                 </span>
-                <select
+                <SearchableSelect
+                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
+                  searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
                   value={selectedAdminProvince}
-                  onChange={(e) => {
-                    setSelectedAdminProvince(e.target.value);
+                  onChange={(val) => {
+                    setSelectedAdminProvince(val);
                     setHazardPage(1);
                   }}
-                  style={{
+                  triggerStyle={{
                     padding: '6px 12px',
                     fontSize: '13px',
                     borderRadius: '6px',
@@ -1531,19 +1556,23 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
                     fontWeight: 500,
-                    cursor: 'pointer',
-                    outline: 'none',
                     minWidth: '240px',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   }}
-                >
-                  <option value="ALL">-- Tất cả Phường / Xã Đà Nẵng ({daNangWards.length}) --</option>
-                  {daNangWards.map((a) => (
-                    <option key={`hf-ward-${a._id}`} value={a.name}>
-                      {a.name} {a.code ? `[${a.code}]` : ''}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    {
+                      value: 'ALL',
+                      label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
+                      keywords: 'tat ca toan thanh pho da nang',
+                    },
+                    ...daNangWards.map((a) => ({
+                      value: a.name,
+                      label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
+                      badgeText: a.code || undefined,
+                      keywords: `${a.name} ${a.code || ''}`,
+                    })),
+                  ]}
+                />
 
                 {selectedAdminProvince !== 'ALL' && (
                   <button
@@ -2450,7 +2479,13 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         {detailHazard.images.map((imgUrl, i) => (
                           <div
                             key={i}
-                            onClick={() => setSelectedHazardPhoto(imgUrl)}
+                            onClick={() =>
+                              setSelectedHazardPhoto({
+                                images: detailHazard.images || [],
+                                activeIndex: i,
+                                title: detailHazard.title,
+                              })
+                            }
                             style={{
                               height: '80px',
                               borderRadius: '8px',
@@ -2949,39 +2984,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     </div>
 
                     {/* 3. Mức độ nguy cấp */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Mức độ nguy cấp <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                        {[
-                          { key: 'LOW', label: 'Thấp' },
-                          { key: 'MEDIUM', label: 'Trung bình' },
-                          { key: 'HIGH', label: 'Cao' },
-                          { key: 'CRITICAL', label: 'Cực kỳ nguy cấp' },
-                        ].map((s) => {
-                          const isSel = editSeverity === s.key;
-                          return (
-                            <button
-                              key={s.key}
-                              type="button"
-                              onClick={() => setEditSeverity(s.key as any)}
-                              className="sos-btn-flat"
-                              style={{
-                                justifyContent: 'center',
-                                padding: '7px 4px',
-                                fontSize: '11.5px',
-                                background: isSel ? '#0f172a' : '#ffffff',
-                                color: isSel ? '#ffffff' : '#334155',
-                                borderColor: isSel ? '#0f172a' : '#cbd5e1',
-                              }}
-                            >
-                              {s.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    {renderSeveritySelector(editSeverity, setEditSeverity)}
 
                     {/* 4. Địa chỉ hiện trường */}
                     <div>
@@ -3053,6 +3056,22 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         </div>
                       )}
                     </div>
+
+                    <MultiImageUploader
+                      inputId="edit-hazard-images"
+                      label="Ảnh hiện trường"
+                      existingUrls={editExistingImages}
+                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
+                      pendingImages={editPendingImages}
+                      onAddFiles={(files) =>
+                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
+                      }
+                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
+                      onPreviewImage={(_url, images, index) =>
+                        setSelectedHazardPhoto({ images, activeIndex: index, title: editTitle || 'Ảnh hiện trường' })
+                      }
+                      disabled={submittingReview}
+                    />
                   </div>
 
                   {/* CỘT PHẢI: TỌA ĐỘ GPS, BẢN ĐỒ TÌM KIẾM & GHI CHÚ */}
@@ -3101,20 +3120,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         }}
                       />
                     </div>
-
-                    <MultiImageUploader
-                      inputId="edit-hazard-images"
-                      label="Ảnh hiện trường"
-                      existingUrls={editExistingImages}
-                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
-                      pendingImages={editPendingImages}
-                      onAddFiles={(files) =>
-                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
-                      }
-                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
-                      onPreviewImage={setSelectedHazardPhoto}
-                      disabled={submittingReview}
-                    />
                   </div>
                 </div>
               </div>
@@ -3387,40 +3392,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     </div>
 
                     {/* 3. Mức độ nguy cấp */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Mức độ nguy cấp <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                        {[
-                          { key: 'LOW', label: 'Thấp', color: '#16a34a' },
-                          { key: 'MEDIUM', label: 'Trung bình', color: '#ca8a04' },
-                          { key: 'HIGH', label: 'Cao', color: '#ea580c' },
-                          { key: 'CRITICAL', label: 'Cực kỳ nguy cấp', color: '#dc2626' },
-                        ].map((s) => {
-                          const isSel = createSeverity === s.key;
-                          return (
-                            <button
-                              key={s.key}
-                              type="button"
-                              onClick={() => setCreateSeverity(s.key as any)}
-                              className="sos-btn-flat"
-                              style={{
-                                justifyContent: 'center',
-                                padding: '7px 4px',
-                                fontSize: '11.5px',
-                                background: isSel ? s.color : '#ffffff',
-                                color: isSel ? '#ffffff' : '#334155',
-                                borderColor: isSel ? s.color : '#cbd5e1',
-                                fontWeight: isSel ? 700 : 500,
-                              }}
-                            >
-                              {s.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    {renderSeveritySelector(createSeverity, setCreateSeverity)}
 
                     {/* 4. Khu vực quản lý hành chính */}
                     <div>
@@ -3432,27 +3404,32 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
                             Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                           </div>
-                          <select
+                          <SearchableSelect
+                            ariaLabel="Chọn Phường / Xã quản lý điểm nguy hiểm"
+                            searchPlaceholder="Tìm nhanh Phường / Xã..."
                             value={createHazardAreaId || daNangProvinceId}
-                            onChange={(e) => {
-                              const val = e.target.value;
+                            onChange={(val) => {
                               setCreateHazardAreaId(val);
                               const found = areas.find((a) => String(a._id) === val);
                               if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
                                 setCreateAddress(found.name);
                               }
                             }}
-                            style={HAZARD_SELECT_STYLE}
-                          >
-                            <option value={daNangProvinceId}>
-                              Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã)
-                            </option>
-                            {daNangWards.map((w) => (
-                              <option key={`h-ward-${w._id}`} value={w._id}>
-                                {w.name}
-                              </option>
-                            ))}
-                          </select>
+                            triggerStyle={HAZARD_SELECT_STYLE}
+                            options={[
+                              {
+                                value: daNangProvinceId,
+                                label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
+                                keywords: 'tat ca toan thanh pho da nang',
+                              },
+                              ...daNangWards.map((w) => ({
+                                value: w._id,
+                                label: w.name,
+                                badgeText: w.code || undefined,
+                                keywords: `${w.name} ${w.code || ''}`,
+                              })),
+                            ]}
+                          />
                         </div>
                       ) : (
                         <div
@@ -3547,6 +3524,20 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         </div>
                       )}
                     </div>
+
+                    <MultiImageUploader
+                      inputId="create-hazard-images"
+                      label="Ảnh hiện trường"
+                      pendingImages={createPendingImages}
+                      onAddFiles={(files) =>
+                        appendPendingImageFiles(files, setCreatePendingImages, notifyInvalidImageFile)
+                      }
+                      onRemovePending={(id) => removePendingImageItem(id, setCreatePendingImages)}
+                      onPreviewImage={(_url, images, index) =>
+                        setSelectedHazardPhoto({ images, activeIndex: index, title: createTitle || 'Ảnh hiện trường' })
+                      }
+                      disabled={submittingCreate}
+                    />
                   </div>
 
                   {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
@@ -3644,18 +3635,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         }}
                       />
                     </div>
-
-                    <MultiImageUploader
-                      inputId="create-hazard-images"
-                      label="Ảnh hiện trường"
-                      pendingImages={createPendingImages}
-                      onAddFiles={(files) =>
-                        appendPendingImageFiles(files, setCreatePendingImages, notifyInvalidImageFile)
-                      }
-                      onRemovePending={(id) => removePendingImageItem(id, setCreatePendingImages)}
-                      onPreviewImage={setSelectedHazardPhoto}
-                      disabled={submittingCreate}
-                    />
                   </div>
                 </div>
               </div>
@@ -3721,61 +3700,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         )}
 
         {/* MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG */}
-        {selectedHazardPhoto && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.85)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10000,
-              padding: 24,
-            }}
-            onClick={() => setSelectedHazardPhoto(null)}
-          >
-            <div
-              style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img
-                src={selectedHazardPhoto}
-                alt="Hiện trường phóng to"
-                style={{
-                  maxWidth: '88vw',
-                  maxHeight: '84vh',
-                  borderRadius: 8,
-                  objectFit: 'contain',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setSelectedHazardPhoto(null)}
-                style={{
-                  position: 'absolute',
-                  top: -12,
-                  right: -12,
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  border: 'none',
-                  fontSize: 16,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold',
-                }}
-                title="Đóng xem ảnh"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
+        <PhotoLightboxModal
+          state={selectedHazardPhoto}
+          onClose={() => setSelectedHazardPhoto(null)}
+        />
 
         {/* TOASTS VÀ CONFIRMATION MODAL TOÀN CỤC */}
         {renderGlobalModals()}

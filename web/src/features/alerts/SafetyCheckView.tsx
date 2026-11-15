@@ -9,8 +9,14 @@ import {
   type SafetyCheckResponseItem,
   type CreateSafetyCheckPayload,
 } from '@/api/safetyCheck.api';
-import { fetchAdministrativeAreas, findRootProvinceId, getDaNangAreaScope } from '@/api/area.api';
+import {
+  fetchAdministrativeAreas,
+  findRootProvinceId,
+  getDaNangAreaScope,
+  getSelectedWardValue,
+} from '@/api/area.api';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -78,7 +84,14 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   });
 
   // Phân cấp khu vực hành chính khu vực Đà Nẵng từ DB
-  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+  const {
+    areaById,
+    daNangProvince,
+    daNangProvinceId,
+    daNangWards,
+    daNangWardIds,
+    canonicalAreaIdMap,
+  } = useMemo(
     () => getDaNangAreaScope(areas),
     [areas]
   );
@@ -614,23 +627,31 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
                   Phường/Xã (Đà Nẵng):
                 </span>
-                <select
+                <SearchableSelect
                   className="sos-clean-sort-select"
-                  value={areaById.get(areaFilter)?.type === 'WARD' ? areaFilter : ''}
-                  onChange={(e) => {
-                    const wId = e.target.value;
+                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
+                  searchPlaceholder="Tìm nhanh Phường / Xã..."
+                  value={getSelectedWardValue(areaFilter, daNangWardIds, canonicalAreaIdMap)}
+                  onChange={(wId) => {
                     setAreaFilter(wId || 'ALL');
                     setCurrentPage(1);
                     setJumpPageInput('1');
                   }}
-                >
-                  <option value="">Tất cả Phường / Xã Đà Nẵng ({daNangWards.length})</option>
-                  {daNangWards.map((w) => (
-                    <option key={w._id} value={w._id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                  triggerStyle={{ minWidth: '230px' }}
+                  options={[
+                    {
+                      value: '',
+                      label: `Tất cả Phường / Xã Đà Nẵng (${daNangWards.length})`,
+                      keywords: 'tat ca toan thanh pho da nang',
+                    },
+                    ...daNangWards.map((w) => ({
+                      value: w._id,
+                      label: w.name,
+                      badgeText: w.code || undefined,
+                      keywords: `${w.name} ${w.code || ''}`,
+                    })),
+                  ]}
+                />
               </div>
             </>
           ) : (
@@ -1729,11 +1750,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                         Phường / Xã (Khu vực {daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-                      <select
+                      <SearchableSelect
                         className="sc-form-control"
-                        value={areaById.get(createForm.areaId)?.type === 'WARD' ? createForm.areaId : ''}
-                        onChange={(e) => {
-                          const wardId = e.target.value;
+                        ariaLabel="Chọn Phường / Xã kiểm tra an toàn"
+                        searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                        value={getSelectedWardValue(createForm.areaId, daNangWardIds, canonicalAreaIdMap)}
+                        onChange={(wardId) => {
                           const nextAreaId = wardId || daNangProvinceId || 'ALL';
                           const selectedAreaObj = areaById.get(nextAreaId);
                           const nextAreaLabel = selectedAreaObj
@@ -1747,16 +1769,21 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                               : prev.title,
                           }));
                         }}
-                      >
-                        <option value="">
-                          Tất cả Phường/Xã tại Đà Nẵng ({daNangWards.length})
-                        </option>
-                        {daNangWards.map((ward) => (
-                          <option key={ward._id} value={ward._id}>
-                            {ward.name} ({ward.code})
-                          </option>
-                        ))}
-                      </select>
+                        triggerStyle={{ width: '100%' }}
+                        options={[
+                          {
+                            value: '',
+                            label: `Tất cả Phường/Xã tại Đà Nẵng (${daNangWards.length})`,
+                            keywords: 'tat ca toan thanh pho da nang',
+                          },
+                          ...daNangWards.map((ward) => ({
+                            value: ward._id,
+                            label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+                            badgeText: ward.code || undefined,
+                            keywords: `${ward.name} ${ward.code || ''}`,
+                          })),
+                        ]}
+                      />
                       <p className="sc-form-hint">
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </p>

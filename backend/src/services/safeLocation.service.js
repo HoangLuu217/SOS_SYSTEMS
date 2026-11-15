@@ -5,6 +5,30 @@ const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('..
 const { sanitizeImages } = require('../utils/validation.util');
 const eventBus = require('./eventBus');
 
+const MAX_SHELTER_OCCUPANCY_PERCENT = 120;
+
+function validateCapacityAndOccupancy(capacity, currentOccupancy) {
+  const cap = Number(capacity);
+  const occ = Number(currentOccupancy);
+
+  if (!Number.isFinite(cap) || cap < 0) {
+    throw new ApiError(400, 'Sức chứa tối đa (capacity) không hợp lệ và không được là số âm.');
+  }
+  if (!Number.isFinite(occ) || occ < 0) {
+    throw new ApiError(400, 'Số người hiện tại (currentOccupancy) không hợp lệ và không được là số âm.');
+  }
+  if (cap === 0 && occ > 0) {
+    throw new ApiError(400, 'Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú.');
+  }
+  if (cap > 0 && occ * 100 > cap * MAX_SHELTER_OCCUPANCY_PERCENT) {
+    const maxAllowed = Math.floor((cap * MAX_SHELTER_OCCUPANCY_PERCENT) / 100);
+    throw new ApiError(
+      400,
+      `Số người đang lưu trú (${occ}) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed} người cho sức chứa ${cap}).`
+    );
+  }
+}
+
 class SafeLocationService {
   /**
    * Tạo địa điểm an toàn mới
@@ -31,6 +55,10 @@ class SafeLocationService {
     if (typeof lng !== 'number' || typeof lat !== 'number' || isNaN(lng) || isNaN(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
       throw new ApiError(400, 'Tọa độ GPS kinh độ (-180..180) hoặc vĩ độ (-90..90) không hợp lệ');
     }
+
+    const capVal = capacity ?? 0;
+    const occVal = currentOccupancy ?? 0;
+    validateCapacityAndOccupancy(capVal, occVal);
 
     // 1. Nếu có truyền areaId hợp lệ từ DB (ví dụ Admin hoặc Cán bộ chọn trực tiếp khu vực trong area), ưu tiên lấy area đó
     let area = null;
@@ -111,8 +139,8 @@ class SafeLocationService {
       },
       areaId: area._id,
       address: address ? String(address).trim() : '',
-      capacity: capacity ?? 0,
-      currentOccupancy: currentOccupancy ?? 0,
+      capacity: capVal,
+      currentOccupancy: occVal,
       status: status || 'ACTIVE',
       images: sanitizeImages(images),
       createdBy: actorId,
@@ -262,6 +290,10 @@ class SafeLocationService {
       if (updateData[field] !== undefined) {
         safeLocation[field] = updateData[field];
       }
+    }
+
+    if (updateData.capacity !== undefined || updateData.currentOccupancy !== undefined) {
+      validateCapacityAndOccupancy(safeLocation.capacity ?? 0, safeLocation.currentOccupancy ?? 0);
     }
 
     if (updateData.images !== undefined) {

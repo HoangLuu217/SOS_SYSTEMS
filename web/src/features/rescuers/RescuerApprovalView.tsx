@@ -24,6 +24,7 @@ import { fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api'
 import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import { SKILL_LABELS, getApplicantInitials } from './rescuersConstants';
 import './RescuerApprovalView.css';
@@ -793,33 +794,39 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
           <div className="ra-toolbar-controls">
             {/* Bộ lọc địa bàn Đà Nẵng: Dành riêng cho Quản trị viên (Admin) */}
             {isAdmin && (
-              <select
+              <SearchableSelect
                 className="ra-filter-select"
+                ariaLabel="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
+                title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
+                searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
                 value={areaFilter}
-                onChange={(e) => {
-                  setAreaFilter(e.target.value);
+                onChange={(val) => {
+                  setAreaFilter(val);
                   setCurrentPage(1);
                 }}
-                style={{
-                  minWidth: 195,
+                triggerStyle={{
+                  minWidth: 215,
                   fontWeight: 700,
                   borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
                   background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
                   color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
                 }}
-                title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
-              >
-                <option value="ALL">
-                  {wardsLoading
-                    ? '⏳ Đang tải địa bàn Đà Nẵng...'
-                    : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`}
-                </option>
-                {wards.map((ward) => (
-                  <option key={ward.id} value={ward.id}>
-                    {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  {
+                    value: 'ALL',
+                    label: wardsLoading
+                      ? '⏳ Đang tải địa bàn Đà Nẵng...'
+                      : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
+                    keywords: 'tat ca toan thanh pho da nang',
+                  },
+                  ...wards.map((ward) => ({
+                    value: ward.id,
+                    label: `${ward.type === 'DISTRICT' ? '🏛️' : '📍'} ${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+                    badgeText: ward.code || undefined,
+                    keywords: `${ward.name} ${ward.code || ''}`,
+                  })),
+                ]}
+              />
             )}
 
             {/* Bộ lọc trạng thái */}

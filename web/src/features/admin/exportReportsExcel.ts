@@ -786,13 +786,24 @@ function buildAllSheets(data: ReportsRawData): SheetSpec[] {
 
     const rows: { v: string | number; align?: 'left' | 'center' | 'right' }[][] = [];
     data.shelters.forEach((s) => {
+      const cap = Number(s.capacity) || 0;
+      const occ = Number(s.currentOccupancy) || 0;
+      const isOverloaded = cap > 0 && occ > cap;
+      const statusLabel =
+        s.status === 'INACTIVE' || s.status === 'MAINTENANCE'
+          ? 'Tạm đóng'
+          : isOverloaded
+            ? `Quá tải (${Math.round((occ / cap) * 100)}%)`
+            : s.status === 'FULL' || (cap > 0 && occ >= cap)
+              ? 'Đã đầy'
+              : 'Đang mở';
       rows.push([
         { v: rows.length + 1, align: 'center' },
         { v: 'Điểm trú ẩn', align: 'center' },
         { v: s.name || '—' },
         { v: s.address || '—' },
-        { v: `${Number(s.currentOccupancy) || 0} / ${Number(s.capacity) || 0} chỗ`, align: 'center' },
-        { v: s.status === 'ACTIVE' ? 'Đang mở' : 'Tạm đóng', align: 'center' },
+        { v: `${occ} / ${cap} chỗ`, align: 'center' },
+        { v: statusLabel, align: 'center' },
       ]);
     });
 

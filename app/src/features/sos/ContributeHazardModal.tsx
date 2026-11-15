@@ -13,7 +13,6 @@ import {
   Platform,
   Modal,
   RefreshControl,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -21,9 +20,8 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
+import { FullScreenImageViewer, type ImagePreviewState } from '@/components';
 import { useAuth } from '@/context/AuthContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ContributeHazardModalProps {
   visible: boolean;
@@ -109,8 +107,8 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
   // Danh sách nhiều ảnh hiện trường (Hỗ trợ upload lên Cloudinary)
   const [selectedImages, setSelectedImages] = useState<LocalHazardImage[]>([]);
 
-  // Xem ảnh phóng to (Zoom Modal)
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  // Xem ảnh phóng to (Fullscreen Viewer)
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
 
   // Lịch sử đóng góp của tôi
   const [myReports, setMyReports] = useState<MyHazardReportItem[]>([]);
@@ -595,7 +593,17 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
   `;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={() => {
+        if (imagePreview) {
+          setImagePreview(null);
+          return;
+        }
+        onClose();
+      }}
+    >
       <KeyboardAvoidingView
         style={styles.modalContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -939,7 +947,12 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                       <View key={img.id} style={styles.thumbnailWrapper}>
                         <TouchableOpacity
                           activeOpacity={0.9}
-                          onPress={() => setPreviewImageUrl(img.uri)}
+                          onPress={() =>
+                            setImagePreview({
+                              images: selectedImages.map((s) => s.uri),
+                              index: idx,
+                            })
+                          }
                         >
                           <Image source={{ uri: img.uri }} style={styles.thumbnailImage} />
                         </TouchableOpacity>
@@ -1220,7 +1233,12 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                               <TouchableOpacity
                                 key={imgIdx}
                                 activeOpacity={0.85}
-                                onPress={() => setPreviewImageUrl(imgUrl)}
+                                onPress={() =>
+                                  setImagePreview({
+                                    images: item.images || [],
+                                    index: imgIdx,
+                                  })
+                                }
                                 style={styles.cardImageThumbWrap}
                               >
                                 <Image
@@ -1251,32 +1269,15 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
             )}
           </View>
         )}
+        {/* ==================== PHÓNG TO XEM ẢNH FULL SIZE (NEXT / BACK) ==================== */}
+        <FullScreenImageViewer
+          visible={Boolean(imagePreview)}
+          images={imagePreview?.images || []}
+          initialIndex={imagePreview?.index || 0}
+          onClose={() => setImagePreview(null)}
+          useModal={false}
+        />
       </KeyboardAvoidingView>
-
-      {/* ==================== MODAL PHÓNG TO XEM ẢNH FULL SIZE ==================== */}
-      <Modal
-        visible={Boolean(previewImageUrl)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewImageUrl(null)}
-      >
-        <View style={styles.previewModalOverlay}>
-          <TouchableOpacity
-            style={styles.previewCloseBtn}
-            onPress={() => setPreviewImageUrl(null)}
-            activeOpacity={0.8}
-          >
-            <Feather name="x" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImageUrl && (
-            <Image
-              source={{ uri: previewImageUrl }}
-              style={styles.fullPreviewImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
 
       {/* ==================== MODAL CHỌN GHIM TRÊN GOOGLE MAPS ==================== */}
       <Modal visible={showMapPicker} animationType="slide" onRequestClose={() => setShowMapPicker(false)}>
@@ -2050,30 +2051,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#0C4A6E',
     lineHeight: 16,
-  },
-
-  // Image Preview Modal Overlay
-  previewModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewCloseBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullPreviewImage: {
-    width: SCREEN_WIDTH * 0.95,
-    height: '75%',
   },
 
   // Map Picker Modal Styles

@@ -13,8 +13,13 @@ import {
   type WeatherPaginationCounts,
 } from '@/api/weather.api';
 import { broadcastNotificationApi } from '@/api/alert.api';
-import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
+import {
+  fetchAdministrativeAreas,
+  getDaNangAreaScope,
+  getSelectedWardValue,
+} from '@/api/area.api';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
   CloudSun,
@@ -178,7 +183,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [broadcasting, setBroadcasting] = useState<boolean>(false);
   const [administrativeAreas, setAdministrativeAreas] = useState<AdministrativeAreaItem[]>([]);
 
-  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+  const {
+    areaById,
+    daNangProvince,
+    daNangProvinceId,
+    daNangWards,
+    daNangWardIds,
+    canonicalAreaIdMap,
+  } = useMemo(
     () => getDaNangAreaScope(administrativeAreas),
     [administrativeAreas]
   );
@@ -422,8 +434,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         : typeof item.areaId === 'string' && item.areaId
           ? item.areaId
           : '';
-    const isDaNangWard = rawAreaId ? daNangWards.some((w) => w._id === rawAreaId) : false;
-    const defaultAreaId = isDaNangWard ? rawAreaId : daNangProvinceId || 'ALL';
+    const canonicalAreaId = rawAreaId ? canonicalAreaIdMap.get(String(rawAreaId)) || String(rawAreaId) : '';
+    const isDaNangWard = canonicalAreaId ? daNangWardIds.has(canonicalAreaId) : false;
+    const defaultAreaId = isDaNangWard ? canonicalAreaId : daNangProvinceId || 'ALL';
 
     setBroadcastForm({
       title: item.title || '',
@@ -1769,34 +1782,50 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     <label className="weather-form-label">
                       Khu vực cảnh báo (Đà Nẵng) <span className="required">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      list="weather-area-suggestions"
-                      placeholder="VD: Thành phố Đà Nẵng, Phường Hải Châu, Xã Hòa Vang..."
-                      className="weather-form-input"
-                      value={formValues.area}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const daNangOptions = daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards;
-                        const matched = daNangOptions.find(
-                          (a) => a.name.toLowerCase() === val.trim().toLowerCase()
-                        );
-                        setFormValues({
-                          ...formValues,
-                          area: val,
-                          areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
-                        });
-                      }}
-                    />
-                    <datalist id="weather-area-suggestions">
-                      {(daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards).map((area) => (
-                        <option key={area._id} value={area.name}>
-                          {area.type === 'PROVINCE' ? '[Toàn TP Đà Nẵng] ' : '[Phường/Xã] '}
-                          {area.name}
-                        </option>
-                      ))}
-                    </datalist>
+                    {(() => {
+                      const daNangOptions = daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards;
+                      const currentAreaName = formValues.area || '';
+                      const hasMatchingName = daNangOptions.some(
+                        (a) => a.name.toLowerCase() === currentAreaName.trim().toLowerCase()
+                      );
+                      const areaOptions = [
+                        ...(currentAreaName.trim() && !hasMatchingName
+                          ? [{ value: currentAreaName, label: currentAreaName, keywords: currentAreaName }]
+                          : []),
+                        ...daNangOptions.map((area) => ({
+                          value: area.name,
+                          label: area.name,
+                          badgeText:
+                            area.type === 'PROVINCE'
+                              ? 'Toàn TP'
+                              : area.name.startsWith('Đặc khu')
+                                ? 'Đặc khu'
+                                : area.code || 'Phường/Xã',
+                          keywords: `${area.name} ${area.code || ''} ${area.type === 'PROVINCE' ? 'tat ca toan thanh pho da nang' : ''}`,
+                        })),
+                      ];
+                      return (
+                        <SearchableSelect
+                          className="weather-form-input"
+                          ariaLabel="Chọn khu vực cảnh báo Đà Nẵng"
+                          placeholder="Chọn khu vực cảnh báo..."
+                          searchPlaceholder="Tìm nhanh Phường / Xã tại Đà Nẵng..."
+                          value={currentAreaName}
+                          onChange={(val) => {
+                            const matched = daNangOptions.find(
+                              (a) => a.name.toLowerCase() === val.trim().toLowerCase()
+                            );
+                            setFormValues({
+                              ...formValues,
+                              area: val,
+                              areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
+                            });
+                          }}
+                          triggerStyle={{ width: '100%', background: '#ffffff', color: '#0f172a' }}
+                          options={areaOptions}
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -2188,30 +2217,37 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 <label className="weather-form-label">
                   Phạm vi phát thông báo — Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                 </label>
-                <select
+                <SearchableSelect
                   className="weather-form-input"
-                  value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
+                  value={getSelectedWardValue(broadcastForm.areaId, daNangWardIds, canonicalAreaIdMap)}
                   disabled={broadcasting}
-                  onChange={(e) => {
-                    const wardId = e.target.value;
+                  onChange={(wardId) => {
                     setBroadcastForm((prev) => ({
                       ...prev,
                       areaId: wardId || daNangProvinceId || 'ALL',
                     }));
                   }}
-                  aria-label="Chọn xã phường"
-                  style={{
+                  ariaLabel="Chọn xã phường"
+                  searchPlaceholder="Tìm nhanh Phường / Xã..."
+                  triggerStyle={{
+                    width: '100%',
                     background: '#ffffff',
                     color: '#0f172a',
                   }}
-                >
-                  <option value="">Tất cả Phường/Xã tại Đà Nẵng ({daNangWards.length})</option>
-                  {daNangWards.map((ward) => (
-                    <option key={ward._id} value={ward._id}>
-                      {ward.name} ({ward.code})
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    {
+                      value: '',
+                      label: `Tất cả Phường/Xã tại Đà Nẵng (${daNangWards.length})`,
+                      keywords: 'tat ca toan thanh pho da nang',
+                    },
+                    ...daNangWards.map((ward) => ({
+                      value: ward._id,
+                      label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+                      badgeText: ward.code || undefined,
+                      keywords: `${ward.name} ${ward.code || ''}`,
+                    })),
+                  ]}
+                />
               </div>
 
               {/* Live Preview trên điện thoại (Nền trắng đồng bộ) */}

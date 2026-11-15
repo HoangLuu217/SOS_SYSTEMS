@@ -19,9 +19,14 @@ import {
   Bell,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
-import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
+import {
+  fetchAdministrativeAreas,
+  getDaNangAreaScope,
+  getSelectedWardValue,
+} from '@/api/area.api';
 import type { User } from '@/types/auth';
 import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 
 export interface BloodDonationsViewProps {
   user?: User | null;
@@ -352,7 +357,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     void fetchAllData(false);
   }, [fetchAreas, fetchAllData]);
 
-  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+  const {
+    daNangProvince,
+    daNangProvinceId,
+    daNangWards,
+    daNangWardIds,
+    canonicalAreaIdMap,
+  } = useMemo(
     () => getDaNangAreaScope(areas),
     [areas]
   );
@@ -2478,20 +2489,17 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
                         Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-                      <select
-                        value={
-                          areaById.get(formAreaId)?.type === 'WARD'
-                            ? formAreaId
-                            : ''
-                        }
-                        onChange={(e) => {
-                          const wardId = e.target.value;
+                      <SearchableSelect
+                        ariaLabel="Chọn Phường / Xã tổ chức hiến máu"
+                        searchPlaceholder="Tìm nhanh Phường / Xã..."
+                        value={getSelectedWardValue(formAreaId, daNangWardIds, canonicalAreaIdMap)}
+                        onChange={(wardId) => {
                           const nextAreaId = wardId || daNangProvinceId || 'ALL';
                           setFormAreaId(nextAreaId);
                           const matched = areas.find((a) => a._id === nextAreaId);
                           if (matched) setFormAddress(matched.name);
                         }}
-                        style={{
+                        triggerStyle={{
                           width: '100%',
                           padding: '8px 11px',
                           borderRadius: 8,
@@ -2499,16 +2507,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           fontSize: 13,
                           background: '#ffffff',
                         }}
-                      >
-                        <option value="">
-                          Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã)
-                        </option>
-                        {daNangWards.map((w) => (
-                          <option key={w._id} value={w._id}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          {
+                            value: '',
+                            label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
+                            keywords: 'tat ca toan thanh pho da nang',
+                          },
+                          ...daNangWards.map((w) => ({
+                            value: w._id,
+                            label: w.name,
+                            badgeText: w.code || undefined,
+                            keywords: `${w.name} ${w.code || ''}`,
+                          })),
+                        ]}
+                      />
                       <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </div>

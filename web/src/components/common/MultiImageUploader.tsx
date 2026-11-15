@@ -10,7 +10,7 @@ export interface MultiImageUploaderProps {
   pendingImages: PendingUploadImage[];
   onAddFiles: (files: FileList | null) => void;
   onRemovePending: (id: string) => void;
-  onPreviewImage?: (url: string) => void;
+  onPreviewImage?: (url: string, images: string[], index: number) => void;
   disabled?: boolean;
 }
 
@@ -29,6 +29,10 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
   disabled,
 }) => {
   const totalCount = existingUrls.length + pendingImages.length;
+  const allPreviewUrls = [
+    ...existingUrls,
+    ...pendingImages.map((img) => img.previewUrl),
+  ];
 
   return (
     <div>
@@ -100,7 +104,7 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
               <img
                 src={url}
                 alt={`Ảnh hiện có ${idx + 1}`}
-                onClick={() => onPreviewImage?.(url)}
+                onClick={() => onPreviewImage?.(url, allPreviewUrls, idx)}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -152,7 +156,7 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
               <img
                 src={img.previewUrl}
                 alt={`Ảnh mới ${idx + 1}`}
-                onClick={() => onPreviewImage?.(img.previewUrl)}
+                onClick={() => onPreviewImage?.(img.previewUrl, allPreviewUrls, existingUrls.length + idx)}
                 style={{
                   width: '100%',
                   height: '100%',

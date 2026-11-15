@@ -36,6 +36,7 @@ import {
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
 import './SosRequestsView.css';
 
@@ -2241,16 +2242,20 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               </div>
               <div>
                 <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Khu vực hành chính:</label>
-                <select
+                <SearchableSelect
                   className="sos-form-select"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px' }}
+                  ariaLabel="Chọn khu vực hành chính"
+                  searchPlaceholder="Tìm nhanh khu vực hành chính..."
+                  triggerStyle={{ width: '100%', padding: '8px 12px', borderRadius: '6px' }}
                   value={hotlineForm.areaId}
-                  onChange={(e) => setHotlineForm({ ...hotlineForm, areaId: e.target.value })}
-                >
-                  {areas.map((a) => (
-                    <option key={a._id} value={a._id}>{a.name} ({a.code})</option>
-                  ))}
-                </select>
+                  onChange={(val) => setHotlineForm({ ...hotlineForm, areaId: val })}
+                  options={areas.map((a) => ({
+                    value: a._id,
+                    label: `${a.name}${a.code ? ` (${a.code})` : ''}`,
+                    badgeText: a.code || undefined,
+                    keywords: `${a.name} ${a.code || ''}`,
+                  }))}
+                />
               </div>
               <div>
                 <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Địa chỉ hiện tại:</label>

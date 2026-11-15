@@ -5,6 +5,11 @@ import 'leaflet/dist/leaflet.css';
 import type { VehicleTerrainCapability } from '@/types/dashboard';
 import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import {
+  reverseGeocodeCoords,
+  searchGeocodeSuggestions,
+  type GeocodeSearchResult,
+} from '@/utils/geocode';
+import {
   normalizeViText,
   isValidSafeLocationItem,
   getSafeLocationIcon,
@@ -12,6 +17,27 @@ import {
   VEHICLE_TYPE_GROUPS,
   STANDARD_VEHICLE_TYPES,
 } from './resourcesConstants';
+
+const MAX_DESTINATION_LENGTH = 140;
+
+function formatGeocodeOption(place: GeocodeSearchResult): {
+  primaryName: string;
+  secondaryText: string;
+  selectedLabel: string;
+} {
+  const parts = place.display_name.split(',').map((s) => s.trim()).filter(Boolean);
+  const primaryName = place.title?.trim() || parts[0] || place.display_name;
+  const secondaryText =
+    place.address && place.address.trim() !== primaryName
+      ? place.address.trim()
+      : place.display_name;
+  const baseLabel = place.display_name.replace(/,\s*Việt Nam$/i, '').trim() || place.display_name;
+  return {
+    primaryName,
+    secondaryText,
+    selectedLabel: baseLabel.slice(0, MAX_DESTINATION_LENGTH),
+  };
+}
 
 export const VehicleTerrainSelector: React.FC<{
   value: VehicleTerrainCapability[];
@@ -68,11 +94,14 @@ export const LocationMapPickerModal: React.FC<{
 
   useEffect(() => {
     if (!isOpen) return;
+    let disposed = false;
+    let activeReverseReqId = 0;
     setPicked(initialCoords || null);
     setAddressPreview('');
+    setIsGeocoding(false);
 
     const timer = setTimeout(() => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || disposed) return;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -132,27 +161,26 @@ export const LocationMapPickerModal: React.FC<{
           markerRef.current = L.marker([lat, lng], { icon: redPinIcon }).addTo(map);
         }
 
+        const reqId = ++activeReverseReqId;
+        setAddressPreview('');
+        setIsGeocoding(true);
         try {
-          setIsGeocoding(true);
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-            { headers: { 'Accept-Language': 'vi' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.display_name) {
-              setAddressPreview(data.display_name);
-            }
+          const addr = await reverseGeocodeCoords(lat, lng);
+          if (!disposed && activeReverseReqId === reqId && addr) {
+            setAddressPreview(addr);
           }
         } catch {
           // Reverse geocoding failure should not block coordinate pinning
         } finally {
-          setIsGeocoding(false);
+          if (!disposed && activeReverseReqId === reqId) {
+            setIsGeocoding(false);
+          }
         }
       });
     }, 120);
 
     return () => {
+      disposed = true;
       clearTimeout(timer);
       if (mapRef.current) {
         mapRef.current.remove();
@@ -216,7 +244,7 @@ export const LocationMapPickerModal: React.FC<{
                   <span style={{ color: '#16a34a' }}>●</span>
                   <span>Tọa độ GPS: [{picked[1].toFixed(5)}, {picked[0].toFixed(5)}]</span>
                 </div>
-                {addressPreview && (
+                {(isGeocoding || addressPreview) && (
                   <div style={{ fontSize: 11.5, color: '#475569', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {isGeocoding ? 'Đang tìm tên địa điểm...' : addressPreview}
                   </div>
@@ -295,15 +323,6 @@ export const LocationMapPickerModal: React.FC<{
   );
 };
 
-interface NominatimPlaceItem {
-  place_id: number | string;
-  display_name: string;
-  name?: string;
-  lat: string;
-  lon: string;
-  type?: string;
-}
-
 interface DestinationAutocompleteInputProps {
   value: string;
   onChange: (value: string) => void;
@@ -315,6 +334,8 @@ interface DestinationAutocompleteInputProps {
   inputHeight?: number;
   openSafeTrigger?: number;
   coordinates?: [number, number] | null;
+  areaBias?: string;
+  biasCenterName?: string;
   onOpenMapPicker?: () => void;
 }
 
@@ -329,14 +350,22 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
   inputHeight = 38,
   openSafeTrigger = 0,
   coordinates = null,
+  areaBias = 'Thành phố Đà Nẵng',
+  biasCenterName,
   onOpenMapPicker,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const queryCacheRef = useRef<Map<string, NominatimPlaceItem[]>>(new Map());
+  const queryCacheRef = useRef<Map<string, GeocodeSearchResult[]>>(new Map());
+  const coordinatesRef = useRef<[number, number] | null>(coordinates);
+  const lastSelectedLabelRef = useRef<string>('');
   const [isOpen, setIsOpen] = useState(false);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
-  const [placeResults, setPlaceResults] = useState<NominatimPlaceItem[]>([]);
+  const [placeResults, setPlaceResults] = useState<GeocodeSearchResult[]>([]);
+
+  useEffect(() => {
+    coordinatesRef.current = coordinates;
+  }, [coordinates]);
 
   useEffect(() => {
     if (openSafeTrigger > 0) {
@@ -358,13 +387,16 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
   useEffect(() => {
     const rawQuery = value.trim();
     const isAutoLabel = /\([^)]+\)$/.test(rawQuery) && rawQuery.length > 35;
-    if (!isOpen || rawQuery.length < 2 || isAutoLabel) {
-      setPlaceResults([]);
+    if (!isOpen || rawQuery.length < 2 || isAutoLabel || rawQuery === lastSelectedLabelRef.current) {
+      if (rawQuery !== lastSelectedLabelRef.current) {
+        setPlaceResults([]);
+      }
       setIsSearchingPlaces(false);
       return;
     }
 
-    const cacheKey = normalizeViText(rawQuery);
+    const resolvedAreaBias = (areaBias || 'Thành phố Đà Nẵng').trim() || 'Thành phố Đà Nẵng';
+    const cacheKey = `${normalizeViText(resolvedAreaBias)}|${normalizeViText(rawQuery)}`;
     const cached = queryCacheRef.current.get(cacheKey);
     if (cached) {
       setPlaceResults(cached);
@@ -372,40 +404,38 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
       return;
     }
 
-    const controller = new AbortController();
+    let cancelled = false;
     setIsSearchingPlaces(true);
 
     const timer = setTimeout(async () => {
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=vn&limit=5&q=${encodeURIComponent(rawQuery)}`;
-        const res = await fetch(url, {
-          headers: { 'Accept-Language': 'vi' },
-          signal: controller.signal,
+        const biasTarget = (biasCenterName || resolvedAreaBias).trim() || resolvedAreaBias;
+        const defaultCenter = getAreaCoordinates(biasTarget);
+        const activeCoords = coordinatesRef.current;
+        const results = await searchGeocodeSuggestions(rawQuery, {
+          areaBias: resolvedAreaBias,
+          lat: activeCoords ? activeCoords[1] : defaultCenter.lat,
+          lng: activeCoords ? activeCoords[0] : defaultCenter.lng,
         });
-        if (!res.ok) {
-          setPlaceResults([]);
-          return;
-        }
-        const data = await res.json();
-        const normalized: NominatimPlaceItem[] = Array.isArray(data) ? data : [];
-        queryCacheRef.current.set(cacheKey, normalized);
-        setPlaceResults(normalized);
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+        if (cancelled) return;
+        queryCacheRef.current.set(cacheKey, results);
+        setPlaceResults(results);
+      } catch {
+        if (!cancelled) {
           setPlaceResults([]);
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (!cancelled) {
           setIsSearchingPlaces(false);
         }
       }
-    }, 350);
+    }, 380);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
-      controller.abort();
     };
-  }, [value, isOpen]);
+  }, [value, isOpen, areaBias, biasCenterName]);
 
   const filteredSafeLocations = useMemo(() => {
     const preferredIds = new Set(preferredSafeLocations.map((l) => String(l?._id)));
@@ -438,6 +468,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
     value.trim().length >= 2
   );
 
+  const hasSerpApiResult = placeResults.some((item) => item.source === 'serpapi_google_maps');
+
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       <div
@@ -462,7 +494,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
           ref={inputRef}
           type="text"
           required={required}
-          maxLength={80}
+          maxLength={MAX_DESTINATION_LENGTH}
           title={value || undefined}
           placeholder={placeholder}
           value={value}
@@ -473,7 +505,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
             }
           }}
           onChange={(e) => {
-            onChange(e.target.value.slice(0, 80));
+            lastSelectedLabelRef.current = '';
+            onChange(e.target.value.slice(0, MAX_DESTINATION_LENGTH));
             if (!isOpen) setIsOpen(true);
           }}
           style={{
@@ -496,6 +529,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
           <button
             type="button"
             onClick={() => {
+              lastSelectedLabelRef.current = '';
               onChange('');
               onSelectPlace('', null);
               setPlaceResults([]);
@@ -603,7 +637,11 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       const fullLabel = `${loc.name}${loc.address ? ` (${loc.address})` : ''}`;
-                      const compactLabel = fullLabel.length <= 80 ? fullLabel : String(loc.name || fullLabel).slice(0, 80);
+                      const compactLabel =
+                        fullLabel.length <= MAX_DESTINATION_LENGTH
+                          ? fullLabel
+                          : String(loc.name || fullLabel).slice(0, MAX_DESTINATION_LENGTH);
+                      lastSelectedLabelRef.current = compactLabel;
                       onSelectPlace(compactLabel, coords);
                       setIsOpen(false);
                     }}
@@ -664,21 +702,27 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                 paddingTop: filteredSafeLocations.length > 0 ? 6 : 4,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: 5,
               }}>
-                <MapPin size={11} color="#0284c7" />
-                <span>GỢI Ý ĐỊA ĐIỂM TRÊN BẢN ĐỒ</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <MapPin size={11} color="#0284c7" />
+                  <span>GỢI Ý ĐỊA ĐIỂM TRÊN BẢN ĐỒ</span>
+                </span>
+                {hasSerpApiResult && (
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: 999 }}>
+                    Google Maps
+                  </span>
+                )}
               </div>
               {isSearchingPlaces && (
                 <div style={{ padding: '8px 10px', fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Loader2 size={13} className="animate-spin" />
-                  <span>Đang tìm địa điểm phù hợp...</span>
+                  <span>Đang tìm địa điểm Google Maps...</span>
                 </div>
               )}
               {!isSearchingPlaces && placeResults.map((place) => {
-                const parts = place.display_name.split(',').map((s) => s.trim()).filter(Boolean);
-                const primaryName = place.name || parts[0] || place.display_name;
-                const shortLabel = parts.slice(0, 3).join(', ');
+                const { primaryName, secondaryText, selectedLabel } = formatGeocodeOption(place);
                 return (
                   <button
                     key={place.place_id}
@@ -688,8 +732,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                       const lng = Number(place.lon);
                       const lat = Number(place.lat);
                       const coords: [number, number] | null = !isNaN(lng) && !isNaN(lat) ? [lng, lat] : null;
-                      const rawLabel = shortLabel || place.display_name || '';
-                      onSelectPlace(rawLabel.slice(0, 80), coords);
+                      lastSelectedLabelRef.current = selectedLabel;
+                      onSelectPlace(selectedLabel, coords);
                       setIsOpen(false);
                     }}
                     style={{
@@ -713,7 +757,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                         {primaryName}
                       </div>
                       <div style={{ fontSize: 10.5, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {place.display_name}
+                        {secondaryText}
                       </div>
                     </div>
                   </button>

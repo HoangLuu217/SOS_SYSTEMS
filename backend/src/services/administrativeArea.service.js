@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
+const { normalizeAreaName, getEquivalentProvinceIds } = require('../utils/geoUtils');
 
 class AdministrativeAreaService {
   constructor() {
@@ -182,10 +183,12 @@ class AdministrativeAreaService {
     }
 
     if (query.provinceId && mongoose.Types.ObjectId.isValid(query.provinceId)) {
-      // Lấy toàn bộ các quận/huyện trực thuộc tỉnh này
-      const districts = await AdministrativeArea.find({ parentId: query.provinceId, status: 'ACTIVE' }).select('_id');
+      // Mở rộng sang các bản ghi PROVINCE cùng tên (VD: VN-48 và DANANG) và lấy toàn bộ quận/huyện/phường trực thuộc
+      const provinceIds = await getEquivalentProvinceIds(query.provinceId, AdministrativeArea);
+      const rootIds = provinceIds.length > 0 ? provinceIds : [query.provinceId];
+      const districts = await AdministrativeArea.find({ parentId: { $in: rootIds }, status: 'ACTIVE' }).select('_id');
       const districtIds = districts.map((d) => d._id);
-      filter.parentId = { $in: [query.provinceId, ...districtIds] };
+      filter.parentId = { $in: [...rootIds, ...districtIds] };
     } else if (query.parentId !== undefined) {
       if (query.parentId === 'null' || query.parentId === null) {
         filter.parentId = null;
@@ -312,20 +315,26 @@ class AdministrativeAreaService {
       return { success: false, message: 'Dữ liệu không đủ để đồng bộ' };
     }
 
-    const normalizeNameKey = (val) =>
-      String(val || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
+    const normalizeNameKey = (val) => normalizeAreaName(val);
 
-    // 1. Tìm hoặc tạo Province
-    let provinceDoc = await AdministrativeArea.findOne({
-      $or: [
-        { code: `VN-${provinceCode}` },
-        { name: provinceName },
-        { code: String(provinceCode || '') }
-      ]
+    // 1. Tìm hoặc tạo Province (ưu tiên mã chuẩn VN-XX trước khi fallback tên / DANANG)
+    const candidateCodes = [`VN-${provinceCode}`, String(provinceCode || '')].filter(Boolean);
+    if (String(provinceCode) === '48' || normalizeNameKey(provinceName).includes('da nang')) {
+      candidateCodes.push('DANANG');
+    }
+    const candidateProvs = await AdministrativeArea.find({
+      type: 'PROVINCE',
+      code: { $in: candidateCodes },
     });
+    let provinceDoc =
+      candidateProvs.find((p) => p.code === `VN-${provinceCode}`) ||
+      candidateProvs[0] ||
+      null;
+    if (!provinceDoc) {
+      const allProvs = await AdministrativeArea.find({ type: 'PROVINCE', status: 'ACTIVE' });
+      const targetProvNorm = normalizeNameKey(provinceName);
+      provinceDoc = allProvs.find((p) => normalizeNameKey(p.name) === targetProvNorm) || null;
+    }
 
     if (!provinceDoc) {
       provinceDoc = await AdministrativeArea.create({
@@ -336,14 +345,25 @@ class AdministrativeAreaService {
       });
     }
 
-    // Lấy tất cả đơn vị hiện có thuộc tỉnh này để so khớp theo tên trước khi xét code
-    const existingChildren = await AdministrativeArea.find({ parentId: provinceDoc._id }).lean();
+    // Lấy toàn bộ đơn vị hiện có thuộc các cây tỉnh cùng tên (VD: VN-48 + DANANG) để tránh tạo bản ghi trùng
+    const equivalentProvIds = await getEquivalentProvinceIds(provinceDoc, AdministrativeArea);
+    const existingChildren = await AdministrativeArea.find({
+      parentId: { $in: equivalentProvIds },
+    }).lean();
     const childIds = existingChildren.map((c) => c._id);
     const existingGrandChildren =
       childIds.length > 0
         ? await AdministrativeArea.find({ parentId: { $in: childIds } }).lean()
         : [];
-    const provinceAreas = [...existingChildren, ...existingGrandChildren];
+    const codePriority = (code) => {
+      const upper = String(code || '').trim().toUpperCase();
+      if (/^VN\d+-\d{4,}$/i.test(upper)) return 3;
+      if (/^VN\d+-W\d{1,3}$/i.test(upper)) return 1;
+      return 2;
+    };
+    const provinceAreas = [...existingChildren, ...existingGrandChildren].sort(
+      (a, b) => codePriority(b.code) - codePriority(a.code)
+    );
 
     const byName = new Map();
     const byCode = new Map();
@@ -368,14 +388,13 @@ class AdministrativeAreaService {
       const matchedByCode = byCode.get(cleanCode);
 
       if (matchedByName) {
-        // Nếu incoming cleanCode chưa bị đơn vị khác tên chiếm giữ thì cập nhật code chuẩn mới
-        // Không hạ cấp code chuẩn dạng VN48-20285 về mã tuần tự cũ VN48-W10 từ tab trình duyệt cache cũ
+        // Không hạ cấp code chuẩn dạng VN48-20285 hoặc DAD-NHS-* về mã tuần tự VN48-W10
         const codeOccupiedByOther =
           matchedByCode && String(matchedByCode._id) !== String(matchedByName._id);
-        const isExistingOfficialCode = /^VN\d+-\d{4,}$/i.test(matchedByName.code || '');
+        const isExistingCanonicalCode = !/^VN\d+-W\d{1,3}$/i.test(matchedByName.code || '');
         const isIncomingLegacySeqCode = /^VN\d+-W\d{1,3}$/i.test(cleanCode);
         const nextCode =
-          codeOccupiedByOther || (isExistingOfficialCode && isIncomingLegacySeqCode)
+          codeOccupiedByOther || (isExistingCanonicalCode && isIncomingLegacySeqCode)
             ? matchedByName.code
             : cleanCode;
 
@@ -386,7 +405,7 @@ class AdministrativeAreaService {
               name: unitName,
               code: nextCode,
               type: unitType,
-              parentId,
+              parentId: matchedByName.parentId || parentId,
               status: 'ACTIVE',
             },
           },

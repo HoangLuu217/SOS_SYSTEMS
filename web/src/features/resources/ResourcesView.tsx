@@ -62,6 +62,7 @@ import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import {
   resolveProofImageSrc,
   STANDARD_EQUIPMENT_CATALOG,
@@ -896,6 +897,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
     return safeLocations;
   }, [safeLocations, managedArea, userAreaId, userAreaName]);
+
+  const supplyAreaBias =
+    selectedProvince && selectedProvince !== 'ALL'
+      ? selectedProvince
+      : 'Thành phố Đà Nẵng';
+  const supplyBiasCenter = userAreaName || (managedArea as any)?.name || supplyAreaBias;
 
 
 
@@ -2133,51 +2140,62 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
     return (
       <>
-        <select
+        <SearchableSelect
           className="ra-filter-select"
-          value={selectedProvince}
-          onChange={(e) => {
-            setSelectedProvince(e.target.value);
-            onResetTeamFilter();
-            setCurrentPage(1);
-          }}
-          style={{ minWidth: 175, fontWeight: 700, ...activeStyle(selectedProvince !== 'ALL') }}
+          ariaLabel="Bước 1: Chọn Tỉnh / Thành phố"
           title="Bước 1: Chọn Tỉnh / Thành phố (API)"
-        >
-          <option value="ALL">
-            {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
-          </option>
-          {provinces.map((prov) => (
-            <option key={prov.id || prov.name} value={prov.name}>
-              🏙️ {prov.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="ra-filter-select"
-          value={selectedAreaId}
-          onChange={(e) => {
-            setSelectedAreaId(e.target.value);
+          searchPlaceholder="Tìm nhanh Tỉnh / Thành phố..."
+          value={selectedProvince}
+          onChange={(val) => {
+            setSelectedProvince(val);
             onResetTeamFilter();
             setCurrentPage(1);
           }}
-          style={{ minWidth: 185, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
+          triggerStyle={{ minWidth: 195, fontWeight: 700, ...activeStyle(selectedProvince !== 'ALL') }}
+          options={[
+            {
+              value: 'ALL',
+              label: provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`,
+              keywords: 'tat ca tinh thanh pho',
+            },
+            ...provinces.map((prov) => ({
+              value: prov.name,
+              label: `🏙️ ${prov.name}`,
+              keywords: prov.name,
+            })),
+          ]}
+        />
+
+        <SearchableSelect
+          className="ra-filter-select"
+          ariaLabel="Bước 2: Chọn Quận / Huyện / Xã / Phường"
           title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
-        >
-          <option value="ALL">
-            {wardsLoading
-              ? '⏳ Đang tải xã, phường từ API...'
-              : selectedProvince === 'ALL'
-                ? `📍 Tất cả địa bàn (${wards.length})`
-                : `📍 Tất cả xã / phường (${wards.length})`}
-          </option>
-          {wards.map((ward) => (
-            <option key={ward.id} value={ward.id}>
-              {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
-            </option>
-          ))}
-        </select>
+          searchPlaceholder="Tìm nhanh xã / phường..."
+          value={selectedAreaId}
+          onChange={(val) => {
+            setSelectedAreaId(val);
+            onResetTeamFilter();
+            setCurrentPage(1);
+          }}
+          triggerStyle={{ minWidth: 210, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
+          options={[
+            {
+              value: 'ALL',
+              label: wardsLoading
+                ? '⏳ Đang tải xã, phường từ API...'
+                : selectedProvince === 'ALL'
+                  ? `📍 Tất cả địa bàn (${wards.length})`
+                  : `📍 Tất cả xã / phường (${wards.length})`,
+              keywords: 'tat ca dia ban xa phuong',
+            },
+            ...wards.map((ward) => ({
+              value: ward.id,
+              label: `${ward.type === 'DISTRICT' ? '🏛️' : '📍'} ${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+              badgeText: ward.code || undefined,
+              keywords: `${ward.name} ${ward.code || ''}`,
+            })),
+          ]}
+        />
       </>
     );
   };
@@ -2390,7 +2408,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                 <button
                   type="button"
-                  className="coordination-action-btn primary"
+                  className="sos-btn sos-btn--primary sos-btn--sm"
                   onClick={() => {
                     setEqTeamId('');
                     setEqSupplyType('DURABLE');
@@ -2403,23 +2421,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     setEqNote('');
                     setIsCreateEquipmentOpen(true);
                   }}
-                  style={{
-                    background: '#16a34a',
-                    color: '#ffffff',
-                    border: '1px solid #16a34a',
-                    borderRadius: 8,
-                    padding: '7px 14px',
-                    height: 'auto',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    cursor: 'pointer',
-                  }}
                   title="Nhập kho thiết bị hoặc nhu yếu phẩm mới"
                 >
-                  <PlusCircle size={15} />
+                  <Plus size={14} strokeWidth={2.2} />
                   <span>Nhập kho mới</span>
                 </button>
               </>
@@ -5233,11 +5237,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     {eqSupplyType === 'CONSUMABLE' ? 'Danh mục nhu yếu phẩm chuẩn (*)' : 'Loại Thiết Bị Cứu Hộ (*)'}
                   </label>
                   {eqSupplyType === 'CONSUMABLE' ? (
-                    <select
+                    <SearchableSelect
                       className="executive-modal-select"
+                      ariaLabel="Danh mục nhu yếu phẩm chuẩn"
+                      searchPlaceholder="Tìm nhanh nhu yếu phẩm..."
                       value={eqName}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      onChange={(val) => {
                         setEqName(val);
                         const matched = STANDARD_CONSUMABLE_CATALOG.find((item) => item.name === val);
                         if (matched) {
@@ -5247,21 +5252,28 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
                         }
                       }}
-                      required
-                    >
-                      {STANDARD_CONSUMABLE_CATALOG.map((item) => (
-                        <option key={item.name} value={item.name}>
-                          {item.name}
-                        </option>
-                      ))}
-                      <option value="CUSTOM">➕ Khác (Nhập mặt hàng cứu trợ khác)...</option>
-                    </select>
+                      triggerStyle={{ width: '100%' }}
+                      options={[
+                        ...STANDARD_CONSUMABLE_CATALOG.map((item) => ({
+                          value: item.name,
+                          label: item.name,
+                          badgeText: item.unit,
+                          keywords: `${item.name} ${item.category || ''} ${item.unit || ''}`,
+                        })),
+                        {
+                          value: 'CUSTOM',
+                          label: '➕ Khác (Nhập mặt hàng cứu trợ khác)...',
+                          keywords: 'khac tuy chinh custom nhap moi',
+                        },
+                      ]}
+                    />
                   ) : (
-                    <select
+                    <SearchableSelect
                       className="executive-modal-select"
+                      ariaLabel="Loại Thiết Bị Cứu Hộ"
+                      searchPlaceholder="Tìm nhanh thiết bị cứu hộ..."
                       value={eqName}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      onChange={(val) => {
                         setEqName(val);
                         const matched = STANDARD_EQUIPMENT_CATALOG.find((item) => item.name === val);
                         if (matched) {
@@ -5272,15 +5284,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           setEqSerialNumber(generateRandomEquipmentSerial('KT'));
                         }
                       }}
-                      required
-                    >
-                      {STANDARD_EQUIPMENT_CATALOG.map((item) => (
-                        <option key={item.name} value={item.name}>
-                          {item.name} ({item.unit})
-                        </option>
-                      ))}
-                      <option value="CUSTOM">➕ Khác (Nhập thiết bị tùy chỉnh)...</option>
-                    </select>
+                      triggerStyle={{ width: '100%' }}
+                      options={[
+                        ...STANDARD_EQUIPMENT_CATALOG.map((item) => ({
+                          value: item.name,
+                          label: `${item.name} (${item.unit})`,
+                          badgeText: item.unit,
+                          keywords: `${item.name} ${item.category || ''} ${item.unit || ''}`,
+                        })),
+                        {
+                          value: 'CUSTOM',
+                          label: '➕ Khác (Nhập thiết bị tùy chỉnh)...',
+                          keywords: 'khac tuy chinh custom thiet bi moi',
+                        },
+                      ]}
+                    />
                   )}
                 </div>
 
@@ -8746,6 +8764,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             placeholder="Gõ tìm địa điểm hoặc chọn..."
                             openSafeTrigger={safePickerTrigger}
                             coordinates={batchCoordinates}
+                            areaBias={supplyAreaBias}
+                            biasCenterName={supplyBiasCenter}
                             onOpenMapPicker={() => setIsMapPickerOpen(true)}
                           />
 
@@ -8849,7 +8869,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         </label>
                         <DestinationAutocompleteInput
                           value={batchDestination}
-                          onChange={(val) => setBatchDestination(val)}
+                          onChange={(val) => {
+                            setBatchDestination(val);
+                            if (!val.trim() && batchCoordinates) {
+                              setBatchCoordinates(null);
+                            }
+                          }}
                           onSelectPlace={(label, coords) => {
                             setBatchDestination(label);
                             setBatchCoordinates(coords);
@@ -8859,6 +8884,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           placeholder="VD: Thôn An Trạch, xã Hòa Tiến (hoặc chọn Điểm an toàn)..."
                           inputHeight={36}
                           coordinates={batchCoordinates}
+                          areaBias={supplyAreaBias}
+                          biasCenterName={supplyBiasCenter}
                           onOpenMapPicker={() => setIsMapPickerOpen(true)}
                         />
                       </div>
@@ -9293,7 +9320,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         isOpen={isMapPickerOpen}
         onClose={() => setIsMapPickerOpen(false)}
         initialCoords={batchCoordinates}
-        areaName={userAreaName || (managedArea as any)?.name || 'Đà Nẵng'}
+        areaName={supplyBiasCenter}
         onConfirm={(coords, address) => {
           if (!coords) {
             setBatchCoordinates(null);
@@ -9302,7 +9329,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           }
           setBatchCoordinates(coords);
           if (address) {
-            setBatchDestination(address);
+            const cleanAddress = address.replace(/,\s*Việt Nam$/i, '').trim() || address;
+            setBatchDestination(cleanAddress.slice(0, 140));
           } else if (!batchDestination.trim()) {
             setBatchDestination(`Tọa độ [${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}]`);
           }

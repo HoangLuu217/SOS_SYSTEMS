@@ -421,6 +421,7 @@ interface AdminMapContentProps {
   sosList: AdminSosItem[];
   selectedSos: AdminSosItem | null;
   onSelectSos: (sos: AdminSosItem | null) => void;
+  onClearPointSelection?: () => void;
   focusRequest: { lat: number; lng: number; seq: number } | null;
 }
 
@@ -476,6 +477,7 @@ export const AdminMapContent = ({
   sosList,
   selectedSos,
   onSelectSos,
+  onClearPointSelection,
   focusRequest,
 }: AdminMapContentProps) => {
   const map = useMap();
@@ -576,6 +578,7 @@ export const AdminMapContent = ({
   useMapEvents({
     click: () => {
       onSelectSos(null);
+      onClearPointSelection?.();
     },
   });
 
@@ -782,6 +785,10 @@ interface AdminMapHudProps {
   selectedWard: AdministrativeArea | null;
   onSelectWard: (wardId: string | null) => void;
   wardSosCountMap: Record<string, number>;
+  hudCollapsed?: boolean;
+  onHudCollapsedChange?: (collapsed: boolean) => void;
+  drawerOpen?: boolean;
+  onDrawerOpenChange?: (open: boolean) => void;
 }
 
 export const AdminMapHud = ({
@@ -799,9 +806,24 @@ export const AdminMapHud = ({
   selectedWard,
   onSelectWard,
   wardSosCountMap,
+  hudCollapsed: controlledHudCollapsed,
+  onHudCollapsedChange,
+  drawerOpen: controlledDrawerOpen,
+  onDrawerOpenChange,
 }: AdminMapHudProps) => {
-  const [hudCollapsed, setHudCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [internalHudCollapsed, setInternalHudCollapsed] = useState(false);
+  const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
+  const hudCollapsed = controlledHudCollapsed ?? internalHudCollapsed;
+  const setHudCollapsed = (next: boolean) => {
+    setInternalHudCollapsed(next);
+    onHudCollapsedChange?.(next);
+  };
+  const drawerOpen = controlledDrawerOpen ?? internalDrawerOpen;
+  const setDrawerOpen = (nextOrUpdater: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(drawerOpen) : nextOrUpdater;
+    setInternalDrawerOpen(next);
+    onDrawerOpenChange?.(next);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [wardDropdownOpen, setWardDropdownOpen] = useState(false);
   const [wardSearch, setWardSearch] = useState('');

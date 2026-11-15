@@ -26,7 +26,10 @@ async function seedNguHanhSon() {
     // ========================================================
     console.log('\n--- 1. Đồng bộ Khu Vực Hành Chính Quận Ngũ Hành Sơn ---');
 
-    let danang = await AdministrativeArea.findOne({ code: 'DANANG' });
+    let danang = await AdministrativeArea.findOne({
+      type: 'PROVINCE',
+      $or: [{ code: 'DANANG' }, { code: 'VN-48' }, { name: /^Thành phố Đà Nẵng$/i }],
+    });
     if (!danang) {
       danang = await AdministrativeArea.create({
         name: 'Thành phố Đà Nẵng',
