@@ -958,6 +958,33 @@
   font-weight: 600;
 }
 
+.ready-mission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mission-cell-trigger {
+  cursor: pointer;
+}
+
+.mission-cell-trigger:hover .active-mission-pill,
+.mission-cell-trigger:hover .ready-mission-pill,
+.mission-cell-trigger:hover .no-mission-pill {
+  filter: brightness(0.96);
+}
+
 /* 5. Team Detail Drawer (5 Tabs) */
 .team-drawer-backdrop {
   position: fixed;

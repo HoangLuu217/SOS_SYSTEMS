@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { RescueTeam, User, AuthorityOrganization, AdministrativeArea, Vehicle } = require('../models');
 const ApiError = require('../utils/apiError');
 
@@ -144,13 +145,30 @@ class RescueTeamService {
   async createTeam(data) {
     const { name, type, leaderId, authorityId, areaId, description, members = [] } = data;
 
-    // Kiểm tra Leader
+    if (!name || !String(name).trim()) {
+      throw new ApiError(400, 'Vui lòng nhập tên đội cứu hộ');
+    }
+
+    // Kiểm tra định dạng & điều kiện Leader
+    if (!leaderId || !mongoose.Types.ObjectId.isValid(leaderId)) {
+      throw new ApiError(400, 'Vui lòng chọn Chỉ huy Đội trưởng hợp lệ (leaderId)');
+    }
+
     const leader = await User.findById(leaderId);
     if (!leader) {
       throw new ApiError(404, 'Không tìm thấy thông tin Đội trưởng (leaderId)');
     }
-    if (!leader.roles.includes('RESCUER')) {
+    if (!Array.isArray(leader.roles) || !leader.roles.includes('RESCUER')) {
       throw new ApiError(400, 'Người được chọn làm Đội trưởng phải có vai trò RESCUER');
+    }
+    if (leader.status && leader.status !== 'ACTIVE') {
+      throw new ApiError(400, 'Tài khoản Đội trưởng hiện đang bị khóa hoặc chưa kích hoạt');
+    }
+    if (leader.rescuer?.verificationStatus !== 'VERIFIED') {
+      throw new ApiError(
+        400,
+        'Hồ sơ Cứu hộ viên chưa được thẩm định (VERIFIED), không thể phân công làm Đội trưởng'
+      );
     }
 
     // Kiểm tra Đội trưởng đã thuộc đội khác hay chưa (Quy tắc: 1 User - 1 Đội)
@@ -254,6 +272,7 @@ class RescueTeamService {
             ],
           })
             .populate('sosRequestId', 'sosCode emergencyType people address status description')
+            .populate('sosId', 'sosCode emergencyType people address status description')
             .populate('rescuerId', 'fullName phone')
             .populate('vehicleId', 'plateNumber type')
             .sort({ assignedAt: -1, createdAt: -1 })
@@ -292,7 +311,9 @@ class RescueTeamService {
       const tId = (a.rescueTeamId || a.teamId)?.toString();
       if (!tId) return;
       if (!assignmentMap[tId]) assignmentMap[tId] = [];
-      const sos = a.sosRequestId && typeof a.sosRequestId === 'object' ? a.sosRequestId : null;
+      const sos =
+        (a.sosRequestId && typeof a.sosRequestId === 'object' ? a.sosRequestId : null) ||
+        (a.sosId && typeof a.sosId === 'object' ? a.sosId : null);
       const sosCode =
         a.dispatchCode ||
         sos?.sosCode ||
@@ -300,11 +321,11 @@ class RescueTeamService {
           ? 'Điều phối tiếp tế'
           : a.missionType === 'SHORE_HANDOFF'
             ? 'Tiếp vận đón bờ'
-            : `SOS #${String(sos?._id || a.sosRequestId || a._id).slice(-4)}`);
+            : `SOS #${String(sos?._id || a.sosRequestId || a.sosId || a._id).slice(-4)}`);
       assignmentMap[tId].push({
         _id: a._id,
         id: String(a._id),
-        sosRequestId: sos?._id || a.sosRequestId || null,
+        sosRequestId: sos?._id || a.sosRequestId || a.sosId || null,
         sosCode,
         location: a.destination || sos?.address || '',
         status: a.status || 'PENDING',

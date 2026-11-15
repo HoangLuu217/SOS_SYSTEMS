@@ -1,6 +1,23 @@
 const { Vehicle, RescueTeam } = require('../models');
 const ApiError = require('../utils/apiError');
 
+const MAX_VEHICLE_CAPACITY = 50;
+
+function normalizeAndValidateCapacity(rawCapacity, vehicleType) {
+  if (rawCapacity === undefined || rawCapacity === null || String(rawCapacity).trim() === '') {
+    throw new ApiError(400, 'Vui lòng nhập sức chở tối đa của phương tiện');
+  }
+  const parsed = typeof rawCapacity === 'number' ? rawCapacity : Number(String(rawCapacity).trim());
+  const minCapacity = vehicleType === 'DRONE' ? 0 : 1;
+  if (!Number.isInteger(parsed) || parsed < minCapacity || parsed > MAX_VEHICLE_CAPACITY) {
+    throw new ApiError(
+      400,
+      `Sức chở tối đa phải là số nguyên từ ${minCapacity} đến ${MAX_VEHICLE_CAPACITY} người`
+    );
+  }
+  return parsed;
+}
+
 class VehicleService {
   /**
    * Phát sự kiện realtime khi phương tiện thay đổi để Đội cứu hộ & Kho phương tiện tự cập nhật
@@ -50,17 +67,22 @@ class VehicleService {
     }
 
     // Kiểm tra trùng biển số
-    const cleanPlateNumber = String(plateNumber).trim().toUpperCase();
+    const cleanPlateNumber = String(plateNumber || '').trim().toUpperCase();
+    if (!cleanPlateNumber) {
+      throw new ApiError(400, 'Biển kiểm soát / số hiệu phương tiện là bắt buộc');
+    }
     const existingVehicle = await Vehicle.findOne({ plateNumber: cleanPlateNumber });
     if (existingVehicle) {
       throw new ApiError(409, `Biển kiểm soát '${cleanPlateNumber}' đã tồn tại trong hệ thống`);
     }
 
+    const validCapacity = capacity !== undefined ? normalizeAndValidateCapacity(capacity, type) : 1;
+
     const vehicle = await Vehicle.create({
       teamId: validTeamId,
       type,
       plateNumber: cleanPlateNumber,
-      capacity: capacity !== undefined ? Number(capacity) : 1,
+      capacity: validCapacity,
       status: status || 'AVAILABLE',
       description,
       terrainCapabilities: Array.isArray(terrainCapabilities) ? terrainCapabilities : [],
@@ -216,8 +238,11 @@ class VehicleService {
       }
     }
 
-    if (updateData.plateNumber) {
-      const cleanPlate = updateData.plateNumber.trim().toUpperCase();
+    if (updateData.plateNumber !== undefined) {
+      const cleanPlate = String(updateData.plateNumber || '').trim().toUpperCase();
+      if (!cleanPlate) {
+        throw new ApiError(400, 'Biển kiểm soát / số hiệu phương tiện không được để trống');
+      }
       if (cleanPlate !== vehicle.plateNumber) {
         const existing = await Vehicle.findOne({ plateNumber: cleanPlate });
         if (existing) {
@@ -227,8 +252,11 @@ class VehicleService {
       }
     }
 
+    const targetType = updateData.type !== undefined ? updateData.type : vehicle.type;
     if (updateData.type !== undefined) vehicle.type = updateData.type;
-    if (updateData.capacity !== undefined) vehicle.capacity = Number(updateData.capacity);
+    if (updateData.capacity !== undefined) {
+      vehicle.capacity = normalizeAndValidateCapacity(updateData.capacity, targetType);
+    }
     if (updateData.terrainCapabilities !== undefined) {
       if (!Array.isArray(updateData.terrainCapabilities)) {
         throw new ApiError(400, 'terrainCapabilities phải là danh sách khả năng địa hình');

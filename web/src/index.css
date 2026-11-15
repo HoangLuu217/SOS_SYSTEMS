@@ -845,6 +845,15 @@ input[type=number] {
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
 }
 
+.executive-modal-input.executive-modal-input-error {
+  border-color: #dc2626 !important;
+}
+
+.executive-modal-input.executive-modal-input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+}
+
 .executive-btn-primary {
   display: inline-flex !important;
   align-items: center !important;
