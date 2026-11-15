@@ -6,8 +6,14 @@ const joinedChannels = new Set<string>();
 let registeredUserId: string | null = null;
 
 const getSocketUrl = (): string => {
-  if (import.meta.env.VITE_BACKEND_URL) {
-    return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  const isRemoteHost =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  if (backendUrl && !(isRemoteHost && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(backendUrl))) {
+    return backendUrl.replace(/\/+$/, '');
   }
   const apiUrl = import.meta.env.VITE_API_URL;
   if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
@@ -30,7 +36,7 @@ export const getSocket = (): Socket => {
 
     socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
-      withCredentials: true,
+      withCredentials: false,
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,

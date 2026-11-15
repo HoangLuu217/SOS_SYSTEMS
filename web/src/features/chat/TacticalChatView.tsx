@@ -280,7 +280,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
-  const [, setRealtimeConnected] = useState(true);
+  const [realtimeConnected, setRealtimeConnected] = useState(true);
   const [mobileShowChat, setMobileShowChat] = useState(false);
   const [sosStatusMap, setSosStatusMap] = useState<Record<string, string>>({});
   const sosStatusMapRef = useRef<Record<string, string>>({});
@@ -640,6 +640,18 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
       unsubscribe();
     };
   }, [currentUser?._id, loadConversations, playChime, scrollToBottom]);
+
+  // Dự phòng tự động tải lại tin nhắn mỗi 4s nếu kết nối Socket.IO bị gián đoạn
+  useEffect(() => {
+    if (realtimeConnected) return;
+    const timer = window.setInterval(() => {
+      loadConversations();
+      if (activeConvRef.current) {
+        loadMessages(activeConvRef.current);
+      }
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [realtimeConnected, loadConversations, loadMessages]);
 
   // Lắng nghe sự kiện SOS cập nhật trạng thái realtime (đặc biệt khi người dân bấm HỦY)
   useEffect(() => {
