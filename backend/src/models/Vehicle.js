@@ -44,6 +44,11 @@ const vehicleSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'Sức chứa / tải trọng người là bắt buộc'],
       min: [0, 'Sức chứa không được là số âm'],
+      max: [50, 'Sức chở tối đa không được vượt quá 50 người'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Sức chở tối đa phải là số nguyên',
+      },
       default: 1,
     },
     terrainCapabilities: {
