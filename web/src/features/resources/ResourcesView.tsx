@@ -32,6 +32,7 @@ import {
   RotateCcw,
   Shield,
   Loader2,
+  Download,
 } from 'lucide-react';
 import type { VehicleItem, VehicleType, VehicleTerrainCapability, RescueTeamItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
@@ -62,8 +63,10 @@ import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
+import { exportSupplyDispatchVoucherPdf } from './printSupplyDispatchVoucher';
 import {
   resolveProofImageSrc,
+  ProofImagePreview,
   STANDARD_EQUIPMENT_CATALOG,
   STANDARD_CONSUMABLE_CATALOG,
   generateRandomEquipmentSerial,
@@ -355,6 +358,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }, 260);
   }, [isDispatchDrawerClosing]);
 
+  const handlePrintDispatchVoucher = useCallback(
+    (rec: DispatchHistoryRecord) => {
+      const ok = exportSupplyDispatchVoucherPdf(rec, {
+        areaName: userAreaName || (managedArea as any)?.name || 'Thành phố Đà Nẵng',
+      });
+      if (!ok) {
+        toast.error('Không thể xuất file PDF phiếu xuất kho trên trình duyệt này.');
+      } else {
+        toast.success(`Đã xuất file PDF phiếu ${rec.dispatchCode}`);
+      }
+    },
+    [userAreaName, managedArea]
+  );
+
   // Hỗ trợ phím ESC để đóng Drawer mượt mà
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -524,6 +541,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         socket.on('assignment:supply_approved', handleRealtimeRefresh);
         socket.on('assignment:status_updated', handleRealtimeRefresh);
         socket.on('sos:sync', handleRealtimeRefresh);
+        socket.on('rescue_teams_updated', handleRealtimeRefresh);
       }
     } catch (e) {
       console.warn('Socket connect error in ResourcesView:', e);
@@ -544,6 +562,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         socket.off('assignment:supply_approved', handleRealtimeRefresh);
         socket.off('assignment:status_updated', handleRealtimeRefresh);
         socket.off('sos:sync', handleRealtimeRefresh);
+        socket.off('rescue_teams_updated', handleRealtimeRefresh);
       }
       window.removeEventListener('equipment_updated', handleWindowUpdate);
       window.removeEventListener('equipment:updated', handleWindowUpdate);
@@ -3128,15 +3147,27 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                           {/* Cột 6: Thao tác */}
                           <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="ra-view-btn"
-                              onClick={() => setSelectedDispatchRecord(rec)}
-                              title="Xem chi tiết phiếu xuất kho"
-                            >
-                              <Eye size={13} />
-                              <span>Chi tiết</span>
-                            </button>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <button
+                                type="button"
+                                className="ra-view-btn"
+                                onClick={() => setSelectedDispatchRecord(rec)}
+                                title="Xem chi tiết phiếu xuất kho"
+                              >
+                                <Eye size={13} />
+                                <span>Chi tiết</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="ra-view-btn"
+                                onClick={() => handlePrintDispatchVoucher(rec)}
+                                title={`Xuất file PDF phiếu ${rec.dispatchCode}`}
+                                aria-label={`Xuất file PDF phiếu ${rec.dispatchCode}`}
+                                style={{ paddingInline: 8 }}
+                              >
+                                <Download size={13} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -4180,10 +4211,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               cursor: 'pointer',
                             }}
                           >
-                            <img
+                            <ProofImagePreview
                               src={resolvedSrc}
                               alt={`Chứng từ ${idx + 1}`}
-                              style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }}
+                              height={110}
+                              fallbackLabel={`Chứng từ ${idx + 1}`}
                             />
                           </button>
                         );
@@ -4207,6 +4239,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               >
                 <button type="button" className="ra-refresh-btn" onClick={handleCloseDispatchDetail}>
                   <span>Đóng</span>
+                </button>
+                <button
+                  type="button"
+                  className="ra-refresh-btn"
+                  onClick={() => handlePrintDispatchVoucher(rec)}
+                  style={{
+                    borderColor: '#0284c7',
+                    color: '#0369a1',
+                    background: '#f0f9ff',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Download size={14} />
+                  <span>Xuất PDF</span>
                 </button>
                 {isRejectedOrCancelled && rec.items.length > 0 && (
                   <button
@@ -4350,10 +4396,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       background: '#f8fafc',
                     }}
                   >
-                    <img
+                    <ProofImagePreview
                       src={resolvedSrc}
                       alt={`Ảnh bàn giao ${i + 1}`}
-                      style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+                      height={220}
+                      fallbackLabel={`Ảnh bàn giao ${i + 1}`}
                     />
                   </a>
                 );

@@ -709,7 +709,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     };
 
     const unsubAssignment = onAssignmentUpdated(handleAssignmentRealtime);
-    const unsubTeams = onRescueTeamsUpdated(() => syncRealSosFromApi(activeOfficer));
+    const unsubTeams = onRescueTeamsUpdated((data?: any) => {
+      if (data?.action === 'LEADER_LEFT_TEAM_INACTIVE') {
+        const name = data?.teamName ? `"${data.teamName}"` : 'cứu hộ';
+        showToast(`⚠️ Đội ${name} đã tạm ngưng hoạt động do Đội trưởng rời đội.`, 'error');
+      }
+      syncRealSosFromApi(activeOfficer);
+    });
 
     const socket = getSocket();
     const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
