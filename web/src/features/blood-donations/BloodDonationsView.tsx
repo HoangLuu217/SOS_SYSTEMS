@@ -122,6 +122,7 @@ interface BloodDonationsCache {
 
 const CACHE_KEY = 'sos_blood_donations_cache_v1';
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 phút
+const BLOOD_TYPES = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
 
 // Bộ nhớ đệm cấp module trong tiến trình trình duyệt (tồn tại qua các lần chuyển tab/menu Admin)
 let memoryBloodCache: BloodDonationsCache | null = null;
@@ -156,9 +157,37 @@ const saveBloodCache = (cache: BloodDonationsCache) => {
 
 const getStatusLabelText = (status: string) => {
   if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
-  if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
+  if (status === 'COMPLETED') return 'Đã hiến máu';
+  if (status === 'CONFIRMED') return 'Xác nhận tham gia';
   if (status === 'DECLINED') return 'Chưa tham gia';
   return status || '';
+};
+
+const isBloodEventExpired = (ev: BloodDonationEvent): boolean => {
+  if (!ev.eventDate) return false;
+  let datePart = '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(ev.eventDate)) {
+    datePart = ev.eventDate.slice(0, 10);
+  } else {
+    try {
+      const d = new Date(ev.eventDate);
+      datePart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } catch {
+      return false;
+    }
+  }
+  let timePart = (ev.endTime || ev.startTime || '23:59').trim();
+  if (/^\d{1}:\d{2}$/.test(timePart)) timePart = '0' + timePart;
+  if (!/^\d{2}:\d{2}$/.test(timePart)) timePart = '23:59';
+  const endDt = new Date(`${datePart}T${timePart}:00+07:00`);
+  return !isNaN(endDt.getTime()) && endDt.getTime() < Date.now();
+};
+
+const normalizeExpiredEvent = (ev: BloodDonationEvent): BloodDonationEvent => {
+  if (ev.status === 'ACTIVE' && isBloodEventExpired(ev)) {
+    return { ...ev, status: 'CLOSED' };
+  }
+  return ev;
 };
 
 export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) => {
@@ -173,7 +202,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     () => initialCache?.registrations || []
   );
   const [events, setEvents] = useState<BloodDonationEvent[]>(
-    () => initialCache?.events || []
+    () => (initialCache?.events || []).map(normalizeExpiredEvent)
   );
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(
     () => initialCache?.areas || []
@@ -214,18 +243,39 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const [formAddress, setFormAddress] = useState('');
   const [formMapUrl, setFormMapUrl] = useState('');
   const [formAreaId, setFormAreaId] = useState<string>(isAdmin ? 'ALL' : authorityAreaId || 'ALL');
+  const getLocalTodayStr = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  };
+  const todayDateStr = getLocalTodayStr();
+
   const [formEventDate, setFormEventDate] = useState<string>(() => {
     const tomorrow = new Date(Date.now() + 86400000);
-    return tomorrow.toISOString().slice(0, 10);
+    return `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
   });
   const [formStartTime, setFormStartTime] = useState('07:30');
   const [formEndTime, setFormEndTime] = useState('11:30');
   const [formNeededBlood, setFormNeededBlood] = useState<string[]>(['ALL']);
   const [formTargetDonors, setFormTargetDonors] = useState('100');
-  const formOrganizer = 'Ban Chỉ Huy PCTT & Hội Chữ Thập Đỏ';
-  const formContactPhone = user?.phone || '';
+  const defaultOrganizerName =
+    user?.authority?.organizationName ||
+    user?.authority?.department ||
+    'Ban Chỉ Huy PCTT & Hội Chữ Thập Đỏ';
+  const [formOrganizer, setFormOrganizer] = useState<string>(defaultOrganizerName);
+  const [formContactPhone, setFormContactPhone] = useState<string>(user?.phone || '');
   const formRequirements =
     'Mang CCCD, ăn sáng nhẹ, không uống rượu bia trước khi hiến máu.';
+
+  useEffect(() => {
+    setFormOrganizer((prev) =>
+      !prev || prev === 'Ban Chỉ Huy PCTT & Hội Chữ Thập Đỏ'
+        ? user?.authority?.organizationName ||
+          user?.authority?.department ||
+          'Ban Chỉ Huy PCTT & Hội Chữ Thập Đỏ'
+        : prev
+    );
+    setFormContactPhone((prev) => prev || user?.phone || '');
+  }, [user]);
 
   // Toast
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -271,7 +321,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         fetchWithAuth<any>('/blood-donations/events?limit=100'),
       ]);
       const regList = Array.isArray(regRes?.data) ? regRes.data : [];
-      const evList = Array.isArray(evRes?.data) ? evRes.data : [];
+      const evList = (Array.isArray(evRes?.data) ? evRes.data : []).map(normalizeExpiredEvent);
       setRegistrations(regList);
       setEvents(evList);
 
@@ -300,47 +350,93 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     }
   }, []);
 
+  const [bloodPromptReg, setBloodPromptReg] = useState<BloodDonationRegistration | null>(null);
+  const [bloodPromptChoice, setBloodPromptChoice] = useState<string>('');
+  const [submittingBloodPrompt, setSubmittingBloodPrompt] = useState(false);
+
   // Cập nhật trạng thái người tham gia (Xác nhận, Đã hiến máu, Từ chối)
   const handleUpdateRegistrationStatus = useCallback(
     async (
       regId: string,
-      newStatus: 'CONFIRMED' | 'COMPLETED' | 'DECLINED' | 'PENDING'
+      newStatus: 'CONFIRMED' | 'COMPLETED' | 'DECLINED' | 'PENDING' | 'CANCELLED',
+      explicitBloodType?: string
     ) => {
+      const targetReg =
+        (selectedRegistration && selectedRegistration._id === regId ? selectedRegistration : null) ||
+        eventResponses.find((r) => r._id === regId) ||
+        registrations.find((r) => r._id === regId) ||
+        null;
+
+      if (
+        newStatus === 'COMPLETED' &&
+        !explicitBloodType &&
+        (!targetReg?.bloodType || targetReg.bloodType === 'UNKNOWN')
+      ) {
+        if (targetReg) {
+          setBloodPromptReg(targetReg);
+          setBloodPromptChoice('');
+        } else {
+          showToast('error', 'Nhóm máu đang Chưa rõ. Vui lòng chọn nhóm máu trước khi xác nhận Đã hiến máu.');
+        }
+        return;
+      }
+
       try {
+        const payload: Record<string, any> = { status: newStatus };
+        if (explicitBloodType) {
+          payload.bloodType = explicitBloodType;
+        }
+
         const res = await fetchWithAuth<any>(`/blood-donations/registrations/${regId}/status`, {
           method: 'PATCH',
-          body: JSON.stringify({ status: newStatus }),
+          body: JSON.stringify(payload),
         });
         if (res?.success === false) {
           throw new Error(res?.message || 'Không thể cập nhật trạng thái');
         }
 
-        showToast('success', `Đã cập nhật trạng thái thành: ${getStatusLabelText(newStatus)}`);
+        showToast(
+          'success',
+          explicitBloodType
+            ? `Đã ghi nhận nhóm máu ${explicitBloodType} và cập nhật: ${getStatusLabelText(newStatus)}`
+            : `Đã cập nhật trạng thái thành: ${getStatusLabelText(newStatus)}`
+        );
+
+        const targetUserId = targetReg?.userId?._id;
+        const applyRegUpdate = (r: BloodDonationRegistration): BloodDonationRegistration => {
+          if (r._id === regId) {
+            return {
+              ...r,
+              status: newStatus,
+              ...(explicitBloodType ? { bloodType: explicitBloodType } : {}),
+            };
+          }
+          if (
+            explicitBloodType &&
+            targetUserId &&
+            r.userId?._id === targetUserId &&
+            (!r.bloodType || r.bloodType === 'UNKNOWN' || r.registrationType === 'PRE_REGISTRATION')
+          ) {
+            return { ...r, bloodType: explicitBloodType };
+          }
+          return r;
+        };
 
         // 1. Cập nhật selectedRegistration nếu đang mở
-        setSelectedRegistration((prev) =>
-          prev && prev._id === regId ? { ...prev, status: newStatus } : prev
-        );
+        setSelectedRegistration((prev) => (prev ? applyRegUpdate(prev) : prev));
 
         // 2. Cập nhật eventResponses (trong form đợt hiến hiện tại)
-        setEventResponses((prev) =>
-          prev.map((r) => (r._id === regId ? { ...r, status: newStatus } : r))
-        );
+        setEventResponses((prev) => prev.map(applyRegUpdate));
 
         // 3. Cập nhật danh sách registrations chung
-        setRegistrations((prev) =>
-          prev.map((r) => (r._id === regId ? { ...r, status: newStatus } : r))
-        );
+        setRegistrations((prev) => prev.map(applyRegUpdate));
 
         // 4. Đồng bộ vào cache
         if (memoryBloodCache) {
-          memoryBloodCache.registrations = memoryBloodCache.registrations.map((r) =>
-            r._id === regId ? { ...r, status: newStatus } : r
-          );
+          memoryBloodCache.registrations = memoryBloodCache.registrations.map(applyRegUpdate);
           if (selectedEventDetail?._id && memoryBloodCache.eventResponses?.[selectedEventDetail._id]) {
-            memoryBloodCache.eventResponses[selectedEventDetail._id] = memoryBloodCache.eventResponses[
-              selectedEventDetail._id
-            ].map((r) => (r._id === regId ? { ...r, status: newStatus } : r));
+            memoryBloodCache.eventResponses[selectedEventDetail._id] =
+              memoryBloodCache.eventResponses[selectedEventDetail._id].map(applyRegUpdate);
           }
           saveBloodCache(memoryBloodCache);
         }
@@ -348,7 +444,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         showToast('error', err?.message || 'Không thể cập nhật trạng thái');
       }
     },
-    [selectedEventDetail]
+    [selectedEventDetail, selectedRegistration, eventResponses, registrations]
   );
 
   useEffect(() => {
@@ -434,6 +530,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       showToast('error', 'Vui lòng điền đủ Tên đợt, Địa điểm, Địa chỉ và Ngày.');
       return;
     }
+    const minToday = getLocalTodayStr();
+    if (formEventDate < minToday) {
+      showToast('error', 'Ngày tổ chức không được nằm trong quá khứ.');
+      return;
+    }
 
     let resolvedMapUrl = formMapUrl.trim();
     const parsedCoords = parseGoogleMapsUrlOrCoords(resolvedMapUrl);
@@ -517,11 +618,12 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     try {
       const res = await fetchWithAuth<any>(`/blood-donations/events/${ev._id}`);
       const data = res?.data || res;
-      const resolvedEv = data?.event || ev;
+      const resolvedEv = normalizeExpiredEvent(data?.event || ev);
       const resolvedResponses = Array.isArray(data?.responses) ? data.responses : [];
 
       setSelectedEventDetail(resolvedEv);
       setEventResponses(resolvedResponses);
+      setEvents((prev) => prev.map((item) => (item._id === resolvedEv._id ? resolvedEv : item)));
 
       // Cập nhật vào cache
       const curCache = memoryBloodCache || {
@@ -642,7 +744,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           </span>
         );
       case 'CONFIRMED':
-      case 'COMPLETED':
         return (
           <span
             style={{
@@ -655,6 +756,22 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             }}
           >
             Xác nhận tham gia
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span
+            style={{
+              background: '#d1fae5',
+              color: '#047857',
+              padding: '3px 10px',
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 700,
+              border: '1px solid #6ee7b7',
+            }}
+          >
+            ✓ Đã hiến máu
           </span>
         );
       case 'DECLINED':
@@ -713,7 +830,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         'Trạng thái tham gia',
         'Khu vực / Tỉnh TP',
         'Địa chỉ chi tiết',
-        'Tình trạng sức khỏe',
         'Ghi chú thêm',
         'Thời gian xác nhận',
       ];
@@ -732,7 +848,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         getStatusLabelText(r.status),
         r.provinceName || r.areaName || ev.areaName || '',
         r.address || r.userId?.address || '',
-        r.healthNote || 'Đủ điều kiện',
         r.note || '',
         formatDateTime(r.respondedAt || r.createdAt),
       ]);
@@ -776,7 +891,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         'Đợt hiến máu phản hồi',
         'Khu vực / Tỉnh TP',
         'Địa chỉ',
-        'Sức khỏe',
         'Ghi chú',
         'Thời gian đăng ký',
       ];
@@ -792,7 +906,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         r.eventId?.title || '—',
         r.provinceName || r.areaName || '',
         r.address || r.userId?.address || '',
-        r.healthNote || 'Đủ điều kiện',
         r.note || '',
         formatDateTime(r.respondedAt || r.createdAt),
       ]);
@@ -1547,10 +1660,43 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
                     <div style={{ fontSize: 11.5, color: '#64748b' }}>Nhóm máu</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626', marginTop: 2 }}>
-                      {selectedRegistration.bloodType === 'UNKNOWN'
-                        ? 'Chưa rõ'
-                        : selectedRegistration.bloodType}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 3 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>
+                        {selectedRegistration.bloodType === 'UNKNOWN'
+                          ? 'Chưa rõ'
+                          : selectedRegistration.bloodType}
+                      </div>
+                      <select
+                        value={selectedRegistration.bloodType || 'UNKNOWN'}
+                        onChange={(e) => {
+                          const nextBt = e.target.value;
+                          if (nextBt && nextBt !== selectedRegistration.bloodType) {
+                            handleUpdateRegistrationStatus(
+                              selectedRegistration._id,
+                              selectedRegistration.status,
+                              nextBt
+                            );
+                          }
+                        }}
+                        style={{
+                          padding: '3px 6px',
+                          borderRadius: 6,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          background: '#ffffff',
+                          cursor: 'pointer',
+                        }}
+                        title="Cập nhật nhóm máu thực tế"
+                      >
+                        <option value="UNKNOWN">Chưa rõ</option>
+                        {BLOOD_TYPES.map((bt) => (
+                          <option key={bt} value={bt}>
+                            {bt}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -1600,13 +1746,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     </span>
                   </div>
                 )}
-
-                <div style={{ fontSize: 13 }}>
-                  <span style={{ color: '#64748b' }}>Sức khỏe: </span>
-                  <span style={{ color: '#0f172a' }}>
-                    {selectedRegistration.healthNote || 'Đủ điều kiện'}
-                  </span>
-                </div>
 
                 {selectedRegistration.note && (
                   <div style={{ fontSize: 13 }}>
@@ -2175,8 +2314,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           </span>
                         </div>
 
-                        {/* Hàng 3: Địa chỉ & Sức khỏe & Ghi chú nếu có */}
-                        {(r.address || r.areaName || r.provinceName || (r.healthNote && r.healthNote !== 'Sức khỏe bình thường, đủ điều kiện hiến máu') || r.note) && (
+                        {/* Hàng 3: Địa chỉ & Ghi chú nếu có */}
+                        {(r.address || r.areaName || r.provinceName || r.note) && (
                           <div
                             style={{
                               background: isCompleted ? '#f0fdf4' : '#f8fafc',
@@ -2193,11 +2332,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475569' }}>
                                 <MapPin size={11} color="#64748b" />
                                 <span>{r.address ? `${r.address}${r.areaName ? `, ${r.areaName}` : ''}` : (r.areaName || r.provinceName)}</span>
-                              </div>
-                            )}
-                            {r.healthNote && r.healthNote !== 'Sức khỏe bình thường, đủ điều kiện hiến máu' && (
-                              <div style={{ color: '#047857' }}>
-                                🩺 <b>Sức khỏe:</b> {r.healthNote}
                               </div>
                             )}
                             {r.note && (
@@ -2541,6 +2675,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     </label>
                     <input
                       type="date"
+                      min={todayDateStr}
                       value={formEventDate}
                       onChange={(e) => setFormEventDate(e.target.value)}
                       required
@@ -2598,6 +2733,46 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       min={1}
                       value={formTargetDonors}
                       onChange={(e) => setFormTargetDonors(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Cơ quan / Đơn vị tổ chức *
+                    </label>
+                    <input
+                      type="text"
+                      value={formOrganizer}
+                      onChange={(e) => setFormOrganizer(e.target.value)}
+                      required
+                      placeholder="VD: Ban Chỉ Huy PCTT / Hội Chữ Thập Đỏ..."
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      SĐT liên hệ
+                    </label>
+                    <input
+                      type="text"
+                      value={formContactPhone}
+                      onChange={(e) => setFormContactPhone(e.target.value)}
+                      placeholder="VD: 0988888888"
                       style={{
                         width: '100%',
                         padding: '8px 11px',
@@ -2695,6 +2870,151 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   }}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL BẮT BUỘC CHỌN NHÓM MÁU KHI XÁC NHẬN ĐÃ HIẾN MÁU ================= */}
+      {bloodPromptReg && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            zIndex: 10050,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => !submittingBloodPrompt && setBloodPromptReg(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 14,
+              width: '100%',
+              maxWidth: 420,
+              padding: 20,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Droplet size={18} color="#dc2626" />
+                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
+                  Cập nhật nhóm máu người hiến
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBloodPromptReg(null)}
+                disabled={submittingBloodPrompt}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: 8,
+                  width: 28,
+                  height: 28,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.5, marginBottom: 12 }}>
+              Người tham gia <strong style={{ color: '#0f172a' }}>{bloodPromptReg.fullName}</strong> ({bloodPromptReg.phone}) hiện đang để nhóm máu <strong style={{ color: '#dc2626' }}>Chưa rõ</strong>. Vui lòng chọn nhóm máu thực tế để xác nhận <strong>Đã hiến máu</strong>:
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 8,
+                marginBottom: 16,
+              }}
+            >
+              {BLOOD_TYPES.map((bt) => {
+                const active = bloodPromptChoice === bt;
+                return (
+                  <button
+                    key={bt}
+                    type="button"
+                    onClick={() => setBloodPromptChoice(bt)}
+                    style={{
+                      padding: '9px 0',
+                      borderRadius: 8,
+                      border: active ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                      background: active ? '#fef2f2' : '#f8fafc',
+                      color: active ? '#dc2626' : '#1e293b',
+                      fontWeight: 700,
+                      fontSize: 13.5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {bt}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setBloodPromptReg(null)}
+                disabled={submittingBloodPrompt}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={!bloodPromptChoice || submittingBloodPrompt}
+                onClick={async () => {
+                  if (!bloodPromptChoice) {
+                    showToast('error', 'Vui lòng chọn nhóm máu của người hiến!');
+                    return;
+                  }
+                  setSubmittingBloodPrompt(true);
+                  try {
+                    await handleUpdateRegistrationStatus(
+                      bloodPromptReg._id,
+                      'COMPLETED',
+                      bloodPromptChoice
+                    );
+                    setBloodPromptReg(null);
+                  } finally {
+                    setSubmittingBloodPrompt(false);
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: bloodPromptChoice ? '#16a34a' : '#94a3b8',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: bloodPromptChoice ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {submittingBloodPrompt ? 'Đang lưu...' : '✓ Xác nhận Đã hiến máu'}
+              </button>
             </div>
           </div>
         </div>

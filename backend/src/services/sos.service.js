@@ -476,12 +476,12 @@ const getSosRequests = async (query = {}, user = null) => {
     });
 
     if (query.sortBy === 'risk') {
-      // Unassessed cases are surfaced first for human review; this is queue ordering, not a danger score.
+      // Unassessed cases are surfaced first for human review; ties put newer requests first.
       const priorityOrder = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
       sosList.sort((a, b) => {
         const diff = (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4);
         if (diff !== 0) return diff;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
     }
   }
@@ -1194,6 +1194,10 @@ const assignShoreHandoff = async (id, data, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1256,6 +1260,10 @@ const cancelShoreHandoff = async (id, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1308,8 +1316,14 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
         const { getIO } = require('../socket');
         const io = getIO();
         if (io) {
+          io.emit('assignment:status_updated', handoffAssignment);
           io.emit('assignment:updated', handoffAssignment);
           io.emit('assignment:completed', handoffAssignment);
+          io.emit('rescue_teams_updated', {
+            teamId: handoffAssignment.rescueTeamId?.toString?.() || handoffAssignment.rescueTeamId || null,
+            assignmentId: handoffAssignment._id.toString(),
+            status: 'COMPLETED',
+          });
         }
       }
     } catch (assignErr) {
@@ -1364,6 +1378,10 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 

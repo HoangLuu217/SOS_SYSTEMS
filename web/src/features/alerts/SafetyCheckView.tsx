@@ -62,7 +62,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'CLOSED'>('ALL');
   const [disasterTypeFilter, setDisasterTypeFilter] = useState<string>('ALL');
   const [areaFilter, setAreaFilter] = useState<string>('ALL');
-  const [scopeMode, setScopeMode] = useState<'LOCAL' | 'ALL'>('LOCAL');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sorting
@@ -161,20 +160,32 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     return parentProv ? `${found.name} - ${parentProv.name}` : found.name;
   }, [user, areas, areaById]);
 
+  // Lọc theo địa bàn của cán bộ địa phương (chỉ hiển thị địa phương mình)
+  const scopedChecks = useMemo(() => {
+    if (isAuthority && user?.authority?.areaId) {
+      return safetyChecks.filter(
+        (c) =>
+          c.areaId?._id === user?.authority?.areaId ||
+          (user?.authority?.areaName ? c.areaName?.includes(user.authority.areaName) : false)
+      );
+    }
+    return safetyChecks;
+  }, [safetyChecks, isAuthority, user]);
+
   // Tính KPI tổng thể
   const kpis = useMemo(() => {
-    const total = safetyChecks.length;
-    const active = safetyChecks.filter((c) => c.status === 'ACTIVE').length;
+    const total = scopedChecks.length;
+    const active = scopedChecks.filter((c) => c.status === 'ACTIVE').length;
     let totalSafe = 0;
     let totalNeedHelp = 0;
 
-    safetyChecks.forEach((c) => {
+    scopedChecks.forEach((c) => {
       totalSafe += c.stats?.safeCount || 0;
       totalNeedHelp += c.stats?.needHelpCount || 0;
     });
 
     return { total, active, totalSafe, totalNeedHelp };
-  }, [safetyChecks]);
+  }, [scopedChecks]);
 
   // Helper hiển thị loại thiên tai
   const getDisasterTypeInfo = (type?: string) => {
@@ -213,16 +224,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
   // Lọc và Sắp xếp danh sách đợt kiểm tra an toàn
   const filteredAndSortedChecks = useMemo(() => {
-    let result = [...safetyChecks];
-
-    // Lọc theo cán bộ địa phương (nếu chọn xem chỉ địa phương mình)
-    if (isAuthority && scopeMode === 'LOCAL' && user?.authority?.areaId) {
-      result = result.filter(
-        (c) =>
-          c.areaId?._id === user?.authority?.areaId ||
-          c.areaName?.includes(user?.authority?.areaName || '')
-      );
-    }
+    let result = [...scopedChecks];
 
     // Lọc theo trạng thái
     if (statusFilter !== 'ALL') {
@@ -275,10 +277,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
     return result;
   }, [
-    safetyChecks,
-    isAuthority,
-    scopeMode,
-    user,
+    scopedChecks,
     statusFilter,
     disasterTypeFilter,
     searchQuery,
@@ -666,6 +665,42 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     );
   };
 
+  const actionButtons = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        className="sos-btn-flat"
+        onClick={handleExportChecksCsv}
+        disabled={exportingAllChecks || filteredAndSortedChecks.length === 0}
+        title="Xuất biểu mẫu Excel: mỗi đợt kiểm tra an toàn là 1 tab kèm đầy đủ người phản hồi"
+      >
+        {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <Download size={14} />}
+        <span>{exportingAllChecks ? 'Đang xuất...' : 'Xuất CSV'}</span>
+      </button>
+
+      <button
+        type="button"
+        className="sos-btn-flat"
+        onClick={loadSafetyChecks}
+        disabled={loading}
+        title="Tải lại dữ liệu"
+      >
+        <RefreshCw size={14} className={loading ? 'fa-spin' : ''} />
+        <span>Làm mới</span>
+      </button>
+
+      <button
+        type="button"
+        className="sos-btn-flat primary"
+        onClick={handleOpenCreate}
+        title="Phát động đợt kiểm tra an toàn người dân"
+      >
+        <Plus size={15} />
+        <span>Tạo Đợt Kiểm Tra Mới</span>
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="sos-views-container safety-check-view-container"
@@ -678,173 +713,105 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         gap: '12px',
       }}
     >
-      {/* 1. TIÊU ĐỀ TRANG & PHẠM VI QUẢN TRỊ (Đồng bộ chuẩn SheltersView) */}
-      <div className="sc-header-card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ShieldCheck size={18} color="#0284c7" />
-          <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
-            {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
-          </span>
-          <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-            {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : authorityAreaName}
-          </strong>
+      {/* 1. TIÊU ĐỀ TRANG & PHẠM VI QUẢN TRỊ (Chỉ hiển thị cho Admin) */}
+      {isAdmin && (
+        <div className="sc-header-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={18} color="#0284c7" />
+            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+              Phạm vi quản trị:
+            </span>
+            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+              {daNangProvince?.name || 'Thành phố Đà Nẵng'}
+            </strong>
+          </div>
+
+          {actionButtons}
         </div>
+      )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            className="sos-btn-flat"
-            onClick={handleExportChecksCsv}
-            disabled={exportingAllChecks || filteredAndSortedChecks.length === 0}
-            title="Xuất biểu mẫu Excel: mỗi đợt kiểm tra an toàn là 1 tab kèm đầy đủ người phản hồi"
-          >
-            {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <Download size={14} />}
-            <span>{exportingAllChecks ? 'Đang xuất...' : 'Xuất CSV'}</span>
-          </button>
+      {/* 2. THANH PHẠM VI (SCOPE TABS) & KPI NĂNG LỰC PHẢN HỒI (Chỉ hiển thị cho Admin) */}
+      {isAdmin && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
+            flexShrink: 0,
+          }}
+        >
+          <div className="sos-scope-tabs">
+            <button
+              type="button"
+              className={`sos-scope-tab ${areaFilter === 'ALL' ? 'active' : ''}`}
+              onClick={() => {
+                setAreaFilter('ALL');
+                setCurrentPage(1);
+                setJumpPageInput('1');
+              }}
+            >
+              <span>Toàn Đà Nẵng</span>
+              <span className="sos-scope-badge">{safetyChecks.length}</span>
+            </button>
 
-          <button
-            type="button"
-            className="sos-btn-flat"
-            onClick={loadSafetyChecks}
-            disabled={loading}
-            title="Tải lại dữ liệu"
-          >
-            <RefreshCw size={14} className={loading ? 'fa-spin' : ''} />
-            <span>Làm mới</span>
-          </button>
-
-          <button
-            type="button"
-            className="sos-btn-flat primary"
-            onClick={handleOpenCreate}
-            title="Phát động đợt kiểm tra an toàn người dân"
-          >
-            <Plus size={15} />
-            <span>Tạo Đợt Kiểm Tra Mới</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. THANH PHẠM VI (SCOPE TABS) & KPI NĂNG LỰC PHẢN HỒI */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '10px',
-          flexShrink: 0,
-        }}
-      >
-        <div className="sos-scope-tabs">
-          {isAdmin ? (
-            <>
-              <button
-                type="button"
-                className={`sos-scope-tab ${areaFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => {
-                  setAreaFilter('ALL');
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+                Phường/Xã (Đà Nẵng):
+              </span>
+              <SearchableSelect
+                className="sos-clean-sort-select"
+                ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
+                searchPlaceholder="Tìm nhanh Phường / Xã..."
+                value={getSelectedWardValue(areaFilter, daNangWardIds, canonicalAreaIdMap)}
+                onChange={(wId) => {
+                  setAreaFilter(wId || 'ALL');
                   setCurrentPage(1);
                   setJumpPageInput('1');
                 }}
-              >
-                <span>Toàn Đà Nẵng</span>
-                <span className="sos-scope-badge">{safetyChecks.length}</span>
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                  Phường/Xã (Đà Nẵng):
-                </span>
-                <SearchableSelect
-                  className="sos-clean-sort-select"
-                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                  searchPlaceholder="Tìm nhanh Phường / Xã..."
-                  value={getSelectedWardValue(areaFilter, daNangWardIds, canonicalAreaIdMap)}
-                  onChange={(wId) => {
-                    setAreaFilter(wId || 'ALL');
-                    setCurrentPage(1);
-                    setJumpPageInput('1');
-                  }}
-                  triggerStyle={{ minWidth: '230px' }}
-                  options={[
-                    {
-                      value: '',
-                      label: `Tất cả Phường / Xã Đà Nẵng (${daNangWards.length})`,
-                      keywords: 'tat ca toan thanh pho da nang',
-                    },
-                    ...daNangWards.map((w) => ({
-                      value: w._id,
-                      label: w.name,
-                      badgeText: w.code || undefined,
-                      keywords: `${w.name} ${w.code || ''}`,
-                    })),
-                  ]}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={`sos-scope-tab ${scopeMode === 'LOCAL' ? 'active' : ''}`}
-                onClick={() => {
-                  setScopeMode('LOCAL');
-                  setCurrentPage(1);
-                  setJumpPageInput('1');
-                }}
-              >
-                <span>{authorityAreaName}</span>
-                <span className="sos-scope-badge">
+                triggerStyle={{ minWidth: '230px' }}
+                options={[
                   {
-                    safetyChecks.filter(
-                      (c) =>
-                        c.areaId?._id === user?.authority?.areaId ||
-                        c.areaName?.includes(user?.authority?.areaName || '')
-                    ).length
-                  }
-                </span>
-              </button>
+                    value: '',
+                    label: `Tất cả Phường / Xã Đà Nẵng (${daNangWards.length})`,
+                    keywords: 'tat ca toan thanh pho da nang',
+                  },
+                  ...daNangWards.map((w) => ({
+                    value: w._id,
+                    label: w.name,
+                    badgeText: w.code || undefined,
+                    keywords: `${w.name} ${w.code || ''}`,
+                  })),
+                ]}
+              />
+            </div>
+          </div>
 
-              <button
-                type="button"
-                className={`sos-scope-tab ${scopeMode === 'ALL' ? 'active' : ''}`}
-                onClick={() => {
-                  setScopeMode('ALL');
-                  setCurrentPage(1);
-                  setJumpPageInput('1');
-                }}
-              >
-                <span>Toàn hệ thống</span>
-                <span className="sos-scope-badge">{safetyChecks.length}</span>
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Quick Stats Strip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12.5px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#64748b' }}>Tổng số đợt:</span>
-            <strong style={{ color: '#0284c7' }}>{kpis.total} đợt</strong>
-          </div>
-          <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#64748b' }}>Đang mở:</span>
-            <strong style={{ color: '#16a34a' }}>{kpis.active} đợt</strong>
-          </div>
-          <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#64748b' }}>Người an toàn:</span>
-            <strong style={{ color: '#16a34a' }}>{kpis.totalSafe.toLocaleString()}</strong>
-          </div>
-          <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#64748b' }}>Cần cứu hộ:</span>
-            <strong style={{ color: '#dc2626' }}>{kpis.totalNeedHelp.toLocaleString()}</strong>
+          {/* Quick Stats Strip */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Tổng số đợt:</span>
+              <strong style={{ color: '#0284c7' }}>{kpis.total} đợt</strong>
+            </div>
+            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Đang mở:</span>
+              <strong style={{ color: '#16a34a' }}>{kpis.active} đợt</strong>
+            </div>
+            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Người an toàn:</span>
+              <strong style={{ color: '#16a34a' }}>{kpis.totalSafe.toLocaleString()}</strong>
+            </div>
+            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Cần cứu hộ:</span>
+              <strong style={{ color: '#dc2626' }}>{kpis.totalNeedHelp.toLocaleString()}</strong>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. THANH CÔNG CỤ: TAB LỌC TRẠNG THÁI, LOẠI THIÊN TAI, SẮP XẾP & TÌM KIẾM */}
       <div className="sos-clean-toolbar" style={{ flexShrink: 0 }}>
@@ -859,7 +826,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               setJumpPageInput('1');
             }}
           >
-            Tất cả <span className="sos-clean-tab-count">{safetyChecks.length}</span>
+            Tất cả <span className="sos-clean-tab-count">{scopedChecks.length}</span>
           </button>
           <button
             type="button"
@@ -881,7 +848,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               setJumpPageInput('1');
             }}
           >
-            Đã kết thúc <span className="sos-clean-tab-count">{safetyChecks.length - kpis.active}</span>
+            Đã kết thúc <span className="sos-clean-tab-count">{scopedChecks.length - kpis.active}</span>
           </button>
         </div>
 
@@ -965,6 +932,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               </button>
             )}
           </div>
+          {!isAdmin && actionButtons}
         </div>
       </div>
 

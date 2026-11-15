@@ -252,14 +252,6 @@ export const ShelterMiniMap: React.FC<{
   );
 };
 
-export const MAX_SHELTER_OCCUPANCY_PERCENT = 120;
-
-export const getMaxAllowedShelterOccupancy = (capacityInput?: number): number => {
-  const cap = Number(capacityInput);
-  if (!Number.isFinite(cap) || cap <= 0) return 0;
-  return Math.floor((cap * MAX_SHELTER_OCCUPANCY_PERCENT) / 100);
-};
-
 export interface ShelterOccupancyMetrics {
   capacity: number;
   occupancy: number;
@@ -323,10 +315,6 @@ export const validateShelterOccupancyLimit = (
     return occ > 0
       ? 'Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú!'
       : undefined;
-  }
-  if (occ * 100 > cap * MAX_SHELTER_OCCUPANCY_PERCENT) {
-    const maxAllowed = getMaxAllowedShelterOccupancy(cap);
-    return `Số người đang lưu trú (${occ.toLocaleString()} người) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed.toLocaleString()} người)!`;
   }
   return undefined;
 };

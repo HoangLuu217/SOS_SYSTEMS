@@ -5,8 +5,6 @@ const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('..
 const { sanitizeImages } = require('../utils/validation.util');
 const eventBus = require('./eventBus');
 
-const MAX_SHELTER_OCCUPANCY_PERCENT = 120;
-
 function validateCapacityAndOccupancy(capacity, currentOccupancy) {
   const cap = Number(capacity);
   const occ = Number(currentOccupancy);
@@ -19,13 +17,6 @@ function validateCapacityAndOccupancy(capacity, currentOccupancy) {
   }
   if (cap === 0 && occ > 0) {
     throw new ApiError(400, 'Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú.');
-  }
-  if (cap > 0 && occ * 100 > cap * MAX_SHELTER_OCCUPANCY_PERCENT) {
-    const maxAllowed = Math.floor((cap * MAX_SHELTER_OCCUPANCY_PERCENT) / 100);
-    throw new ApiError(
-      400,
-      `Số người đang lưu trú (${occ}) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed} người cho sức chứa ${cap}).`
-    );
   }
 }
 

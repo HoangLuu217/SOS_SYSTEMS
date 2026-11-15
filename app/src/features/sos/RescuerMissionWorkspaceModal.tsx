@@ -14,6 +14,7 @@ import {
   Dimensions,
   TextInput,
   DeviceEventEmitter,
+  AppState,
   Vibration,
   Platform,
   Alert,
@@ -534,6 +535,60 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<Socket | null>(null);
+  const assignmentRef = useRef<any>(assignment);
+  const sosRef = useRef<any>(sos);
+  const assignmentIdRef = useRef<string | null | undefined>(assignmentId);
+  const initialAssignmentRef = useRef<any>(initialAssignmentData);
+  const initialSosRef = useRef<any>(initialSosData);
+  const missionStateRef = useRef<RescuerMissionState>(missionState);
+  const isRefreshingAssignmentRef = useRef<boolean>(false);
+  const lastSupplyNoticeSigRef = useRef<string>('');
+
+  useEffect(() => {
+    assignmentRef.current = assignment;
+  }, [assignment]);
+
+  useEffect(() => {
+    sosRef.current = sos;
+  }, [sos]);
+
+  useEffect(() => {
+    assignmentIdRef.current = assignmentId;
+  }, [assignmentId]);
+
+  useEffect(() => {
+    initialAssignmentRef.current = initialAssignmentData;
+  }, [initialAssignmentData]);
+
+  useEffect(() => {
+    initialSosRef.current = initialSosData;
+  }, [initialSosData]);
+
+  useEffect(() => {
+    missionStateRef.current = missionState;
+  }, [missionState]);
+
+  // Đồng bộ nếu parent cập nhật initialAssignmentData khi modal đang mở
+  useEffect(() => {
+    if (!visible || !initialAssignmentData) return;
+    setAssignment((prev: any) => {
+      if (!prev) return initialAssignmentData;
+      if (String(prev._id) !== String(initialAssignmentData._id)) return prev;
+      return {
+        ...prev,
+        ...initialAssignmentData,
+        supplies: Array.isArray(initialAssignmentData.supplies)
+          ? initialAssignmentData.supplies
+          : prev.supplies,
+        requestedSupplies: Array.isArray(initialAssignmentData.requestedSupplies)
+          ? initialAssignmentData.requestedSupplies
+          : prev.requestedSupplies,
+      };
+    });
+    if (Array.isArray(initialAssignmentData.requestedSupplies)) {
+      setRequestedSuppliesList(initialAssignmentData.requestedSupplies);
+    }
+  }, [visible, initialAssignmentData]);
 
   // Lắng nghe sự kiện từ Leaflet WebView (ví dụ: người dùng vuốt/kéo bản đồ -> hủy ghim tự động)
   const handleWebViewMessage = useCallback((event: any) => {
@@ -641,6 +696,32 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   }, [assignmentId, initialAssignmentData, initialSosData]);
 
+  // 1b. Làm mới ngầm thông tin Assignment & Vật tư (không làm nháy loading UI)
+  const refreshAssignmentSilently = useCallback(async () => {
+    if (isRefreshingAssignmentRef.current) return;
+    const targetId =
+      assignmentRef.current?._id ||
+      assignmentIdRef.current ||
+      initialAssignmentRef.current?._id;
+    if (!targetId) return;
+
+    isRefreshingAssignmentRef.current = true;
+    try {
+      const assignRes = await backendApi.get(`/assignments/${targetId}`);
+      if (assignRes.success && assignRes.data) {
+        setAssignment(assignRes.data);
+        if (Array.isArray(assignRes.data.requestedSupplies)) {
+          setRequestedSuppliesList(assignRes.data.requestedSupplies);
+        }
+        syncStateFromStatus(assignRes.data.status);
+      }
+    } catch {
+      // ignore silent refresh errors
+    } finally {
+      isRefreshingAssignmentRef.current = false;
+    }
+  }, []);
+
   // 2. Rung cảnh báo khi nổ lệnh điều động khẩn cấp
   useEffect(() => {
     if (visible && missionState === 'ASSIGNED_PENDING_ACCEPTANCE') {
@@ -736,149 +817,280 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     };
   }, [visible, user?._id, assignment?._id]);
 
-  // 4. Kết nối Realtime Socket.IO
+  // 4. Kết nối Realtime Socket.IO & Đồng bộ trạng thái vật tư/nhiệm vụ
   useEffect(() => {
     if (!visible) return;
 
-    try {
-      const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
-      const socket = io(socketUrl, {
-        transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5,
-      });
+    let isDisposed = false;
+    let activeSocket: Socket | null = null;
+    lastSupplyNoticeSigRef.current = '';
 
-      socketRef.current = socket;
+    const isMatchingMissionEvent = (data?: any) => {
+      if (!data) return false;
+      const candidateAssignIds = [
+        assignmentRef.current?._id,
+        assignmentIdRef.current,
+        initialAssignmentRef.current?._id,
+      ]
+        .filter(Boolean)
+        .map(String);
 
-      socket.on('connect', () => {
-        if (user?._id) {
-          socket.emit('register_user', user._id);
+      const candidateSosIds = [
+        sosRef.current?._id,
+        sosRef.current?.id,
+        assignmentRef.current?.sosRequestId?._id,
+        assignmentRef.current?.sosRequestId,
+        assignmentRef.current?.sosId?._id,
+        assignmentRef.current?.sosId,
+        initialSosRef.current?._id,
+        initialSosRef.current?.id,
+      ]
+        .filter(Boolean)
+        .map(String);
+
+      const incomingAssignId = data.assignmentId?._id || data.assignmentId || data._id;
+      const incomingSosId = data.sosId?._id || data.sosId || data.sosRequestId?._id || data.sosRequestId;
+
+      if (incomingAssignId && candidateAssignIds.includes(String(incomingAssignId))) {
+        return true;
+      }
+      if (incomingSosId && candidateSosIds.includes(String(incomingSosId))) {
+        return true;
+      }
+      return false;
+    };
+
+    const handleMissionCancelled = (data?: any) => {
+      const assignId = assignmentRef.current?._id || assignmentIdRef.current || initialAssignmentRef.current?._id;
+      const currentSosId = sosRef.current?._id || initialSosRef.current?._id;
+      const isMatched =
+        !data ||
+        (!data.assignmentId && !data.sosId) ||
+        (assignId && String(data.assignmentId) === String(assignId)) ||
+        (currentSosId && String(data.sosId) === String(currentSosId));
+
+      if (isMatched) {
+        Alert.alert(
+          '⚠️ ĐIỀU ĐỘNG ĐÃ HỦY',
+          data?.reason
+            ? `Ban chỉ huy đã hủy điều động ca này.\nLý do: ${data.reason}`
+            : 'Ban chỉ huy đã thu hồi hoặc hủy lệnh điều động cho ca cứu nạn.',
+          [{ text: 'Đã hiểu', onPress: onClose }]
+        );
+        onClose();
+      }
+    };
+
+    const handleSosUpdated = (updatedSos: any) => {
+      const currentSosId = sosRef.current?._id || initialSosRef.current?._id;
+      if (updatedSos && currentSosId && (String(updatedSos._id) === String(currentSosId) || String(updatedSos.id) === String(currentSosId))) {
+        if (updatedSos.status === 'CANCELLED' || (updatedSos.status === 'VERIFIED' && missionStateRef.current !== 'COMPLETED')) {
+          handleMissionCancelled({ sosId: updatedSos._id, reason: 'Ca cứu nạn đã được trung tâm chuyển trạng thái điều phối lại.' });
+          return;
         }
-      });
-
-      // Xử lý khi Ban chỉ huy trên Web hủy điều động: Tự động thoát khỏi màn hình nhiệm vụ ngay lập tức
-      const handleMissionCancelled = (data?: any) => {
-        const assignId = assignment?._id || assignmentId;
-        const currentSosId = sos?._id || initialSosData?._id;
-        const isMatched =
-          !data ||
-          !data.assignmentId ||
-          data.assignmentId === assignId ||
-          data.sosId === currentSosId;
-
-        if (isMatched) {
-          Alert.alert(
-            '⚠️ ĐIỀU ĐỘNG ĐÃ HỦY',
-            data?.reason
-              ? `Ban chỉ huy đã hủy điều động ca này.\nLý do: ${data.reason}`
-              : 'Ban chỉ huy đã thu hồi hoặc hủy lệnh điều động cho ca cứu nạn.',
-            [{ text: 'Đã hiểu', onPress: onClose }]
-          );
-          onClose();
+        if (updatedSos.shoreHandoff) {
+          setShoreHandoffData(updatedSos.shoreHandoff);
         }
-      };
+        setSos((prev: any) => ({ ...prev, ...updatedSos }));
+        syncStateFromStatus(updatedSos.status);
+        onMissionUpdated?.(updatedSos.status, assignmentRef.current?._id);
+      }
+    };
 
-      socket.on('assignment:cancelled', handleMissionCancelled);
+    const handleSupplyApproved = (data: any) => {
+      if (!isMatchingMissionEvent(data)) return;
 
-      // Lắng nghe cập nhật trạng thái SOS từ trung tâm chỉ huy
-      socket.on('sos:updated', (updatedSos: any) => {
-        if (updatedSos && (updatedSos._id === sos?._id || updatedSos.id === sos?._id)) {
-          if (updatedSos.status === 'CANCELLED' || (updatedSos.status === 'VERIFIED' && missionState !== 'COMPLETED')) {
-            handleMissionCancelled({ sosId: updatedSos._id, reason: 'Ca cứu nạn đã được trung tâm chuyển trạng thái điều phối lại.' });
-            return;
-          }
-          if (updatedSos.shoreHandoff) {
-            setShoreHandoffData(updatedSos.shoreHandoff);
-          }
-          setSos((prev: any) => ({ ...prev, ...updatedSos }));
-          syncStateFromStatus(updatedSos.status);
-          onMissionUpdated?.(updatedSos.status, assignment?._id);
+      if (Array.isArray(data.requestedSupplies)) {
+        setRequestedSuppliesList(data.requestedSupplies);
+      }
+      if (Array.isArray(data.supplies) || Array.isArray(data.requestedSupplies) || data.assignment) {
+        setAssignment((prev: any) => {
+          const base = prev || data.assignment || initialAssignmentRef.current || {};
+          return {
+            ...base,
+            ...(data.assignment || {}),
+            supplies: Array.isArray(data.supplies)
+              ? data.supplies
+              : (data.assignment?.supplies ?? base.supplies),
+            requestedSupplies: Array.isArray(data.requestedSupplies)
+              ? data.requestedSupplies
+              : (data.assignment?.requestedSupplies ?? base.requestedSupplies),
+          };
+        });
+      }
+
+      refreshAssignmentSilently();
+
+      const sig = `APPROVED:${String(data.assignmentId || assignmentRef.current?._id || '')}:${JSON.stringify(
+        (data.requestedSupplies || []).map((s: any) => `${s.name}:${s.quantity}:${s.status}`)
+      )}`;
+      if (lastSupplyNoticeSigRef.current !== sig) {
+        lastSupplyNoticeSigRef.current = sig;
+        Vibration.vibrate(60);
+        setCustomNotice({
+          visible: true,
+          type: 'success',
+          title: 'Địa phương đã xuất cấp vật tư',
+          message: 'Ban Chỉ Huy địa phương đã phê duyệt và xuất kho tiếp tế bổ sung cho đội cứu hộ!',
+        });
+      }
+    };
+
+    const handleSupplyRejected = (data: any) => {
+      if (!isMatchingMissionEvent(data)) return;
+
+      if (Array.isArray(data.requestedSupplies)) {
+        setRequestedSuppliesList(data.requestedSupplies);
+        setAssignment((prev: any) => {
+          const base = prev || initialAssignmentRef.current || {};
+          return { ...base, requestedSupplies: data.requestedSupplies };
+        });
+      }
+
+      refreshAssignmentSilently();
+
+      const sig = `REJECTED:${String(data.assignmentId || assignmentRef.current?._id || '')}:${JSON.stringify(
+        (data.requestedSupplies || []).map((s: any) => `${s.name}:${s.quantity}:${s.status}`)
+      )}`;
+      if (lastSupplyNoticeSigRef.current !== sig) {
+        lastSupplyNoticeSigRef.current = sig;
+        Vibration.vibrate(60);
+        setCustomNotice({
+          visible: true,
+          type: 'warning',
+          title: 'Từ chối cấp thêm vật tư',
+          message: 'Kho tiếp tế địa phương chưa thể đáp ứng yêu cầu vật tư lúc này.',
+        });
+      }
+    };
+
+    const handleAssignmentRealtimeSync = (data?: any) => {
+      if (data && (data.assignmentId || data.sosId) && !isMatchingMissionEvent(data)) {
+        return;
+      }
+      if (data && isMatchingMissionEvent(data)) {
+        if (Array.isArray(data.requestedSupplies)) {
+          setRequestedSuppliesList(data.requestedSupplies);
         }
-      });
-
-      // Lắng nghe phê duyệt chi viện vật tư từ Ban Chỉ Huy
-      socket.on('assignment:supply_approved', (data: any) => {
-        if (data && (String(data.assignmentId) === String(assignment?._id) || String(data.sosId) === String(sos?._id))) {
-          if (Array.isArray(data.requestedSupplies)) {
-            setRequestedSuppliesList(data.requestedSupplies);
-          }
-          if (Array.isArray(data.supplies)) {
-            setAssignment((prev: any) => ({ ...prev, supplies: data.supplies, requestedSupplies: data.requestedSupplies }));
-          }
-          Vibration.vibrate(60);
-          setCustomNotice({
-            visible: true,
-            type: 'success',
-            title: 'Địa phương đã xuất cấp vật tư',
-            message: 'Ban Chỉ Huy địa phương đã phê duyệt và xuất kho tiếp tế bổ sung cho đội cứu hộ!',
+        if (Array.isArray(data.supplies) || Array.isArray(data.requestedSupplies)) {
+          setAssignment((prev: any) => {
+            if (!prev) return data.assignment || prev;
+            return {
+              ...prev,
+              ...(Array.isArray(data.supplies) ? { supplies: data.supplies } : {}),
+              ...(Array.isArray(data.requestedSupplies) ? { requestedSupplies: data.requestedSupplies } : {}),
+            };
           });
         }
-      });
+      }
+      refreshAssignmentSilently();
+    };
 
-      // Lắng nghe từ chối chi viện vật tư
-      socket.on('assignment:supply_rejected', (data: any) => {
-        if (data && (String(data.assignmentId) === String(assignment?._id) || String(data.sosId) === String(sos?._id))) {
-          if (Array.isArray(data.requestedSupplies)) {
-            setRequestedSuppliesList(data.requestedSupplies);
-            setAssignment((prev: any) => ({ ...prev, requestedSupplies: data.requestedSupplies }));
+    const handleTeamChangedInWorkspace = async () => {
+      refreshAssignmentSilently();
+    };
+
+    const subTeamWorkspace = DeviceEventEmitter.addListener(
+      'team:membership_updated',
+      handleTeamChangedInWorkspace
+    );
+    const subSupplyApproved = DeviceEventEmitter.addListener(
+      'assignment:supply_approved',
+      handleSupplyApproved
+    );
+    const subSupplyRejected = DeviceEventEmitter.addListener(
+      'assignment:supply_rejected',
+      handleSupplyRejected
+    );
+    const subSosSync = DeviceEventEmitter.addListener('sos:sync', handleAssignmentRealtimeSync);
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        refreshAssignmentSilently();
+      }
+    });
+
+    // Polling dự phòng nhẹ mỗi 5s khi đang mở modal để luôn khớp DB kể cả khi mất sóng tạm thời
+    const syncInterval = setInterval(() => {
+      refreshAssignmentSilently();
+    }, 5000);
+
+    (async () => {
+      try {
+        const resolvedBaseUrl = await backendApi.getBaseUrl().catch(() => ENV.API_BASE_URL);
+        if (isDisposed) return;
+
+        const socketUrl = (resolvedBaseUrl || ENV.API_BASE_URL).replace(/\/api\/?$/, '');
+        const socket = io(socketUrl, {
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1500,
+        });
+
+        activeSocket = socket;
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          if (user?._id) {
+            socket.emit('register_user', user._id);
           }
-          Vibration.vibrate(60);
-          setCustomNotice({
-            visible: true,
-            type: 'warning',
-            title: 'Từ chối cấp thêm vật tư',
-            message: 'Kho tiếp tế địa phương chưa thể đáp ứng yêu cầu vật tư lúc này.',
-          });
-        }
-      });
+          refreshAssignmentSilently();
+        });
 
-      // Lắng nghe thông báo khi Ban Chỉ Huy điều động xe cứu thương/xe tải đón tại bờ
-      socket.on('sos:shore_handoff_assigned', (data: any) => {
-        if (data?.shoreHandoff) {
-          setShoreHandoffData(data.shoreHandoff);
-          Vibration.vibrate([200, 100, 200]);
-          Alert.alert(
-            '🚑 Xe đón bờ đã xuất phát!',
-            `Ban Chỉ Huy đã điều động ${data.shoreHandoff.assignedVehicleName} (${data.shoreHandoff.assignedVehiclePlate}) do tài xế ${data.shoreHandoff.assignedDriverName} (${data.shoreHandoff.assignedDriverPhone}) phụ trách đang đến bến đón!`
-          );
-        }
-      });
+        socket.on('assignment:cancelled', handleMissionCancelled);
+        socket.on('sos:updated', handleSosUpdated);
+        socket.on('assignment:supply_approved', handleSupplyApproved);
+        socket.on('assignment:supply_rejected', handleSupplyRejected);
+        socket.on('assignment:supply_requested', handleAssignmentRealtimeSync);
+        socket.on('assignment:updated', handleAssignmentRealtimeSync);
+        socket.on('assignment:status_updated', handleAssignmentRealtimeSync);
+        socket.on('sos:sync', handleAssignmentRealtimeSync);
 
-      const handleTeamChangedInWorkspace = async () => {
-        const targetId = assignment?._id || assignmentId || initialAssignmentData?._id;
-        if (!targetId) return;
-        try {
-          const assignRes = await backendApi.get(`/assignments/${targetId}`);
-          if (assignRes.success && assignRes.data) {
-            setAssignment(assignRes.data);
+        // Lắng nghe thông báo khi Ban Chỉ Huy điều động xe cứu thương/xe tải đón tại bờ
+        socket.on('sos:shore_handoff_assigned', (data: any) => {
+          if (data?.shoreHandoff) {
+            setShoreHandoffData(data.shoreHandoff);
+            Vibration.vibrate([200, 100, 200]);
+            Alert.alert(
+              '🚑 Xe đón bờ đã xuất phát!',
+              `Ban Chỉ Huy đã điều động ${data.shoreHandoff.assignedVehicleName} (${data.shoreHandoff.assignedVehiclePlate}) do tài xế ${data.shoreHandoff.assignedDriverName} (${data.shoreHandoff.assignedDriverPhone}) phụ trách đang đến bến đón!`
+            );
           }
-        } catch {
-          // ignore silent refresh errors
-        }
-      };
+        });
 
-      socket.on('team:membership_updated', handleTeamChangedInWorkspace);
-      socket.on('rescue_teams_updated', handleTeamChangedInWorkspace);
-      const subTeamWorkspace = DeviceEventEmitter.addListener(
-        'team:membership_updated',
-        handleTeamChangedInWorkspace
-      );
+        socket.on('team:membership_updated', handleTeamChangedInWorkspace);
+        socket.on('rescue_teams_updated', handleTeamChangedInWorkspace);
+      } catch (err) {
+        console.warn('[Socket Workspace Error]:', err);
+      }
+    })();
 
-      return () => {
-        socket.off('assignment:cancelled', handleMissionCancelled);
-        socket.off('sos:updated');
-        socket.off('sos:shore_handoff_assigned');
-        socket.off('assignment:supply_approved');
-        socket.off('assignment:supply_rejected');
-        socket.off('team:membership_updated', handleTeamChangedInWorkspace);
-        socket.off('rescue_teams_updated', handleTeamChangedInWorkspace);
-        subTeamWorkspace.remove();
-        socket.disconnect();
-        socketRef.current = null;
-      };
-    } catch (err) {
-      console.warn('[Socket Workspace Error]:', err);
-    }
-  }, [visible, user?._id, sos?._id, assignment?._id, assignmentId, initialAssignmentData?._id]);
+    return () => {
+      isDisposed = true;
+      clearInterval(syncInterval);
+      appStateSub.remove();
+      subTeamWorkspace.remove();
+      subSupplyApproved.remove();
+      subSupplyRejected.remove();
+      subSosSync.remove();
+      if (activeSocket) {
+        activeSocket.off('assignment:cancelled', handleMissionCancelled);
+        activeSocket.off('sos:updated', handleSosUpdated);
+        activeSocket.off('sos:shore_handoff_assigned');
+        activeSocket.off('assignment:supply_approved', handleSupplyApproved);
+        activeSocket.off('assignment:supply_rejected', handleSupplyRejected);
+        activeSocket.off('assignment:supply_requested', handleAssignmentRealtimeSync);
+        activeSocket.off('assignment:updated', handleAssignmentRealtimeSync);
+        activeSocket.off('assignment:status_updated', handleAssignmentRealtimeSync);
+        activeSocket.off('sos:sync', handleAssignmentRealtimeSync);
+        activeSocket.off('team:membership_updated', handleTeamChangedInWorkspace);
+        activeSocket.off('rescue_teams_updated', handleTeamChangedInWorkspace);
+        activeSocket.disconnect();
+      }
+      socketRef.current = null;
+    };
+  }, [visible, user?._id, refreshAssignmentSilently, onClose, onMissionUpdated]);
 
   // 5. Tự động tải dữ liệu khi mở Modal
   useEffect(() => {
@@ -1054,7 +1266,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       setActionLoading(true);
 
       if (assignment?._id) {
-        await backendApi.acceptAssignment(assignment._id);
         await backendApi.updateAssignmentStatus(assignment._id, 'EN_ROUTE');
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'ON_THE_WAY', 'Đội đã tiếp nhận và đang trên đường tới');
@@ -1305,12 +1516,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       assignment?.missionType === 'SHORE_HANDOFF' ||
       Boolean(shoreHandoffData && shoreHandoffData.status === 'ASSIGNED');
 
-    if ((isRelief || isShore) && capturedPhotos.length === 0) {
+    if (capturedPhotos.length === 0) {
       setCustomNotice({
         visible: true,
         type: 'warning',
-        title: 'Thiếu ảnh xác thực bàn giao',
-        message: 'Vui lòng chụp hoặc chọn ít nhất 1 hình ảnh xác thực đã bàn giao trước khi bấm Bàn giao.',
+        title: 'Thiếu ảnh xác thực hoàn thành',
+        message: 'Vui lòng chụp hoặc chọn ít nhất 1 hình ảnh hiện trường / bàn giao trước khi bấm xác nhận hoàn thành.',
       });
       return;
     }
@@ -1769,8 +1980,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     assignment?.authorityOrganizationName ||
     '';
 
-  // Khoảng cách an toàn tránh notch / Dynamic Island của iPhone (tránh bị che phủ status bar)
-  const safeTop = Math.max(insets.top, Platform.OS === 'ios' ? 56 : 40) + 12;
+  // Khoảng cách an toàn tránh notch / Dynamic Island của iPhone; trên Android Modal không translucent nên y=0 đã nằm ngay dưới status bar
+  const safeTop = Platform.OS === 'ios' ? Math.max(insets.top, 56) + 12 : 12;
 
   // Bật / Tắt chế độ dẫn đường Turn-by-Turn trực tiếp trong ứng dụng chuẩn Grab
   const handleToggleInAppNavigation = useCallback(() => {
@@ -1909,24 +2120,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
     try {
       setActionLoading(true);
-      try {
-        await backendApi.post('/supplies/request', {
-          assignmentId: assignment?._id,
-          sosId: sos?._id,
-          items,
-          urgency: supplyUrgency,
-          note: supplyNote,
-        });
-      } catch {
-        // Fallback ghi nhận
-      }
-
       const finalItems = [...items];
       if (supplyNote.trim()) {
         finalItems.push({ name: supplyNote.trim(), quantity: 1, unit: 'yêu cầu', equipmentId: undefined });
       }
 
-      setRequestedSuppliesList((prev) => [...prev, ...finalItems]);
+      const reqRes = await backendApi.post('/supplies/request', {
+        assignmentId: assignment?._id,
+        sosId: sos?._id,
+        items: items.length > 0 ? items : finalItems,
+        urgency: supplyUrgency,
+        note: supplyNote,
+      });
+
+      if (reqRes?.success && reqRes.data) {
+        setAssignment(reqRes.data);
+        if (Array.isArray(reqRes.data.requestedSupplies)) {
+          setRequestedSuppliesList(reqRes.data.requestedSupplies);
+        } else {
+          setRequestedSuppliesList((prev) => [...prev, ...finalItems.map((it) => ({ ...it, status: 'PENDING' }))]);
+        }
+      } else {
+        setRequestedSuppliesList((prev) => [...prev, ...finalItems.map((it) => ({ ...it, status: 'PENDING' }))]);
+      }
 
       // Reset sạch sẽ bảng vật tư về 0 và xóa ghi chú để lần sau mở ra không bị nhớ số lượng cũ
       const resetQty: Record<string, number> = {};
@@ -3362,7 +3578,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                               </View>
 
                               {/* Hàng 2: Danh sách vật tư (Thu gọn vs Mở rộng toàn bộ) */}
-                              {suppliesExpanded ? (
+                              {missionSupplies.length === 0 ? (
+                                <Text style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic', marginTop: 2 }}>
+                                  Chưa có vật tư cấp theo xe.
+                                </Text>
+                              ) : suppliesExpanded ? (
                                 <View style={{ gap: 6, marginTop: 4 }}>
                                   {missionSupplies.map((s: any, idx: number) => (
                                     <View key={idx} style={styles.grabSupplyChip}>
@@ -4794,7 +5014,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                 {/* Chụp ảnh nghiệm thu hiện trường / bàn giao hàng */}
                 {(() => {
-                  const requiresProofPhoto =
+                  const requiresProofPhoto = true;
+                  const isHandoverProof =
                     isReliefMission ||
                     isShoreHandoffMission ||
                     Boolean(shoreHandoffData && shoreHandoffData.status === 'ASSIGNED');
@@ -4806,17 +5027,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     <>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 6 }}>
                         <Text style={[styles.inputSectionLabel, { marginTop: 0, marginBottom: 0 }]}>
-                          {requiresProofPhoto ? `Ảnh xác thực bàn giao (tối đa ${MAX_PROOF_PHOTOS}):` : `Ảnh hiện trường (tối đa ${MAX_PROOF_PHOTOS}):`}
+                          {isHandoverProof ? `Ảnh xác thực bàn giao (tối đa ${MAX_PROOF_PHOTOS}):` : `Ảnh hiện trường xác thực (tối đa ${MAX_PROOF_PHOTOS}):`}
                         </Text>
-                        {requiresProofPhoto ? (
-                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: hasPhotos ? '#16A34A' : '#DC2626' }}>
-                            {hasPhotos ? `✓ Đã chọn ${capturedPhotos.length}/${MAX_PROOF_PHOTOS} ảnh` : '* Bắt buộc'}
-                          </Text>
-                        ) : hasPhotos ? (
-                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0284C7' }}>
-                            {`${capturedPhotos.length}/${MAX_PROOF_PHOTOS} ảnh`}
-                          </Text>
-                        ) : null}
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: hasPhotos ? '#16A34A' : '#DC2626' }}>
+                          {hasPhotos ? `✓ Đã chọn ${capturedPhotos.length}/${MAX_PROOF_PHOTOS} ảnh` : '* Bắt buộc'}
+                        </Text>
                       </View>
 
                       <View style={styles.photoUploadRow}>
@@ -6906,7 +7121,7 @@ const styles = StyleSheet.create({
   },
   zoomCloseBtn: {
     position: 'absolute',
-    top: 40,
+    top: Platform.OS === 'ios' ? 40 : 16,
     right: 20,
     zIndex: 10,
     padding: 8,

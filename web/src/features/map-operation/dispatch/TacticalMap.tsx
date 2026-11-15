@@ -39,6 +39,13 @@ import { fetchHazardReports } from '@/api/hazard.api';
 import { fetchSafeLocations } from '@/api/shelter.api';
 import { getShelterOccupancyMetrics } from '@/features/shelters/shelterConstants';
 import { Shield, AlertTriangle } from 'lucide-react';
+import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
+import {
+  AdminPointDetailPanel,
+  buildAdminLocationDivIcon,
+  getFirstImageUrl,
+  type SelectedAdminPoint,
+} from '../AdminPointDetailPanel';
 
 interface Props {
   selectedSos: SosRequest | null;
@@ -301,6 +308,18 @@ export const TacticalMap = ({
   const [shelters, setShelters] = useState<SafeLocationItem[]>(propShelters || []);
   const [showHazards, setShowHazards] = useState<boolean>(true);
   const [showShelters, setShowShelters] = useState<boolean>(true);
+  const [selectedPointRef, setSelectedPointRef] = useState<{ kind: 'SHELTER' | 'HAZARD'; id: string } | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<PhotoLightboxState | null>(null);
+
+  const selectedPoint = useMemo<SelectedAdminPoint | null>(() => {
+    if (!selectedPointRef) return null;
+    if (selectedPointRef.kind === 'SHELTER') {
+      const sh = shelters.find((s) => s._id === selectedPointRef.id);
+      return sh ? { kind: 'SHELTER', shelter: sh } : null;
+    }
+    const hz = hazards.find((h) => h._id === selectedPointRef.id);
+    return hz ? { kind: 'HAZARD', hazard: hz } : null;
+  }, [selectedPointRef, shelters, hazards]);
 
   // Đồng bộ khi props từ bên ngoài truyền vào
   useEffect(() => {
@@ -990,57 +1009,25 @@ export const TacticalMap = ({
     }
   };
 
-  // Icon ghim Điểm Trú Ẩn An Toàn (Xanh lục / Thẻ nổi bật)
-  const createShelterDivIcon = (shelter: SafeLocationItem) => {
+  // Icon ghim Điểm Trú Ẩn An Toàn (Hiển thị ảnh địa điểm tròn giống bản đồ Admin)
+  const createShelterDivIcon = (shelter: SafeLocationItem, isSelected = false) => {
     const isFull = shelter.status === 'FULL' || (shelter.capacity > 0 && (shelter.currentOccupancy || 0) >= shelter.capacity);
     const isMaintenance = shelter.status === 'MAINTENANCE' || shelter.status === 'INACTIVE';
     const color = isMaintenance ? '#64748b' : isFull ? '#ea580c' : '#10b981';
     const symbol = shelter.type === 'HOSPITAL' ? '🏥' : shelter.type === 'EVACUATION_CENTER' ? '🏫' : '🛡️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-shelter-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-          ">
-            ${shelter.name}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}bb;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: shelter.name,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(shelter.images),
+      isSelected,
     });
   };
 
-  // Icon ghim Điểm Nguy Hiểm (Cảnh báo radar / Giọt nước, Sạt lở, Sét, Cây đổ...)
-  const createHazardDivIcon = (hazard: HazardReportItem) => {
+  // Icon ghim Điểm Nguy Hiểm (Hiển thị ảnh hiện trường tròn giống bản đồ Admin)
+  const createHazardDivIcon = (hazard: HazardReportItem, isSelected = false) => {
     const isCritical = hazard.severity === 'CRITICAL';
     const color = isCritical ? '#dc2626' : hazard.severity === 'HIGH' ? '#ea580c' : hazard.severity === 'MEDIUM' ? '#d97706' : '#64748b';
     const symbol =
@@ -1050,61 +1037,14 @@ export const TacticalMap = ({
       hazard.hazardType === 'ELECTRICAL' ? '⚡' :
       hazard.hazardType === 'ROAD_DAMAGE' ? '🚧' : '⚠️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-hazard-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
-          ${isCritical ? `
-            <div style="
-              position:absolute;
-              top:13px;
-              width:34px;
-              height:34px;
-              border-radius:50%;
-              background:${color};
-              opacity:0.35;
-              animation:pulse-beacon 1.5s infinite;
-            "></div>
-          ` : ''}
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-            position:relative;
-            z-index:2;
-          ">
-            ${hazard.title}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}cc;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-            position:relative;
-            z-index:2;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: hazard.title,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(hazard.images),
+      isSelected,
+      pulse: isCritical,
     });
   };
 
@@ -1159,6 +1099,7 @@ export const TacticalMap = ({
 
         <MapClickDeselectHandler
           onDeselect={() => {
+            setSelectedPointRef(null);
             if (onSelectSos) onSelectSos(null);
           }}
         />
@@ -1625,77 +1566,33 @@ export const TacticalMap = ({
             if (!Array.isArray(coords) || coords.length < 2) return null;
             const [lng, lat] = coords;
             if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+            const isSelected = selectedPointRef?.kind === 'SHELTER' && selectedPointRef.id === sh._id;
             const metrics = getShelterOccupancyMetrics(sh.currentOccupancy, sh.capacity);
+            const hasPhoto = Array.isArray(sh.images) && sh.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
             return (
               <Marker
-                key={`shelter-${sh._id}`}
+                key={`shelter-${sh._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                 position={[lat, lng]}
-                icon={createShelterDivIcon(sh)}
-                zIndexOffset={500}
+                icon={createShelterDivIcon(sh, isSelected)}
+                zIndexOffset={isSelected ? 950 : 500}
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e as unknown as Event);
+                    setSelectedPointRef({ kind: 'SHELTER', id: sh._id });
+                  },
+                }}
               >
-                <Popup>
-                  <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 16 }}>🛡️</span>
-                      <div style={{ fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>
-                        {sh.name}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 6 }}>
-                      📍 {sh.address || 'Chưa cập nhật địa chỉ'}
-                    </div>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: 4,
-                        background: '#f8fafc',
-                        padding: '6px',
-                        borderRadius: 6,
-                        border: '1px solid #e2e8f0',
-                        fontSize: '11px',
-                        marginBottom: 6,
-                      }}
-                    >
-                      <div>Sức chứa: <strong>{sh.capacity || 0}</strong></div>
-                      <div>Đang ở: <strong>{sh.currentOccupancy || 0}</strong></div>
-                      <div
-                        style={{
-                          gridColumn: 'span 2',
-                          color: metrics.remaining > 0 ? '#16a34a' : '#dc2626',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {metrics.isOverloaded
-                          ? `Quá tải (+${metrics.overloadCount} người • ${metrics.percent}%)`
-                          : metrics.remaining > 0
-                            ? `Còn trống: ${metrics.remaining} chỗ (${metrics.percent}%)`
-                            : 'Đã kín chỗ (100%)'}
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: metrics.isOverloaded
-                          ? '#b91c1c'
-                          : sh.status === 'ACTIVE'
-                            ? '#16a34a'
-                            : '#64748b',
-                      }}
-                    >
-                      Trạng thái:{' '}
-                      {sh.status === 'MAINTENANCE' || sh.status === 'INACTIVE'
-                        ? '● Tạm ngưng'
-                        : metrics.isOverloaded
-                          ? `● Quá tải (${metrics.percent}%)`
-                          : sh.status === 'FULL' || metrics.isFull
-                            ? '● Đã đầy'
-                            : '✓ Đang mở cửa tiếp nhận'}
-                    </div>
+                <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
+                    {sh.name} •{' '}
+                    {metrics.isOverloaded
+                      ? `Quá tải (${metrics.percent}%)`
+                      : metrics.remaining > 0
+                        ? `Còn ${metrics.remaining} chỗ`
+                        : 'Đã đầy'}
                   </div>
-                </Popup>
+                </Tooltip>
               </Marker>
             );
           })}
@@ -1707,80 +1604,48 @@ export const TacticalMap = ({
             if (!Array.isArray(coords) || coords.length < 2) return null;
             const [lng, lat] = coords;
             if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+            const isSelected = selectedPointRef?.kind === 'HAZARD' && selectedPointRef.id === hz._id;
+            const hasPhoto = Array.isArray(hz.images) && hz.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
             return (
               <Marker
-                key={`hazard-${hz._id}`}
+                key={`hazard-${hz._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                 position={[lat, lng]}
-                icon={createHazardDivIcon(hz)}
-                zIndexOffset={600}
+                icon={createHazardDivIcon(hz, isSelected)}
+                zIndexOffset={isSelected ? 950 : 600}
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e as unknown as Event);
+                    setSelectedPointRef({ kind: 'HAZARD', id: hz._id });
+                  },
+                }}
               >
-                <Popup>
-                  <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 16 }}>⚠️</span>
-                      <div style={{ fontWeight: 800, fontSize: '13px', color: '#dc2626' }}>
-                        {hz.title}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 800,
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          background: hz.severity === 'CRITICAL' ? '#fef2f2' : '#fff7ed',
-                          color: hz.severity === 'CRITICAL' ? '#b91c1c' : '#c2410c',
-                          border: `1px solid ${hz.severity === 'CRITICAL' ? '#fca5a5' : '#fed7aa'}`,
-                        }}
-                      >
-                        {hz.severity === 'CRITICAL' ? 'NGUY CẤP' : hz.severity === 'HIGH' ? 'KHẨN CẤP' : hz.severity === 'MEDIUM' ? 'TRUNG BÌNH' : 'THẤP'}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          background: '#f1f5f9',
-                          color: '#334155',
-                        }}
-                      >
-                        {hz.hazardType}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 4 }}>
-                      📍 {hz.address || 'Chưa cập nhật địa chỉ'}
-                    </div>
-                    {hz.description && (
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: '#1e293b',
-                          fontStyle: 'italic',
-                          marginBottom: 6,
-                          lineHeight: 1.35,
-                        }}
-                      >
-                        "{hz.description}"
-                      </div>
-                    )}
-                    {Array.isArray(hz.images) && hz.images.length > 0 && (
-                      <div style={{ borderRadius: 6, overflow: 'hidden', height: 80, marginBottom: 4 }}>
-                        <img
-                          src={hz.images[0]}
-                          alt="Hiện trường"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      </div>
-                    )}
+                <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#dc2626' }}>
+                    {hz.title}
                   </div>
-                </Popup>
+                </Tooltip>
               </Marker>
             );
           })}
       </MapContainer>
+
+      {/* Bảng chi tiết Điểm trú ẩn / Điểm nguy hiểm hiển thị bên trái đè lên bản đồ */}
+      <AdminPointDetailPanel
+        point={selectedPoint}
+        hudCollapsed={true}
+        topOffset={10}
+        leftOffset={10}
+        width={392}
+        onClose={() => setSelectedPointRef(null)}
+        onOpenPhoto={(state) => setPhotoLightbox(state)}
+      />
+
+      {/* Lightbox phóng to ảnh địa điểm / hiện trường có Next / Back */}
+      <PhotoLightboxModal
+        state={photoLightbox}
+        onClose={() => setPhotoLightbox(null)}
+      />
 
       {/* Floating Tactical Map Controls (Top Right: Zoom in, Zoom out, Reset) */}
       <div
@@ -1802,13 +1667,13 @@ export const TacticalMap = ({
             height: 32,
             borderRadius: 6,
             backgroundColor: '#ffffff',
-            border: '1px solid #cbd5e1',
+            border: '1.5px solid #0f172a',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: '#1e293b',
+            color: '#0f172a',
           }}
           title="Phóng to"
         >
@@ -1823,13 +1688,13 @@ export const TacticalMap = ({
             height: 32,
             borderRadius: 6,
             backgroundColor: '#ffffff',
-            border: '1px solid #cbd5e1',
+            border: '1.5px solid #0f172a',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: '#1e293b',
+            color: '#0f172a',
           }}
           title="Thu nhỏ"
         >
@@ -1844,13 +1709,13 @@ export const TacticalMap = ({
             height: 32,
             borderRadius: 6,
             backgroundColor: '#ffffff',
-            border: '1px solid #cbd5e1',
+            border: '1.5px solid #0f172a',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: '#1e293b',
+            color: '#0f172a',
           }}
           title="Đưa về tâm điểm SOS"
         >
@@ -1872,14 +1737,23 @@ export const TacticalMap = ({
       >
         <button
           type="button"
-          onClick={() => setShowShelters((prev) => !prev)}
+          onClick={() =>
+            setShowShelters((prev) => {
+              const next = !prev;
+              if (!next && selectedPointRef?.kind === 'SHELTER') {
+                setSelectedPointRef(null);
+              }
+              return next;
+            })
+          }
           style={{
             width: 32,
             height: 32,
             borderRadius: 6,
-            backgroundColor: showShelters ? '#10b981' : '#ffffff',
-            color: showShelters ? '#ffffff' : '#334155',
-            border: `1px solid ${showShelters ? '#059669' : '#cbd5e1'}`,
+            backgroundColor: '#ffffff',
+            color: '#0f172a',
+            border: showShelters ? '1.5px solid #0f172a' : '1px solid #94a3b8',
+            opacity: showShelters ? 1 : 0.5,
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
@@ -1889,20 +1763,30 @@ export const TacticalMap = ({
           }}
           title={`Trú ẩn (${shelters.length}) — ${showShelters ? 'Bấm để ẩn điểm an toàn' : 'Bấm để hiện điểm an toàn'}`}
           aria-label={`Trú ẩn (${shelters.length})`}
+          aria-pressed={showShelters}
         >
           <Shield size={16} />
         </button>
 
         <button
           type="button"
-          onClick={() => setShowHazards((prev) => !prev)}
+          onClick={() =>
+            setShowHazards((prev) => {
+              const next = !prev;
+              if (!next && selectedPointRef?.kind === 'HAZARD') {
+                setSelectedPointRef(null);
+              }
+              return next;
+            })
+          }
           style={{
             width: 32,
             height: 32,
             borderRadius: 6,
-            backgroundColor: showHazards ? '#dc2626' : '#ffffff',
-            color: showHazards ? '#ffffff' : '#334155',
-            border: `1px solid ${showHazards ? '#b91c1c' : '#cbd5e1'}`,
+            backgroundColor: '#ffffff',
+            color: '#0f172a',
+            border: showHazards ? '1.5px solid #0f172a' : '1px solid #94a3b8',
+            opacity: showHazards ? 1 : 0.5,
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
             display: 'flex',
             alignItems: 'center',
@@ -1912,6 +1796,7 @@ export const TacticalMap = ({
           }}
           title={`Nguy hiểm (${hazards.length}) — ${showHazards ? 'Bấm để ẩn điểm nguy hiểm' : 'Bấm để hiện điểm nguy hiểm'}`}
           aria-label={`Nguy hiểm (${hazards.length})`}
+          aria-pressed={showHazards}
         >
           <AlertTriangle size={16} />
         </button>

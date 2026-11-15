@@ -140,12 +140,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     });
 
     if (res.success) {
-      setAlertInfo({
-        visible: true,
-        type: 'success',
-        title: 'Đăng ký thành công',
-        message: 'Tài khoản của bạn đã được xác thực số điện thoại và tạo thành công!',
-      });
+      setOtpModalVisible(false);
       return { success: true };
     } else {
       return {
