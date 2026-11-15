@@ -1193,12 +1193,25 @@ export const TacticalMap = ({
             >
               <Popup>
                 <div style={{ minWidth: 220, padding: '4px 2px' }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#b45309', marginBottom: 3 }}>
-                    🚗 {selectedSos.shoreHandoff.landingPoint.name || 'Điểm Hẹn Đón Tiếp Vận'}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#475569', marginBottom: 6 }}>
-                    {selectedSos.shoreHandoff.landingPoint.address || 'Mép nước chuyển tiếp nạn nhân lên xe đường bộ'}
-                  </div>
+                  {(() => {
+                    const landing = selectedSos.shoreHandoff.landingPoint;
+                    const name = (landing?.name || '').trim();
+                    const address = (landing?.address || '').trim();
+                    const isDuplicate = !address || name.toLowerCase() === address.toLowerCase();
+
+                    return (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: '#b45309', marginBottom: 3 }}>
+                          🚗 {name || address || 'Điểm Hẹn Đón Tiếp Vận'}
+                        </div>
+                        {!isDuplicate && (
+                          <div style={{ fontSize: 11.5, color: '#475569', marginBottom: 6 }}>
+                            {address}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
                     • Cần đón: <span style={{ color: '#ea580c' }}>{selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ'}</span> ({selectedSos.shoreHandoff.peopleCount} người)
                   </div>

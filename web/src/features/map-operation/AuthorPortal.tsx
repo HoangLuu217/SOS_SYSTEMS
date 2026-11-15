@@ -25,7 +25,6 @@ import { MissionDispatch } from './dispatch/MissionDispatch';
 import {
   ShieldAlert,
   LogOut,
-  AlertTriangle,
   X,
   CheckCircle2,
   AlertCircle,
@@ -1551,24 +1550,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
         {/* Right: Actions, Officer Profile, Logout */}
         <div className="author-right-controls">
-          {/* Điểm Nguy Hiểm Shortcut */}
-          <button
-            type="button"
-            onClick={() => navigateTo('hazard_reports', user ?? null)}
-            className="author-map-btn"
-            style={{
-              borderColor: '#f97316',
-              color: '#ea580c',
-              fontWeight: 600,
-              gap: '5px',
-            }}
-            title="Quản lý & Tạo Điểm Nguy Hiểm trên địa bàn (UC-L15)"
-          >
-            <AlertTriangle size={12} color="#ea580c" />
-            <span>Điểm Nguy Hiểm</span>
-          </button>
-
-
           {/* Officer Profile Badge & Logout (Only if not embedded in main dashboard sidebar) */}
           {!embedded && (
             <>
