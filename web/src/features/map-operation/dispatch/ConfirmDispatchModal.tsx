@@ -12,7 +12,7 @@ import {
   Users,
   AlertCircle,
 } from 'lucide-react';
-import type { SosRequest, RescueTeam, Vehicle } from '@/types/domainD';
+import type { SosRequest, RescueTeam, Vehicle, DispatchSuggestedSupply } from '@/types/domainD';
 import { FALLBACK_SUPPLIES } from '@/constants';
 import type { EquipmentItem } from '@/api/equipment.api';
 
@@ -23,6 +23,7 @@ interface Props {
   vehicles: Vehicle[];
   allocatedSupplies?: Record<string, number>;
   areaSupplies?: EquipmentItem[];
+  suggestedSupplies?: DispatchSuggestedSupply[];
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -34,6 +35,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   vehicles,
   allocatedSupplies,
   areaSupplies = [],
+  suggestedSupplies = [],
   onClose,
   onConfirm,
 }) => {
@@ -404,9 +406,11 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             {totalSupplyUnits > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {activeSupplies.map(([id, qty]) => {
-                  const item = areaSupplies?.find((s) => s._id === id || (s as any).id === id) || FALLBACK_SUPPLIES.find((s) => s.id === id);
-                  const name = item?.name || 'Vật tư cứu hộ';
-                  const unit = item?.unit || 'món';
+                  const areaItem = areaSupplies?.find((s) => s._id === id || (s as any).id === id);
+                  const suggestedItem = suggestedSupplies?.find((s) => s.supplyId === id || s.name === id);
+                  const fallbackItem = FALLBACK_SUPPLIES.find((s) => s.id === id);
+                  const name = areaItem?.name || suggestedItem?.name || fallbackItem?.name || 'Vật tư cứu hộ';
+                  const unit = areaItem?.unit || suggestedItem?.unit || fallbackItem?.unit || 'món';
 
                   return (
                     <div

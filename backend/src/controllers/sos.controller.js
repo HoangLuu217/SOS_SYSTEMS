@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
@@ -419,11 +420,18 @@ const getDispatchRecommendations = async (req, res, next) => {
   try {
     const includeAiAdvisor = String(req.query.ai || '').toLowerCase() === 'true';
     const forceRefresh = String(req.query.forceRefresh || '').toLowerCase() === 'true';
-    const officerAreaId = req.query.areaId || req.user?.authority?.areaId || null;
+    const isAdmin = Array.isArray(req.user?.roles) && req.user.roles.includes('ADMIN');
+    const rawAreaId = !isAdmin ? (req.query.areaId || req.user?.authority?.areaId || null) : null;
+    const officerAreaId = rawAreaId && mongoose.Types.ObjectId.isValid(String(rawAreaId)) ? String(rawAreaId) : null;
+    const officerAreaName = !isAdmin
+      ? (req.query.areaName || req.user?.authority?.jurisdictionAreaName || req.user?.authority?.areaName || null)
+      : null;
     const data = await smartDispatchService.getDispatchRecommendations(req.params.id, {
       includeAiAdvisor,
       forceRefresh,
       officerAreaId,
+      officerAreaName,
+      isAdmin,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

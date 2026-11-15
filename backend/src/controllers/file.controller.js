@@ -35,6 +35,12 @@ const uploadFile = async (req, res, next) => {
   try {
     const purpose = req.body.purpose || 'GENERAL';
     const hasCloudinary = cloudinary.isConfigured();
+    if (!hasCloudinary) {
+      return res.status(503).json({
+        success: false,
+        message: 'Máy chủ chưa cấu hình Cloudinary (CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET). Không thể lưu ảnh.',
+      });
+    }
 
     // 1. Nhận danh sách nhiều file base64 từ Mobile App
     if (Array.isArray(req.body.base64Files) && req.body.base64Files.length > 0) {

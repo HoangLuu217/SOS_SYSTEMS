@@ -349,6 +349,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const [wardsLoading, setWardsLoading] = useState(false);
 
   const [rawSosList, setRawSosList] = useState<SosRequestItem[]>([]);
+  const [sosLoadError, setSosLoadError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ACTIVE');
   const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
@@ -395,9 +396,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
       const res = await fetchSosRequests({});
       if (res?.success && Array.isArray(res.data)) {
         setRawSosList(res.data);
+        setSosLoadError(null);
+      } else {
+        setSosLoadError('Không thể tải danh sách SOS từ máy chủ.');
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Không thể tải danh sách SOS từ máy chủ.';
       console.warn(`Không thể tải danh sách SOS tại ${TARGET_PROVINCE_NAME}:`, err);
+      setSosLoadError(message);
     }
   }, []);
 
@@ -599,6 +605,49 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           onSelectWard={handleSelectWard}
           wardSosCountMap={wardSosCountMap}
         />
+
+        {sosLoadError && (
+          <div
+            role="alert"
+            style={{
+              position: 'absolute',
+              top: 14,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#991b1b',
+              borderRadius: 10,
+              padding: '8px 14px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              boxShadow: '0 6px 18px rgba(15, 23, 42, 0.14)',
+            }}
+          >
+            <AlertTriangle size={15} />
+            <span>Lỗi tải SOS: {sosLoadError}</span>
+            <button
+              type="button"
+              onClick={loadAreaSos}
+              style={{
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
 
         {/* Thanh điều khiển nổi góc trên phải: Nút chuyển cổng / đăng xuất (khi chạy độc lập) */}
         {!embedded && (onSwitchToAuthor || onLogout) && (

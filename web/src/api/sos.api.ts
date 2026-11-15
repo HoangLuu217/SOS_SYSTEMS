@@ -135,11 +135,12 @@ export async function clearCancelledSosApi(sosIds?: string[]): Promise<{ success
 
 export async function fetchDispatchRecommendationsApi(
   sosId: string,
-  params: { ai?: boolean; areaId?: string; forceRefresh?: boolean } = {}
+  params: { ai?: boolean; areaId?: string; areaName?: string; forceRefresh?: boolean } = {}
 ): Promise<{ success: boolean; data: import('@/types/domainD').DispatchRecommendationsData }> {
   const qs = new URLSearchParams();
   if (params.ai) qs.set('ai', 'true');
   if (params.areaId) qs.set('areaId', params.areaId);
+  if (params.areaName) qs.set('areaName', params.areaName);
   if (params.forceRefresh) qs.set('forceRefresh', 'true');
   const query = qs.toString();
   return fetchWithAuth(`/sos/${sosId}/dispatch-recommendations${query ? `?${query}` : ''}`, {
