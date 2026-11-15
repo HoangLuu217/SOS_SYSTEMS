@@ -6,11 +6,7 @@ import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import {
   fetchSosRequests,
   fetchAdminUsers,
-  fetchHazardReports,
-  fetchSafeLocations,
   fetchChatConversations,
-  fetchSafetyChecksApi,
-  fetchWithAuth,
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
@@ -129,10 +125,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     unassigned: 0,
     active: 0,
   });
-  const [hazardCount, setHazardCount] = useState<number>(0);
-  const [shelterCount, setShelterCount] = useState<number>(0);
-  const [safetyCheckCount, setSafetyCheckCount] = useState<number>(0);
-  const [bloodDonationCount, setBloodDonationCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
@@ -172,51 +164,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     } catch {
       // Không ép fallback 6 vụ
-    }
-
-    try {
-      const hazardRes = await fetchHazardReports({ status: 'PENDING' });
-      if (hazardRes.success && hazardRes.data) {
-        setHazardCount(hazardRes.data.counts?.PENDING ?? hazardRes.data.reports?.length ?? 0);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const shelterRes = await fetchSafeLocations();
-      if (shelterRes.success && Array.isArray(shelterRes.data)) {
-        setShelterCount(shelterRes.data.length);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const scRes = await fetchSafetyChecksApi({ status: 'ACTIVE', limit: 100 });
-      if (scRes?.success && scRes.data) {
-        const list = Array.isArray(scRes.data)
-          ? scRes.data
-          : Array.isArray((scRes.data as any).safetyChecks)
-            ? (scRes.data as any).safetyChecks
-            : Array.isArray((scRes.data as any).items)
-              ? (scRes.data as any).items
-              : [];
-        const activeItems = list.filter((i: any) => i.status === 'ACTIVE').length;
-        setSafetyCheckCount(activeItems);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const bdRes = await fetchWithAuth<any>('/blood-donations/events?status=ACTIVE&limit=100');
-      if (bdRes?.success && Array.isArray(bdRes.data)) {
-        const activeEvs = bdRes.data.filter((e: any) => e.status === 'ACTIVE').length;
-        setBloodDonationCount(activeEvs);
-      }
-    } catch {
-      // ignore
     }
 
     try {

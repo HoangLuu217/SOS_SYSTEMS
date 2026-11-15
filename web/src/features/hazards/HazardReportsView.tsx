@@ -469,17 +469,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         : targetArea?.name || accountAreaDisplayName.split(',')[0]
     ).trim();
 
-    // Tên tỉnh/thành phố hiển thị trên tab cấp thành phố (lấy động theo cây đơn vị hành chính)
-    const cityTabLabel = (() => {
-      if (userAreaNameFromAuth && userAreaNameFromAuth.includes(',')) {
-        return userAreaNameFromAuth.split(',').slice(-1)[0].trim();
-      }
-      if (areaHierarchy.provinceName) return areaHierarchy.provinceName;
-      const prov = areas.find((a) => a.type === 'PROVINCE');
-      if (prov) return prov.name;
-      return 'Thành phố Đà Nẵng';
-    })();
-
     // 3. HÀM KIỂM TRA ĐIỂM NGUY HIỂM CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
     const isHazardInOfficerJurisdiction = (r: HazardReportItem): boolean => {
       if (isAdmin) return true;

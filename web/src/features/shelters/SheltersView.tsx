@@ -400,17 +400,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         : resolvedAccountArea?.name || accountAreaDisplayName.split(',')[0]
     ).trim();
 
-    // Tên tỉnh/thành phố hiển thị trên tab cấp thành phố (lấy động theo cây đơn vị hành chính)
-    const cityTabLabel = (() => {
-      if (userAreaNameFromAuth && userAreaNameFromAuth.includes(',')) {
-        return userAreaNameFromAuth.split(',').slice(-1)[0].trim();
-      }
-      if (areaHierarchy.provinceName) return areaHierarchy.provinceName;
-      const prov = areas.find((a) => a.type === 'PROVINCE');
-      if (prov) return prov.name;
-      return 'Thành phố Đà Nẵng';
-    })();
-
     const accountAreaId =
       resolvedAccountArea?._id ||
       (resolvedAccountArea ? userAreaIdFromAuth : null) ||
