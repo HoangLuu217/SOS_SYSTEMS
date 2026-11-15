@@ -37,6 +37,7 @@ import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import './SosRequestsView.css';
 
 export interface SosRequestsViewProps {
@@ -111,7 +112,18 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
 
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'ACTIVE_ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [progressFilter, setProgressFilter] = useState<'ALL' | 'PENDING' | 'ASSIGNED' | 'ON_THE_WAY' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const isAdmin = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
+  const {
+    wards: adminFilterWards,
+    wardsLoading: adminFilterWardsLoading,
+    selectedAreaId: adminAreaFilter,
+    setSelectedAreaId: setAdminAreaFilter,
+  } = useAdministrativeFilter({
+    isAdmin: true,
+    wardsScopeProvince: 'Đà Nẵng',
+  });
   const [previewPhotos, setPreviewPhotos] = useState<{
     images: string[];
     activeIndex: number;
@@ -460,6 +472,18 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
   };
 
+  const getProgressCategory = (
+    sos: SosRequestItem
+  ): 'PENDING' | 'ASSIGNED' | 'ON_THE_WAY' | 'RESCUING' | 'COMPLETED' | 'CANCELLED' => {
+    const effStatus = getEffectiveStatus(sos);
+    if (effStatus === 'COMPLETED') return 'COMPLETED';
+    if (['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(effStatus)) return 'RESCUING';
+    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(effStatus)) return 'ON_THE_WAY';
+    if (effStatus === 'ACCEPTED' || effStatus === 'ASSIGNED') return 'ASSIGNED';
+    if (effStatus === 'CANCELLED' || effStatus === 'REJECTED') return 'CANCELLED';
+    return 'PENDING';
+  };
+
   const getAssignedTeamName = (sos: SosRequestItem): string | null => {
     if (sos.assignment?.rescueTeamId && typeof sos.assignment.rescueTeamId === 'object') {
       return (sos.assignment.rescueTeamId as any).name || null;
@@ -666,22 +690,102 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     });
   }, [sosList, user, areas]);
 
+  const normalizeWardKey = useCallback((raw?: string | null): string => {
+    if (!raw) return '';
+    return String(raw)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/gi, 'd')
+      .toLowerCase()
+      .replace(/^(phuong|xa|dac khu|thi tran|quan|huyen|thi xa|thanh pho|tp\.?)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  // Nếu là Admin và đang chọn lọc theo xã/phường cụ thể -> lọc theo đúng đơn vị đã chọn
+  const areaScopedSosList = React.useMemo(() => {
+    if (!isAdmin || adminAreaFilter === 'ALL') return displaySosList;
+
+    const selectedWardObj = adminFilterWards.find(
+      (w) => w.id === adminAreaFilter || w.code === adminAreaFilter || w.name === adminAreaFilter
+    );
+    const targetUnitKey = normalizeWardKey(selectedWardObj?.name || adminAreaFilter);
+    if (!targetUnitKey) return displaySosList;
+
+    return displaySosList.filter((sos) => {
+      const sosAreaObj = typeof sos.areaId === 'object' && sos.areaId !== null ? (sos.areaId as any) : null;
+      const sosAreaId = sosAreaObj ? String(sosAreaObj._id || '') : String(sos.areaId || '');
+      const matchedAreaDoc =
+        sosAreaObj || (sosAreaId ? areas.find((a) => String(a._id) === sosAreaId) : null);
+
+      if (
+        selectedWardObj &&
+        ((matchedAreaDoc?.code && matchedAreaDoc.code === selectedWardObj.code) ||
+          (sosAreaId && sosAreaId === selectedWardObj.id))
+      ) {
+        return true;
+      }
+
+      const rawAreaName = matchedAreaDoc?.name || '';
+      const areaUnitKey = normalizeWardKey(rawAreaName.split(',')[0]);
+      const isProvinceFallback =
+        matchedAreaDoc?.type === 'PROVINCE' || areaUnitKey === 'da nang';
+      if (!isProvinceFallback && areaUnitKey && areaUnitKey === targetUnitKey) {
+        return true;
+      }
+
+      const addressParts = String(sos.address || '')
+        .split(',')
+        .map((part) => normalizeWardKey(part))
+        .filter(Boolean);
+      return addressParts.some((partKey) => partKey === targetUnitKey);
+    });
+  }, [displaySosList, isAdmin, adminAreaFilter, adminFilterWards, areas, normalizeWardKey]);
+
   // Phân tách ca đang diễn ra (Active) và ca đã đóng (Completed / Cancelled)
-  const activeSosList = displaySosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
+  const activeSosList = areaScopedSosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
   const activeCount = activeSosList.length;
   const criticalCount = activeSosList.filter((s) => s.priority === 'CRITICAL').length;
   const highCount = activeSosList.filter((s) => s.priority === 'HIGH').length;
-  const pendingCount = displaySosList.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-  const inRescueCount = displaySosList.filter((s) => ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)).length;
-  const completedCount = displaySosList.filter((s) => s.status === 'COMPLETED').length;
-  const cancelledCount = displaySosList.filter((s) => s.status === 'CANCELLED').length;
-  const totalCount = displaySosList.length;
+  const pendingCount = areaScopedSosList.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+  const inRescueCount = areaScopedSosList.filter((s) => ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)).length;
+  const completedCount = areaScopedSosList.filter((s) => s.status === 'COMPLETED').length;
+  const cancelledCount = areaScopedSosList.filter((s) => s.status === 'CANCELLED').length;
+  const totalCount = areaScopedSosList.length;
+
+  const triageFilterOptions = [
+    { key: 'ALL', label: 'Tất cả', selectLabel: 'Tất cả trạng thái', count: totalCount, btnClass: 'btn-all' },
+    { key: 'CRITICAL', label: 'Nguy cấp', count: criticalCount, btnClass: 'critical', dotClass: 'red' },
+    { key: 'HIGH', label: 'Khẩn cấp', count: highCount, btnClass: 'high', dotClass: 'orange' },
+    { key: 'PENDING', label: 'Chờ điều phối', count: pendingCount, btnClass: 'pending', dotClass: 'yellow' },
+    { key: 'RESCUING', label: 'Đang cứu', count: inRescueCount, btnClass: 'active-state', dotClass: 'blue' },
+    { key: 'COMPLETED', label: 'Đã xong', count: completedCount, btnClass: '', dotClass: 'green' },
+    { key: 'CANCELLED', label: 'Đã hủy', count: cancelledCount, btnClass: '', dotClass: 'gray' },
+  ] as const;
+
+  const progressCounts = areaScopedSosList.reduce(
+    (acc, sos) => {
+      acc[getProgressCategory(sos)] += 1;
+      return acc;
+    },
+    { PENDING: 0, ASSIGNED: 0, ON_THE_WAY: 0, RESCUING: 0, COMPLETED: 0, CANCELLED: 0 }
+  );
+
+  const progressFilterOptions = [
+    { key: 'ALL', label: 'Tất cả tiến trình', count: totalCount },
+    { key: 'PENDING', label: 'Chờ điều phối', count: progressCounts.PENDING },
+    { key: 'ASSIGNED', label: 'Đã giao đội', count: progressCounts.ASSIGNED },
+    { key: 'ON_THE_WAY', label: 'Đang di chuyển', count: progressCounts.ON_THE_WAY },
+    { key: 'RESCUING', label: 'Tại hiện trường', count: progressCounts.RESCUING },
+    { key: 'COMPLETED', label: 'Hoàn thành', count: progressCounts.COMPLETED },
+    { key: 'CANCELLED', label: 'Đã hủy', count: progressCounts.CANCELLED },
+  ] as const;
 
   // Tổng số người gặp nạn CẦN CỨU (chỉ tính trên các ca đang hoạt động, không cộng ca đã hủy)
   const activeVictims = activeSosList.reduce((sum, s) => sum + (s.people || 1), 0);
 
-  // Lọc theo thanh Triage và ô tìm kiếm
-  const filteredSosList = displaySosList.filter((sos) => {
+  // Lọc theo thanh Triage, tiến trình (Admin) và ô tìm kiếm
+  const filteredSosList = areaScopedSosList.filter((sos) => {
     if (triageFilter === 'CRITICAL') {
       if (sos.priority !== 'CRITICAL') return false;
     } else if (triageFilter === 'HIGH') {
@@ -696,6 +800,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       if (sos.status !== 'CANCELLED') return false;
     }
     // 'ALL' -> Hiển thị tất cả
+
+    if (isAdmin && progressFilter !== 'ALL') {
+      if (getProgressCategory(sos) !== progressFilter) return false;
+    }
 
 
     if (searchQuery.trim()) {
@@ -757,99 +865,90 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             ============================================================ */}
       <div className="executive-table-card">
         {/* Toolbar: Triage Filters, Search, Action Buttons */}
-        <div className="executive-table-toolbar">
-          {/* Triage filter pills bên trái */}
-          <div className="executive-triage-pills">
-            {/* 1. Tất cả */}
-            <button
-              type="button"
-              className={`triage-btn btn-all ${triageFilter === 'ALL' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('ALL')}
-            >
-              Tất cả ({totalCount})
-            </button>
-
-            {/* 2. Nguy cấp */}
-            <button
-              type="button"
-              className={`triage-btn critical ${triageFilter === 'CRITICAL' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('CRITICAL')}
-            >
-              <span className="dot-mini red" />
-              Nguy cấp ({criticalCount})
-            </button>
-
-            {/* 3. Khẩn cấp */}
-            <button
-              type="button"
-              className={`triage-btn high ${triageFilter === 'HIGH' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('HIGH')}
-            >
-              <span className="dot-mini orange" />
-              Khẩn cấp ({highCount})
-            </button>
-
-            {/* 4. Chờ điều phối */}
-            <button
-              type="button"
-              className={`triage-btn pending ${triageFilter === 'PENDING' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('PENDING')}
-            >
-              <span className="dot-mini yellow" />
-              Chờ điều phối ({pendingCount})
-            </button>
-
-            {/* 5. Đang cứu */}
-            <button
-              type="button"
-              className={`triage-btn active-state ${triageFilter === 'RESCUING' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('RESCUING')}
-            >
-              <span className="dot-mini blue" />
-              Đang cứu ({inRescueCount})
-            </button>
-
-            <button
-              type="button"
-              className={`triage-btn ${triageFilter === 'COMPLETED' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('COMPLETED')}
-            >
-              <span className="dot-mini green" />
-              Đã xong ({completedCount})
-            </button>
-
-            {/* 7. Đã hủy / Tự an toàn */}
-            <button
-              type="button"
-              className={`triage-btn ${triageFilter === 'CANCELLED' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('CANCELLED')}
-            >
-              <span className="dot-mini gray" />
-              Đã hủy ({cancelledCount})
-            </button>
-
-          </div>
-
-          {/* Ô tìm kiếm bên phải */}
-          <div className="executive-search-input-wrap">
-            <Search size={14} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="executive-search-input"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="search-clear-btn"
-                onClick={() => setSearchQuery('')}
-                title="Xóa tìm kiếm"
+        <div className={`executive-table-toolbar ${isAdmin ? 'is-admin-toolbar' : ''}`}>
+          {/* Bộ lọc trạng thái SOS: Admin dùng dropdown gọn (trạng thái + tiến trình + xã/phường + tìm kiếm đều trên 1 hàng), địa phương hiện thanh ngang */}
+          {isAdmin ? (
+            <>
+              <select
+                className={`sos-status-filter-select ${triageFilter !== 'ALL' ? 'has-filter' : ''}`}
+                value={triageFilter}
+                onChange={(e) => setTriageFilter(e.target.value as typeof triageFilter)}
+                title="Lọc yêu cầu SOS theo mức độ / trạng thái"
               >
-                <X size={12} />
-              </button>
-            )}
+                {triageFilterOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {'selectLabel' in opt ? opt.selectLabel : opt.label} ({opt.count})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className={`sos-status-filter-select ${progressFilter !== 'ALL' ? 'has-filter' : ''}`}
+                value={progressFilter}
+                onChange={(e) => setProgressFilter(e.target.value as typeof progressFilter)}
+                title="Lọc yêu cầu SOS theo tiến trình tác chiến"
+              >
+                {progressFilterOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label} ({opt.count})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className={`sos-area-filter-select ${adminAreaFilter !== 'ALL' ? 'has-filter' : ''}`}
+                value={adminAreaFilter}
+                onChange={(e) => setAdminAreaFilter(e.target.value)}
+                title="Lọc yêu cầu SOS theo xã / phường / đặc khu"
+              >
+                <option value="ALL">
+                  {adminFilterWardsLoading
+                    ? 'Đang tải địa bàn...'
+                    : `Tất cả địa bàn Đà Nẵng (${adminFilterWards.length})`}
+                </option>
+                {adminFilterWards.map((ward) => (
+                  <option key={ward.id || ward.code} value={ward.id}>
+                    {ward.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <div className="executive-triage-pills">
+              {triageFilterOptions.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`triage-btn ${opt.btnClass} ${triageFilter === opt.key ? 'active' : ''}`.trim()}
+                  onClick={() => setTriageFilter(opt.key)}
+                >
+                  {'dotClass' in opt && opt.dotClass && <span className={`dot-mini ${opt.dotClass}`} />}
+                  {opt.label} ({opt.count})
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Ô tìm kiếm */}
+          <div className={`executive-search-input-wrap ${isAdmin ? 'is-admin-search' : ''}`}>
+              <Search size={14} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="executive-search-input"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setSearchQuery('')}
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={12} />
+                </button>
+              )}
           </div>
         </div>
 
@@ -927,7 +1026,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           <button
                             type="button"
                             className="sos-btn sos-btn--outline sos-btn--sm"
-                            onClick={() => setTriageFilter('ALL')}
+                            onClick={() => {
+                              setTriageFilter('ALL');
+                              setProgressFilter('ALL');
+                            }}
                           >
                             Xem tất cả lịch sử ({totalCount} ca)
                           </button>
