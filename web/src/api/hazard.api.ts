@@ -1,4 +1,4 @@
-import { fetchWithAuth } from './client';
+import { fetchWithAuth, uploadMediaFile } from './client';
 import type { HazardReportItem } from '@/types/dashboard';
 
 export async function fetchHazardReports(
@@ -53,6 +53,8 @@ export async function createHazardReport(payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export const uploadHazardImage = uploadMediaFile;
 
 export async function deleteHazardReport(id: string): Promise<{ success: boolean; message: string }> {
   return fetchWithAuth(`/hazard-reports/${id}`, {

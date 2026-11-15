@@ -305,6 +305,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       DeviceEventEmitter.emit('weather:articles_updated');
     }
 
+    if (
+      incoming.type === 'SAFETY_CHECK' ||
+      incoming.actionUrl === 'safety_check' ||
+      incoming.data?.isSafetyCheck
+    ) {
+      DeviceEventEmitter.emit('safety_check:updated');
+    }
+
     // 2. Phân loại thông báo và kiểm tra Cài đặt của người dùng
     const category = classifyNotification(incoming);
     const currentSettings = settingsRef.current;

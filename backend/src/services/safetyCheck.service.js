@@ -7,7 +7,13 @@ const User = require('../models/User');
 const SosRequest = require('../models/SosRequest');
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
+const {
+  getDescendantAreaIds,
+  getRootProvinceIdsForArea,
+  resolveTargetScopeForArea,
+} = require('../utils/geoUtils');
 const eventBus = require('./eventBus');
+const rescueTeamService = require('./rescueTeam.service');
 
 class SafetyCheckService {
   /**
@@ -84,7 +90,7 @@ class SafetyCheckService {
           throw new ApiError(404, 'Khu vực hành chính mục tiêu không tồn tại trong cơ sở dữ liệu.');
         }
         targetAreaId = targetAreaDoc._id;
-        scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
+        scope = await resolveTargetScopeForArea(targetAreaDoc, AdministrativeArea);
       } else {
         // Gửi toàn hệ thống (ALL)
         targetAreaDoc = null;
@@ -129,24 +135,8 @@ class SafetyCheckService {
           $or: geoConditions,
         };
       } else {
-        // Cấp Tỉnh/Thành phố (PROVINCE): Gom các Phường/Xã con trực thuộc trong DB và ranh giới GPS
-        const childAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
-          .select('_id parentId boundary')
-          .lean();
-        const selectedIds = new Set([targetAreaDoc._id.toString()]);
-        let foundChild = true;
-        while (foundChild) {
-          foundChild = false;
-          childAreas.forEach((area) => {
-            const parentId = area.parentId?.toString();
-            if (parentId && selectedIds.has(parentId) && !selectedIds.has(area._id.toString())) {
-              selectedIds.add(area._id.toString());
-              foundChild = true;
-            }
-          });
-        }
-
-        const areaIds = [...selectedIds];
+        // Cấp Tỉnh/Thành phố (PROVINCE): Gom toàn bộ Quận/Huyện/Phường/Xã con (bao gồm các cây PROVINCE cùng tên)
+        const { areaIds, boundedAreas } = await getDescendantAreaIds(targetAreaDoc._id, AdministrativeArea);
         const provinceConditions = [
           { 'authority.areaId': { $in: areaIds } },
           { 'citizen.areaId': { $in: areaIds } },
@@ -170,26 +160,19 @@ class SafetyCheckService {
           );
         }
 
-        childAreas.forEach((area) => {
-          if (
-            selectedIds.has(area._id.toString()) &&
-            area.boundary?.type &&
-            Array.isArray(area.boundary.coordinates) &&
-            area.boundary.coordinates.length > 0
-          ) {
-            provinceConditions.push(
-              {
-                currentLocation: {
-                  $geoWithin: { $geometry: area.boundary },
-                },
+        boundedAreas.forEach((area) => {
+          provinceConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: area.boundary },
               },
-              {
-                'citizen.currentLocation': {
-                  $geoWithin: { $geometry: area.boundary },
-                },
-              }
-            );
-          }
+            },
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: area.boundary },
+              },
+            }
+          );
         });
 
         userFilter = {
@@ -303,7 +286,7 @@ class SafetyCheckService {
    */
   async getSafetyChecks(currentUser, query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+    const limit = Math.min(5000, Math.max(1, parseInt(query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
     const isAdmin = Boolean(currentUser.roles && currentUser.roles.includes('ADMIN'));
@@ -324,18 +307,18 @@ class SafetyCheckService {
     // Phân quyền hiển thị theo vai trò
     if (isLocalAuthority && !isAdmin) {
       const authorityAreaId = currentUser.authority?.areaId;
-      let parentProvinceId = null;
+      let provinceIds = [];
       if (authorityAreaId && mongoose.Types.ObjectId.isValid(authorityAreaId)) {
-        const authArea = await AdministrativeArea.findById(authorityAreaId).select('parentId').lean();
-        parentProvinceId = authArea?.parentId || null;
+        const { equivalentProvinceIds } = await getRootProvinceIdsForArea(authorityAreaId, AdministrativeArea);
+        provinceIds = equivalentProvinceIds;
       }
       const orConditions = [
         { areaId: authorityAreaId, scope: 'WARD' },
         { createdBy: currentUser._id },
         { scope: 'ALL' },
       ];
-      if (parentProvinceId) {
-        orConditions.push({ areaId: parentProvinceId, scope: 'PROVINCE' });
+      if (provinceIds.length > 0) {
+        orConditions.push({ areaId: { $in: provinceIds }, scope: 'PROVINCE' });
       }
       filter.$or = orConditions;
     } else if (!isAdmin) {
@@ -343,14 +326,14 @@ class SafetyCheckService {
       filter.status = 'ACTIVE';
       const citizenAreaId = currentUser.citizen?.areaId;
       if (citizenAreaId && mongoose.Types.ObjectId.isValid(citizenAreaId)) {
-        const citizenArea = await AdministrativeArea.findById(citizenAreaId).select('parentId').lean();
+        const { equivalentProvinceIds } = await getRootProvinceIdsForArea(citizenAreaId, AdministrativeArea);
         const orConditions = [
           { areaId: citizenAreaId, scope: 'WARD' },
           { areaId: null },
           { scope: 'ALL' },
         ];
-        if (citizenArea?.parentId) {
-          orConditions.push({ areaId: citizenArea.parentId, scope: 'PROVINCE' });
+        if (equivalentProvinceIds.length > 0) {
+          orConditions.push({ areaId: { $in: equivalentProvinceIds }, scope: 'PROVINCE' });
         }
         filter.$or = orConditions;
       } else {
@@ -361,9 +344,8 @@ class SafetyCheckService {
       if (query.areaId && query.areaId !== 'ALL' && mongoose.Types.ObjectId.isValid(query.areaId)) {
         const filterArea = await AdministrativeArea.findById(query.areaId).select('_id type').lean();
         if (filterArea && filterArea.type === 'PROVINCE') {
-          const childWards = await AdministrativeArea.find({ parentId: filterArea._id }).select('_id').lean();
-          const wardIds = childWards.map((w) => w._id);
-          filter.areaId = { $in: [filterArea._id, ...wardIds] };
+          const { areaIds } = await getDescendantAreaIds(filterArea._id, AdministrativeArea);
+          filter.areaId = { $in: areaIds };
         } else {
           filter.areaId = query.areaId;
         }
@@ -497,6 +479,11 @@ class SafetyCheckService {
           },
         });
         sosRequestId = newSos._id;
+        try {
+          await rescueTeamService.deactivateLeaderTeamsOnSos(currentUser._id, newSos);
+        } catch (leaderTeamErr) {
+          console.warn('Auto-deactivate leader team on safetyCheck SOS error:', leaderTeamErr?.message || leaderTeamErr);
+        }
       }
     }
 
@@ -633,7 +620,7 @@ class SafetyCheckService {
     }
 
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+    const limit = Math.min(5000, Math.max(1, parseInt(query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
     const filter = { safetyCheckId };
@@ -737,20 +724,25 @@ class SafetyCheckService {
     const areaConditions = [{ areaId: null }, { scope: 'ALL' }];
 
     if (userAreaId && mongoose.Types.ObjectId.isValid(userAreaId)) {
-      const citizenArea = await AdministrativeArea.findById(userAreaId)
-        .select('_id parentId type name boundary')
-        .lean();
+      const { areaDoc: citizenArea, equivalentProvinceIds } = await getRootProvinceIdsForArea(
+        userAreaId,
+        AdministrativeArea
+      );
 
       if (citizenArea) {
-        if (citizenArea.type === 'WARD') {
+        const citizenScope = await resolveTargetScopeForArea(citizenArea, AdministrativeArea);
+        if (citizenScope === 'WARD') {
           areaConditions.push({ areaId: citizenArea._id, scope: 'WARD' });
-          if (citizenArea.parentId) {
-            areaConditions.push({ areaId: citizenArea.parentId, scope: 'PROVINCE' });
+          if (equivalentProvinceIds.length > 0) {
+            areaConditions.push({ areaId: { $in: equivalentProvinceIds }, scope: 'PROVINCE' });
           }
         } else if (citizenArea.type === 'PROVINCE') {
-          areaConditions.push({ areaId: citizenArea._id, scope: 'PROVINCE' });
+          areaConditions.push({ areaId: { $in: equivalentProvinceIds }, scope: 'PROVINCE' });
         } else {
           areaConditions.push({ areaId: citizenArea._id });
+          if (equivalentProvinceIds.length > 0) {
+            areaConditions.push({ areaId: { $in: equivalentProvinceIds }, scope: 'PROVINCE' });
+          }
         }
         if (citizenArea.name) {
           areaConditions.push({ areaName: { $regex: citizenArea.name, $options: 'i' } });
@@ -780,7 +772,7 @@ class SafetyCheckService {
     ) {
       try {
         const gpsWard = await AdministrativeArea.findOne({
-          type: 'WARD',
+          type: { $in: ['WARD', 'DISTRICT'] },
           'boundary.coordinates.0': { $exists: true },
           boundary: {
             $geoIntersects: {
@@ -788,6 +780,7 @@ class SafetyCheckService {
             },
           },
         })
+          .sort({ type: -1 })
           .select('_id parentId name')
           .lean();
 

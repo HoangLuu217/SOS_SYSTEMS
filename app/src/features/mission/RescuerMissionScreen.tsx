@@ -24,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
 import { ENV } from '@/config/env';
 import { backendApi } from '@/api';
+import { FullScreenImageViewer } from '@/components';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
 import { SosScreen, RescuerMissionWorkspaceModal } from '@/features/sos';
@@ -56,7 +57,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const [proofPhotos, setProofPhotos] = useState<Array<{ uri: string; base64?: string }>>([]);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    images: string[];
+    index: number;
+    insideModal?: boolean;
+  } | null>(null);
 
   // Thông tin Đội cứu hộ & Phương tiện tác chiến
   const [unitInfo, setUnitInfo] = useState<{
@@ -176,86 +181,103 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   }, [fetchMissions]);
 
   // Tải thông tin Đội cứu hộ và Phương tiện cơ động của Cứu hộ viên
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTeamInfo = async () => {
-      try {
-        const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
-        const teams = Array.isArray(teamsRes.data)
-          ? teamsRes.data
-          : (teamsRes.data as any)?.teams || [];
-        const currentUserId = (user?._id || (user as any)?.id)?.toString();
-        const currentUserPhone = user?.phone;
-        const currentUserEmail = user?.email?.toLowerCase();
+  const fetchTeamInfo = useCallback(async () => {
+    try {
+      const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
+      const teams = Array.isArray(teamsRes.data)
+        ? teamsRes.data
+        : (teamsRes.data as any)?.teams || [];
+      const currentUserId = (user?._id || (user as any)?.id)?.toString();
+      const currentUserPhone = user?.phone;
+      const currentUserEmail = user?.email?.toLowerCase();
 
-        const myTeam = teams.find((t: any) => {
-          const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
-          const leaderPhone = t.leaderId?.phone;
-          const leaderEmail = t.leaderId?.email?.toLowerCase();
-          const isLeader =
-            (currentUserId && leaderIdStr === currentUserId) ||
-            (currentUserPhone && leaderPhone === currentUserPhone) ||
-            (currentUserEmail && leaderEmail === currentUserEmail);
+      const myTeam = teams.find((t: any) => {
+        if (t.status === 'INACTIVE') return false;
+        const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
+        const leaderPhone = t.leaderId?.phone;
+        const leaderEmail = t.leaderId?.email?.toLowerCase();
+        const isLeader =
+          (currentUserId && leaderIdStr === currentUserId) ||
+          (currentUserPhone && leaderPhone === currentUserPhone) ||
+          (currentUserEmail && leaderEmail === currentUserEmail);
 
-          const isMember =
-            Array.isArray(t.members) &&
-            t.members.some((m: any) => {
-              const r = m.rescuerId;
-              const rId = (r?._id || r)?.toString();
-              const rPhone = r?.phone;
-              const rEmail = r?.email?.toLowerCase();
-              const matchesUser =
-                (currentUserId && rId === currentUserId) ||
-                (currentUserPhone && rPhone === currentUserPhone) ||
-                (currentUserEmail && rEmail === currentUserEmail);
-              return matchesUser && m.status !== 'REJECTED';
-            });
-          return isLeader || isMember;
-        });
-
-        if (myTeam && isMounted) {
-          const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
-          const isLeaderOfTeam =
-            (currentUserId && leaderIdStr === currentUserId) ||
-            (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
-            (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
-          setIsTeamLeader(Boolean(isLeaderOfTeam));
-          myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
-          let vehiclePlate = 'Chưa phân bổ';
-          let vehicleType = 'AMBULANCE';
-
-          if (Array.isArray(myTeam.vehicles) && myTeam.vehicles.length > 0) {
-            vehiclePlate = myTeam.vehicles[0].plateNumber;
-            vehicleType = myTeam.vehicles[0].type;
-          } else {
-            try {
-              const vehRes = await backendApi.getVehicles({ teamId: myTeam._id });
-              const vList = Array.isArray(vehRes.data) ? vehRes.data : [];
-              if (vList.length > 0 && isMounted) {
-                vehiclePlate = vList[0].plateNumber;
-                vehicleType = vList[0].type;
-              }
-            } catch {
-              // ignore
-            }
-          }
-
-          setUnitInfo({
-            teamName: myTeam.name,
-            vehiclePlate,
-            vehicleType,
+        const isMember =
+          Array.isArray(t.members) &&
+          t.members.some((m: any) => {
+            const r = m.rescuerId;
+            const rId = (r?._id || r)?.toString();
+            const rPhone = r?.phone;
+            const rEmail = r?.email?.toLowerCase();
+            const matchesUser =
+              (currentUserId && rId === currentUserId) ||
+              (currentUserPhone && rPhone === currentUserPhone) ||
+              (currentUserEmail && rEmail === currentUserEmail);
+            return matchesUser && m.status !== 'REJECTED';
           });
-        }
-      } catch {
-        // Giữ fallback mặc định
-      }
-    };
+        return isLeader || isMember;
+      });
 
+      if (myTeam) {
+        const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
+        const isLeaderOfTeam =
+          (currentUserId && leaderIdStr === currentUserId) ||
+          (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
+          (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
+        setIsTeamLeader(Boolean(isLeaderOfTeam));
+        myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
+        let vehiclePlate = 'Chưa phân bổ';
+        let vehicleType = 'AMBULANCE';
+
+        if (Array.isArray(myTeam.vehicles) && myTeam.vehicles.length > 0) {
+          vehiclePlate = myTeam.vehicles[0].plateNumber;
+          vehicleType = myTeam.vehicles[0].type;
+        } else {
+          try {
+            const vehRes = await backendApi.getVehicles({ teamId: myTeam._id });
+            const vList = Array.isArray(vehRes.data) ? vehRes.data : [];
+            if (vList.length > 0) {
+              vehiclePlate = vList[0].plateNumber;
+              vehicleType = vList[0].type;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        setUnitInfo({
+          teamName: myTeam.name,
+          vehiclePlate,
+          vehicleType,
+        });
+      } else {
+        setIsTeamLeader(false);
+        myTeamIdRef.current = null;
+        setUnitInfo({
+          teamName: 'Chưa thuộc đội',
+          vehiclePlate: 'Chưa phân bổ',
+          vehicleType: 'AMBULANCE',
+        });
+      }
+    } catch {
+      // Giữ fallback mặc định
+    }
+  }, [user?._id, user?.phone, user?.email]);
+
+  useEffect(() => {
     fetchTeamInfo();
+    const subTeam = DeviceEventEmitter.addListener('team:membership_updated', () => {
+      fetchTeamInfo();
+      fetchMissions({ isSilent: true });
+    });
+    const subTeamsUpdated = DeviceEventEmitter.addListener('rescue_teams_updated', () => {
+      fetchTeamInfo();
+      fetchMissions({ isSilent: true });
+    });
     return () => {
-      isMounted = false;
+      subTeam.remove();
+      subTeamsUpdated.remove();
     };
-  }, [user?._id]);
+  }, [fetchTeamInfo, fetchMissions]);
 
   // Kết nối Socket.IO realtime để nhận lệnh điều động & hủy điều động tức thời 100%
   useEffect(() => {
@@ -1518,7 +1540,13 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           {cardProofList.map((imgUrl: string, imgIdx: number) => (
                             <TouchableOpacity
                               key={imgIdx}
-                              onPress={() => setPreviewImageUri(imgUrl)}
+                              onPress={() =>
+                                setImagePreview({
+                                  images: cardProofList,
+                                  index: imgIdx,
+                                  insideModal: false,
+                                })
+                              }
                               activeOpacity={0.8}
                               style={styles.cardProofThumbWrap}
                             >
@@ -1935,7 +1963,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         >
                           {proofPhotos.map((photo, pIdx) => (
                             <View key={pIdx} style={styles.proofThumbWrap}>
-                              <TouchableOpacity onPress={() => setPreviewImageUri(photo.uri)}>
+                              <TouchableOpacity
+                                onPress={() =>
+                                  setImagePreview({
+                                    images: proofPhotos.map((p) => p.uri),
+                                    index: pIdx,
+                                    insideModal: true,
+                                  })
+                                }
+                              >
                                 <Image source={{ uri: photo.uri }} style={styles.proofThumbImg} />
                               </TouchableOpacity>
                               <TouchableOpacity
@@ -2011,32 +2047,25 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               })()}
             </ScrollView>
           </View>
+
+          <FullScreenImageViewer
+            visible={Boolean(imagePreview?.insideModal)}
+            images={imagePreview?.images || []}
+            initialIndex={imagePreview?.index || 0}
+            onClose={() => setImagePreview(null)}
+            useModal={false}
+          />
         </View>
       </Modal>
 
-      {/* Modal phóng to xem ảnh bằng chứng bàn giao */}
-      <Modal
-        visible={Boolean(previewImageUri)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewImageUri(null)}
-      >
-        <View style={styles.imagePreviewOverlay}>
-          <TouchableOpacity
-            style={styles.imagePreviewCloseBtn}
-            onPress={() => setPreviewImageUri(null)}
-          >
-            <Feather name="x" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImageUri && (
-            <Image
-              source={{ uri: previewImageUri }}
-              style={styles.imagePreviewFull}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+      {/* Phóng to xem ảnh bằng chứng bàn giao (từ thẻ nhiệm vụ) */}
+      <FullScreenImageViewer
+        visible={Boolean(imagePreview && !imagePreview.insideModal)}
+        images={imagePreview?.images || []}
+        initialIndex={imagePreview?.index || 0}
+        onClose={() => setImagePreview(null)}
+        useModal={true}
+      />
 
       {/* 5. Modal Tác chiến Thực địa GrabDriver */}
       <RescuerMissionWorkspaceModal
@@ -3135,24 +3164,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Full Image Lightbox Preview Modal
-  imagePreviewOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imagePreviewCloseBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 99,
-    padding: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-  },
-  imagePreviewFull: {
-    width: '92%',
-    height: '75%',
-  },
 });

@@ -12,7 +12,7 @@ import {
   Users,
   AlertCircle,
 } from 'lucide-react';
-import type { SosRequest, RescueTeam, Vehicle } from '@/types/domainD';
+import type { SosRequest, RescueTeam, Vehicle, DispatchSuggestedSupply } from '@/types/domainD';
 import { FALLBACK_SUPPLIES } from '@/constants';
 import type { EquipmentItem } from '@/api/equipment.api';
 
@@ -23,6 +23,7 @@ interface Props {
   vehicles: Vehicle[];
   allocatedSupplies?: Record<string, number>;
   areaSupplies?: EquipmentItem[];
+  suggestedSupplies?: DispatchSuggestedSupply[];
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -34,6 +35,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   vehicles,
   allocatedSupplies,
   areaSupplies = [],
+  suggestedSupplies = [],
   onClose,
   onConfirm,
 }) => {
@@ -42,6 +44,35 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   // Danh sách các mặt hàng vật tư đã cấp phát (> 0)
   const activeSupplies = Object.entries(allocatedSupplies || {}).filter(([_, qty]) => qty > 0);
   const totalSupplyUnits = activeSupplies.reduce((acc, [_, qty]) => acc + qty, 0);
+
+  // Tính ETA tiếp cận dự kiến thực tế
+  const estimatedEtaText = (() => {
+    const sosWithGeo = selectedSos as SosRequest & { location?: { coordinates?: [number, number] } };
+    const sosLat = selectedSos?.coordinates?.lat ?? sosWithGeo?.location?.coordinates?.[1];
+    const sosLng = selectedSos?.coordinates?.lng ?? sosWithGeo?.location?.coordinates?.[0];
+    if (typeof sosLat === 'number' && typeof sosLng === 'number') {
+      const firstTeam = selectedTeams[0];
+      const lead = firstTeam?.rescuers?.find(
+        (r) => typeof r.coordinates?.lat === 'number' && typeof r.coordinates?.lng === 'number'
+      );
+      const origin = lead?.coordinates ?? firstTeam?.baseCoordinates;
+      if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
+        const R = 6371;
+        const dLat = ((sosLat - origin.lat) * Math.PI) / 180;
+        const dLon = ((sosLng - origin.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((origin.lat * Math.PI) / 180) *
+            Math.cos((sosLat * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const min = Math.max(3, Math.round((distKm / 25) * 60 + 2));
+        return `~${min} phút (${distKm < 1 ? Math.round(distKm * 1000) + ' m' : distKm.toFixed(1) + ' km'})`;
+      }
+    }
+    return '~5-7 phút';
+  })();
 
   return (
     <div
@@ -404,9 +435,11 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             {totalSupplyUnits > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {activeSupplies.map(([id, qty]) => {
-                  const item = areaSupplies?.find((s) => s._id === id || (s as any).id === id) || FALLBACK_SUPPLIES.find((s) => s.id === id);
-                  const name = item?.name || 'Vật tư cứu hộ';
-                  const unit = item?.unit || 'món';
+                  const areaItem = areaSupplies?.find((s) => s._id === id || (s as any).id === id);
+                  const suggestedItem = suggestedSupplies?.find((s) => s.supplyId === id || s.name === id);
+                  const fallbackItem = FALLBACK_SUPPLIES.find((s) => s.id === id);
+                  const name = areaItem?.name || suggestedItem?.name || fallbackItem?.name || 'Vật tư cứu hộ';
+                  const unit = areaItem?.unit || suggestedItem?.unit || fallbackItem?.unit || 'món';
 
                   return (
                     <div

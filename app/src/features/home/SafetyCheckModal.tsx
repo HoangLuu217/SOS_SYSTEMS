@@ -42,8 +42,6 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
   const [selectedStatus, setSelectedStatus] = useState<'SAFE' | 'NEED_HELP'>('SAFE');
   const [message, setMessage] = useState<string>('');
-  const [peopleCount, setPeopleCount] = useState<number>(1);
-  const [createSosRequest, setCreateSosRequest] = useState<boolean>(false);
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAddress, setLocationAddress] = useState<string>('');
 
@@ -62,13 +60,10 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
     if (existingResp) {
       setSelectedStatus(existingResp.status);
       setMessage(existingResp.message || '');
-      setPeopleCount(existingResp.peopleCount || 1);
       setIsEditing(false);
     } else {
       setSelectedStatus('SAFE');
       setMessage('');
-      setPeopleCount(1);
-      setCreateSosRequest(false);
       setIsEditing(true);
     }
   };
@@ -181,7 +176,6 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
       const payload: any = {
         status: 'NEED_HELP',
         message: message.trim() || 'Người dân cần cứu hộ khẩn cấp',
-        peopleCount: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
         createSosRequest: false,
         address: locationAddress || undefined,
       };
@@ -190,7 +184,14 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
           coordinates: [coords.longitude, coords.latitude],
         };
       }
-      void safetyCheckApi.respondToSafetyCheck(safetyCheck._id, payload);
+      safetyCheckApi
+        .respondToSafetyCheck(safetyCheck._id, payload)
+        .then((res) => {
+          if (res?.success) {
+            DeviceEventEmitter.emit('safety_check:updated');
+          }
+        })
+        .catch(() => {});
     }
 
     // 2. Đóng SafetyCheckModal
@@ -198,7 +199,6 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
     // 3. Mở tab SOS kèm dữ liệu điền sẵn
     const sosData = {
-      people: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
       description: message.trim() || undefined,
     };
     if (onNavigateToSos) {
@@ -216,8 +216,7 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
       const payload: any = {
         status: selectedStatus,
         message: message.trim(),
-        peopleCount: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
-        createSosRequest: selectedStatus === 'NEED_HELP' && createSosRequest,
+        createSosRequest: false,
         address: locationAddress || undefined,
       };
 
@@ -238,7 +237,7 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
           userPhone: '',
           status: selectedStatus,
           message: message.trim(),
-          peopleCount: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
+          peopleCount: 1,
           respondedAt: new Date().toISOString(),
         };
 
@@ -253,11 +252,10 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
         DeviceEventEmitter.emit('safety_check:updated');
         if (onSuccess) onSuccess();
 
-        // Nếu người dùng chọn Tạo yêu cầu SOS khẩn cấp, mở thẳng trang nhập SOS
-        if (selectedStatus === 'NEED_HELP' && createSosRequest) {
+        // Nếu chọn Cần cứu hộ, tự động đóng modal và chuyển thẳng sang trang tạo SOS
+        if (selectedStatus === 'NEED_HELP') {
           onClose();
           const sosData = {
-            people: peopleCount,
             description: message.trim() || undefined,
           };
           if (onNavigateToSos) {
@@ -427,9 +425,7 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                                 fontWeight: '800',
                               }}
                             >
-                              {myResponse.status === 'SAFE'
-                                ? 'Tôi an toàn'
-                                : `Cần cứu hộ (${myResponse.peopleCount || 1} người)`}
+                              {myResponse.status === 'SAFE' ? 'Tôi an toàn' : 'Cần cứu hộ'}
                             </Text>
                           </Text>
                           {myResponse.message ? (
@@ -521,66 +517,6 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                         </TouchableOpacity>
                       </View>
 
-                      {selectedStatus === 'NEED_HELP' && (
-                        <View style={styles.needHelpCompactBox}>
-                          <View style={styles.peopleRow}>
-                            <Text style={styles.peopleLabel}>Số người:</Text>
-                            <View style={styles.peopleBtns}>
-                              {[1, 2, 3, 4, 5].map((num) => (
-                                <TouchableOpacity
-                                  key={num}
-                                  style={[
-                                    styles.peopleChip,
-                                    peopleCount === num && styles.peopleChipActive,
-                                  ]}
-                                  onPress={() => setPeopleCount(num)}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.peopleChipText,
-                                      peopleCount === num && styles.peopleChipTextActive,
-                                    ]}
-                                  >
-                                    {num >= 5 ? '5+' : num}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          </View>
-
-                          {/* Nút nổi bật mở trực tiếp trang nhập yêu cầu SOS */}
-                          <TouchableOpacity
-                            style={styles.openSosScreenCard}
-                            onPress={handleOpenSosScreen}
-                            activeOpacity={0.85}
-                          >
-                            <View style={styles.openSosIconCircle}>
-                              <Ionicons name="megaphone" size={18} color="#FFFFFF" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.openSosCardTitle}>Mở trang nhập yêu cầu SOS</Text>
-                              <Text style={styles.openSosCardSub}>
-                                Điền ảnh hiện trường, mức ngập &amp; gửi vị trí khẩn cấp
-                              </Text>
-                            </View>
-                            <Feather name="arrow-right" size={18} color="#DC2626" />
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.sosCheckRow}
-                            onPress={() => setCreateSosRequest(!createSosRequest)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons
-                              name={createSosRequest ? 'checkbox' : 'square-outline'}
-                              size={18}
-                              color={createSosRequest ? '#DC2626' : '#64748B'}
-                            />
-                            <Text style={styles.sosCheckLabel}>Tạo yêu cầu SOS khẩn cấp</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
                       <TextInput
                         style={styles.compactInput}
                         placeholder="Ghi chú thêm (tùy chọn)..."
@@ -608,17 +544,6 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                             disabled={submitting}
                           >
                             <Text style={styles.cancelEditBtnText}>Hủy</Text>
-                          </TouchableOpacity>
-                        )}
-
-                        {selectedStatus === 'NEED_HELP' && (
-                          <TouchableOpacity
-                            style={styles.openSosFooterBtn}
-                            onPress={handleOpenSosScreen}
-                            activeOpacity={0.85}
-                          >
-                            <Ionicons name="megaphone" size={15} color="#FFFFFF" />
-                            <Text style={styles.openSosFooterBtnText}>Mở trang SOS</Text>
                           </TouchableOpacity>
                         )}
 

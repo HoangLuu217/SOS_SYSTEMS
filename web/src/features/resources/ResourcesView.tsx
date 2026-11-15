@@ -32,6 +32,7 @@ import {
   RotateCcw,
   Shield,
   Loader2,
+  Download,
 } from 'lucide-react';
 import type { VehicleItem, VehicleType, VehicleTerrainCapability, RescueTeamItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
@@ -62,8 +63,11 @@ import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { exportSupplyDispatchVoucherPdf } from './printSupplyDispatchVoucher';
 import {
   resolveProofImageSrc,
+  ProofImagePreview,
   STANDARD_EQUIPMENT_CATALOG,
   STANDARD_CONSUMABLE_CATALOG,
   generateRandomEquipmentSerial,
@@ -355,6 +359,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }, 260);
   }, [isDispatchDrawerClosing]);
 
+  const handlePrintDispatchVoucher = useCallback(
+    (rec: DispatchHistoryRecord) => {
+      const ok = exportSupplyDispatchVoucherPdf(rec, {
+        areaName: userAreaName || (managedArea as any)?.name || 'Thành phố Đà Nẵng',
+      });
+      if (!ok) {
+        toast.error('Không thể xuất file PDF phiếu xuất kho trên trình duyệt này.');
+      } else {
+        toast.success(`Đã xuất file PDF phiếu ${rec.dispatchCode}`);
+      }
+    },
+    [userAreaName, managedArea]
+  );
+
   // Hỗ trợ phím ESC để đóng Drawer mượt mà
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -524,6 +542,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         socket.on('assignment:supply_approved', handleRealtimeRefresh);
         socket.on('assignment:status_updated', handleRealtimeRefresh);
         socket.on('sos:sync', handleRealtimeRefresh);
+        socket.on('rescue_teams_updated', handleRealtimeRefresh);
       }
     } catch (e) {
       console.warn('Socket connect error in ResourcesView:', e);
@@ -544,6 +563,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         socket.off('assignment:supply_approved', handleRealtimeRefresh);
         socket.off('assignment:status_updated', handleRealtimeRefresh);
         socket.off('sos:sync', handleRealtimeRefresh);
+        socket.off('rescue_teams_updated', handleRealtimeRefresh);
       }
       window.removeEventListener('equipment_updated', handleWindowUpdate);
       window.removeEventListener('equipment:updated', handleWindowUpdate);
@@ -861,6 +881,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
     return safeLocations;
   }, [safeLocations, managedArea, userAreaId, userAreaName]);
+
+  const supplyAreaBias = 'Thành phố Đà Nẵng';
+  const supplyBiasCenter = userAreaName || (managedArea as any)?.name || supplyAreaBias;
 
 
 
@@ -2097,28 +2120,34 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
 
     return (
-      <select
+      <SearchableSelect
         className="ra-filter-select"
+        ariaLabel="Lọc theo địa bàn Đà Nẵng"
+        title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
+        searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
         value={selectedAreaId}
-        onChange={(e) => {
-          setSelectedAreaId(e.target.value);
+        onChange={(val) => {
+          setSelectedAreaId(val);
           onResetTeamFilter();
           setCurrentPage(1);
         }}
-        style={{ minWidth: 195, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
-        title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
-      >
-        <option value="ALL">
-          {wardsLoading
-            ? '⏳ Đang tải địa bàn Đà Nẵng...'
-            : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`}
-        </option>
-        {wards.map((ward) => (
-          <option key={ward.id} value={ward.id}>
-            {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
-          </option>
-        ))}
-      </select>
+        triggerStyle={{ minWidth: 210, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
+        options={[
+          {
+            value: 'ALL',
+            label: wardsLoading
+              ? '⏳ Đang tải địa bàn Đà Nẵng...'
+              : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
+            keywords: 'tat ca dia ban da nang',
+          },
+          ...wards.map((ward) => ({
+            value: ward.id,
+            label: `${ward.type === 'DISTRICT' ? '🏛️' : '📍'} ${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+            badgeText: ward.code || undefined,
+            keywords: `${ward.name} ${ward.code || ''}`,
+          })),
+        ]}
+      />
     );
   };
 
@@ -2330,7 +2359,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                 <button
                   type="button"
-                  className="coordination-action-btn primary"
+                  className="sos-btn sos-btn--primary sos-btn--sm"
                   onClick={() => {
                     setEqTeamId('');
                     setEqSupplyType('DURABLE');
@@ -2343,23 +2372,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     setEqNote('');
                     setIsCreateEquipmentOpen(true);
                   }}
-                  style={{
-                    background: '#16a34a',
-                    color: '#ffffff',
-                    border: '1px solid #16a34a',
-                    borderRadius: 8,
-                    padding: '7px 14px',
-                    height: 'auto',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    cursor: 'pointer',
-                  }}
                   title="Nhập kho thiết bị hoặc nhu yếu phẩm mới"
                 >
-                  <PlusCircle size={15} />
+                  <Plus size={14} strokeWidth={2.2} />
                   <span>Nhập kho mới</span>
                 </button>
               </>
@@ -3128,15 +3143,27 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                           {/* Cột 6: Thao tác */}
                           <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="ra-view-btn"
-                              onClick={() => setSelectedDispatchRecord(rec)}
-                              title="Xem chi tiết phiếu xuất kho"
-                            >
-                              <Eye size={13} />
-                              <span>Chi tiết</span>
-                            </button>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <button
+                                type="button"
+                                className="ra-view-btn"
+                                onClick={() => setSelectedDispatchRecord(rec)}
+                                title="Xem chi tiết phiếu xuất kho"
+                              >
+                                <Eye size={13} />
+                                <span>Chi tiết</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="ra-view-btn"
+                                onClick={() => handlePrintDispatchVoucher(rec)}
+                                title={`Xuất file PDF phiếu ${rec.dispatchCode}`}
+                                aria-label={`Xuất file PDF phiếu ${rec.dispatchCode}`}
+                                style={{ paddingInline: 8 }}
+                              >
+                                <Download size={13} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -4180,10 +4207,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               cursor: 'pointer',
                             }}
                           >
-                            <img
+                            <ProofImagePreview
                               src={resolvedSrc}
                               alt={`Chứng từ ${idx + 1}`}
-                              style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }}
+                              height={110}
+                              fallbackLabel={`Chứng từ ${idx + 1}`}
                             />
                           </button>
                         );
@@ -4207,6 +4235,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               >
                 <button type="button" className="ra-refresh-btn" onClick={handleCloseDispatchDetail}>
                   <span>Đóng</span>
+                </button>
+                <button
+                  type="button"
+                  className="ra-refresh-btn"
+                  onClick={() => handlePrintDispatchVoucher(rec)}
+                  style={{
+                    borderColor: '#0284c7',
+                    color: '#0369a1',
+                    background: '#f0f9ff',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Download size={14} />
+                  <span>Xuất PDF</span>
                 </button>
                 {isRejectedOrCancelled && rec.items.length > 0 && (
                   <button
@@ -4350,10 +4392,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       background: '#f8fafc',
                     }}
                   >
-                    <img
+                    <ProofImagePreview
                       src={resolvedSrc}
                       alt={`Ảnh bàn giao ${i + 1}`}
-                      style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }}
+                      height={220}
+                      fallbackLabel={`Ảnh bàn giao ${i + 1}`}
                     />
                   </a>
                 );
@@ -5173,11 +5216,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     {eqSupplyType === 'CONSUMABLE' ? 'Danh mục nhu yếu phẩm chuẩn (*)' : 'Loại Thiết Bị Cứu Hộ (*)'}
                   </label>
                   {eqSupplyType === 'CONSUMABLE' ? (
-                    <select
+                    <SearchableSelect
                       className="executive-modal-select"
+                      ariaLabel="Danh mục nhu yếu phẩm chuẩn"
+                      searchPlaceholder="Tìm nhanh nhu yếu phẩm..."
                       value={eqName}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      onChange={(val) => {
                         setEqName(val);
                         const matched = STANDARD_CONSUMABLE_CATALOG.find((item) => item.name === val);
                         if (matched) {
@@ -5187,21 +5231,28 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
                         }
                       }}
-                      required
-                    >
-                      {STANDARD_CONSUMABLE_CATALOG.map((item) => (
-                        <option key={item.name} value={item.name}>
-                          {item.name}
-                        </option>
-                      ))}
-                      <option value="CUSTOM">➕ Khác (Nhập mặt hàng cứu trợ khác)...</option>
-                    </select>
+                      triggerStyle={{ width: '100%' }}
+                      options={[
+                        ...STANDARD_CONSUMABLE_CATALOG.map((item) => ({
+                          value: item.name,
+                          label: item.name,
+                          badgeText: item.unit,
+                          keywords: `${item.name} ${item.category || ''} ${item.unit || ''}`,
+                        })),
+                        {
+                          value: 'CUSTOM',
+                          label: '➕ Khác (Nhập mặt hàng cứu trợ khác)...',
+                          keywords: 'khac tuy chinh custom nhap moi',
+                        },
+                      ]}
+                    />
                   ) : (
-                    <select
+                    <SearchableSelect
                       className="executive-modal-select"
+                      ariaLabel="Loại Thiết Bị Cứu Hộ"
+                      searchPlaceholder="Tìm nhanh thiết bị cứu hộ..."
                       value={eqName}
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      onChange={(val) => {
                         setEqName(val);
                         const matched = STANDARD_EQUIPMENT_CATALOG.find((item) => item.name === val);
                         if (matched) {
@@ -5212,15 +5263,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           setEqSerialNumber(generateRandomEquipmentSerial('KT'));
                         }
                       }}
-                      required
-                    >
-                      {STANDARD_EQUIPMENT_CATALOG.map((item) => (
-                        <option key={item.name} value={item.name}>
-                          {item.name} ({item.unit})
-                        </option>
-                      ))}
-                      <option value="CUSTOM">➕ Khác (Nhập thiết bị tùy chỉnh)...</option>
-                    </select>
+                      triggerStyle={{ width: '100%' }}
+                      options={[
+                        ...STANDARD_EQUIPMENT_CATALOG.map((item) => ({
+                          value: item.name,
+                          label: `${item.name} (${item.unit})`,
+                          badgeText: item.unit,
+                          keywords: `${item.name} ${item.category || ''} ${item.unit || ''}`,
+                        })),
+                        {
+                          value: 'CUSTOM',
+                          label: '➕ Khác (Nhập thiết bị tùy chỉnh)...',
+                          keywords: 'khac tuy chinh custom thiet bi moi',
+                        },
+                      ]}
+                    />
                   )}
                 </div>
 
@@ -8686,6 +8743,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             placeholder="Gõ tìm địa điểm hoặc chọn..."
                             openSafeTrigger={safePickerTrigger}
                             coordinates={batchCoordinates}
+                            areaBias={supplyAreaBias}
+                            biasCenterName={supplyBiasCenter}
                             onOpenMapPicker={() => setIsMapPickerOpen(true)}
                           />
 
@@ -8789,7 +8848,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         </label>
                         <DestinationAutocompleteInput
                           value={batchDestination}
-                          onChange={(val) => setBatchDestination(val)}
+                          onChange={(val) => {
+                            setBatchDestination(val);
+                            if (!val.trim() && batchCoordinates) {
+                              setBatchCoordinates(null);
+                            }
+                          }}
                           onSelectPlace={(label, coords) => {
                             setBatchDestination(label);
                             setBatchCoordinates(coords);
@@ -8799,6 +8863,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           placeholder="VD: Thôn An Trạch, xã Hòa Tiến (hoặc chọn Điểm an toàn)..."
                           inputHeight={36}
                           coordinates={batchCoordinates}
+                          areaBias={supplyAreaBias}
+                          biasCenterName={supplyBiasCenter}
                           onOpenMapPicker={() => setIsMapPickerOpen(true)}
                         />
                       </div>
@@ -9233,7 +9299,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         isOpen={isMapPickerOpen}
         onClose={() => setIsMapPickerOpen(false)}
         initialCoords={batchCoordinates}
-        areaName={userAreaName || (managedArea as any)?.name || 'Đà Nẵng'}
+        areaName={supplyBiasCenter}
         onConfirm={(coords, address) => {
           if (!coords) {
             setBatchCoordinates(null);
@@ -9242,7 +9308,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           }
           setBatchCoordinates(coords);
           if (address) {
-            setBatchDestination(address);
+            const cleanAddress = address.replace(/,\s*Việt Nam$/i, '').trim() || address;
+            setBatchDestination(cleanAddress.slice(0, 140));
           } else if (!batchDestination.trim()) {
             setBatchDestination(`Tọa độ [${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}]`);
           }

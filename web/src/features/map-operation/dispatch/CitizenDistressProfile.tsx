@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus, Users, AlertCircle } from 'lucide-react';
+import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus, Users } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
 import type { EquipmentItem } from '@/api/equipment.api';
 

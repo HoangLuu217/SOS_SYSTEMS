@@ -296,7 +296,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [activeSafetyCheckId, setActiveSafetyCheckId] = useState<string | undefined>(undefined);
   const [activeSafetyCheck, setActiveSafetyCheck] = useState<SafetyCheckItem | null>(null);
   const [unrespondedSafetyCount, setUnrespondedSafetyCount] = useState<number>(0);
-  const [myPrimaryResponse, setMyPrimaryResponse] = useState<any>(null);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   interface ConfirmModalState {
@@ -440,16 +439,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       const res = await safetyCheckApi.getActiveSafetyCheck();
       if (res.success && res.data) {
-        setActiveSafetyCheck(res.data.activeCheck || null);
-        setMyPrimaryResponse(res.data.myResponse || null);
         const checks = res.data.activeChecks || (res.data.activeCheck ? [res.data.activeCheck] : []);
         const respondedIds = new Set(
           (res.data.myResponses || (res.data.myResponse ? [res.data.myResponse] : [])).map((r: any) =>
             String(r.safetyCheckId)
           )
         );
-        const unresponded = checks.filter((c) => !respondedIds.has(String(c._id))).length;
-        setUnrespondedSafetyCount(unresponded);
+        const unrespondedChecks = checks.filter((c) => !respondedIds.has(String(c._id)));
+        const primaryUnresponded =
+          res.data.activeCheck && !respondedIds.has(String(res.data.activeCheck._id))
+            ? res.data.activeCheck
+            : unrespondedChecks[0] || null;
+        setUnrespondedSafetyCount(unrespondedChecks.length);
+        setActiveSafetyCheck(primaryUnresponded);
+      } else {
+        setUnrespondedSafetyCount(0);
+        setActiveSafetyCheck(null);
       }
     } catch {
       // Ignored
@@ -958,8 +963,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* ==================== 2. NỘI DUNG CHÍNH (NỀN TRẮNG) ==================== */}
         <View style={styles.bodyContainer}>
-          {/* Banner Đợt Kiểm Tra An Toàn Đang Hoạt Động */}
-          {activeSafetyCheck && (
+          {/* Banner Đợt Kiểm Tra An Toàn Đang Hoạt Động (ẩn khi đã xác nhận toàn bộ) */}
+          {activeSafetyCheck && unrespondedSafetyCount > 0 && (
             <TouchableOpacity
               style={styles.safetyCheckBanner}
               activeOpacity={0.85}
@@ -980,17 +985,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       {activeSafetyCheck.areaId?.name || activeSafetyCheck.areaName || 'Toàn khu vực'}
                     </Text>
                   </View>
-                  {unrespondedSafetyCount > 0 ? (
-                    <View style={styles.safetyCheckPendingBadge}>
-                      <Text style={styles.safetyCheckPendingText}>
-                        {unrespondedSafetyCount} chưa báo
-                      </Text>
-                    </View>
-                  ) : myPrimaryResponse ? (
-                    <View style={styles.safetyCheckDoneBadge}>
-                      <Text style={styles.safetyCheckDoneText}>Đã xác nhận</Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.safetyCheckPendingBadge}>
+                    <Text style={styles.safetyCheckPendingText}>
+                      {unrespondedSafetyCount} chưa báo
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.safetyCheckBannerTitle} numberOfLines={1}>
                   {activeSafetyCheck.title}
@@ -2181,17 +2180,6 @@ const styles = StyleSheet.create({
   },
   safetyCheckPendingText: {
     color: '#DC2626',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  safetyCheckDoneBadge: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  safetyCheckDoneText: {
-    color: '#16A34A',
     fontSize: 10,
     fontWeight: '700',
   },

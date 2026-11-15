@@ -1,4 +1,5 @@
 const bloodDonationService = require('../services/bloodDonation.service');
+const geocodeService = require('../services/geocode.service');
 const { sendSuccess } = require('../utils/apiResponse');
 
 class BloodDonationController {
@@ -192,7 +193,7 @@ class BloodDonationController {
 
   /**
    * GET /blood-donations/geocode/search?q=...
-   * Tìm kiếm vị trí, địa chỉ qua Nominatim & Photon (tránh lỗi CORS và 403 ở client)
+   * Tìm kiếm vị trí, địa chỉ qua SerpAPI Google Maps (fallback Nominatim & Photon)
    */
   async searchLocation(req, res) {
     try {
@@ -201,62 +202,11 @@ class BloodDonationController {
         return sendSuccess(res, 200, 'Thành công', []);
       }
 
-      let results = [];
-
-      // 1. Thử gọi Nominatim trước với User-Agent chuẩn
-      try {
-        const osmRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            q
-          )}&countrycodes=vn&limit=5&addressdetails=1`,
-          {
-            headers: {
-              'User-Agent': 'SosSystem-App/1.0 (contact@sos.local)',
-            },
-          }
-        );
-        if (osmRes.ok) {
-          const osmData = await osmRes.json();
-          if (Array.isArray(osmData) && osmData.length > 0) {
-            results = osmData.map((d) => ({
-              place_id: d.place_id,
-              display_name: d.display_name,
-              lat: String(d.lat),
-              lon: String(d.lon),
-            }));
-          }
-        }
-      } catch (_) {}
-
-      // 2. Nếu Nominatim chưa có kết quả, fallback gọi Photon API
-      if (results.length === 0) {
-        try {
-          const photonRes = await fetch(
-            `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5`
-          );
-          if (photonRes.ok) {
-            const photonData = await photonRes.json();
-            if (photonData.features && photonData.features.length > 0) {
-              results = photonData.features.map((f) => {
-                const props = f.properties || {};
-                const parts = [
-                  props.name,
-                  props.street,
-                  props.city,
-                  props.state,
-                  props.country,
-                ].filter(Boolean);
-                return {
-                  place_id: f.properties.osm_id || Math.random(),
-                  display_name: parts.join(', ') || props.name,
-                  lat: String(f.geometry.coordinates[1]),
-                  lon: String(f.geometry.coordinates[0]),
-                };
-              });
-            }
-          }
-        } catch (_) {}
-      }
+      const results = await geocodeService.searchPlaces(q, {
+        lat: req.query.lat,
+        lng: req.query.lng,
+        ll: req.query.ll,
+      });
 
       return sendSuccess(res, 200, 'Tìm kiếm vị trí thành công', results);
     } catch (err) {
@@ -275,17 +225,9 @@ class BloodDonationController {
         return sendSuccess(res, 200, 'Thành công', '');
       }
 
-      const osmRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-        {
-          headers: {
-            'User-Agent': 'SosSystem-App/1.0 (contact@sos.local)',
-          },
-        }
-      );
-      if (osmRes.ok) {
-        const data = await osmRes.json();
-        return sendSuccess(res, 200, 'Tra cứu địa chỉ thành công', data.display_name || '');
+      const displayName = await geocodeService.reverseGeocode(lat, lng);
+      if (displayName) {
+        return sendSuccess(res, 200, 'Tra cứu địa chỉ thành công', displayName);
       }
       return sendSuccess(res, 200, 'Không tìm thấy địa chỉ', '');
     } catch (err) {

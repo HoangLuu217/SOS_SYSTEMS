@@ -154,10 +154,24 @@ class WeatherNotificationService {
       }
     });
 
+    const normalizedItems = items.map((doc) => {
+      const effectiveScore =
+        typeof doc.relevance_score === 'number' && doc.relevance_score > 0
+          ? doc.relevance_score
+          : typeof doc.score === 'number' && doc.score > 0
+            ? doc.score
+            : doc.relevance_score ?? doc.score ?? 0;
+      return {
+        ...doc,
+        score: effectiveScore,
+        relevance_score: effectiveScore,
+      };
+    });
+
     const totalPages = isAll ? 1 : (Math.ceil(total / limit) || 1);
 
     return {
-      items,
+      items: normalizedItems,
       pagination: {
         total,
         page: isAll ? 1 : page,
@@ -184,6 +198,15 @@ class WeatherNotificationService {
     if (!item) {
       throw new ApiError(404, 'Không tìm thấy thông báo thời tiết');
     }
+
+    const effectiveScore =
+      typeof item.relevance_score === 'number' && item.relevance_score > 0
+        ? item.relevance_score
+        : typeof item.score === 'number' && item.score > 0
+          ? item.score
+          : item.relevance_score ?? item.score ?? 0;
+    item.score = effectiveScore;
+    item.relevance_score = effectiveScore;
 
     return item;
   }
@@ -306,6 +329,20 @@ class WeatherNotificationService {
         item[field] = data[field];
       }
     });
+
+    if (data.score !== undefined && data.relevance_score === undefined) {
+      const numericScore = Number(data.score) || 0;
+      item.score = numericScore;
+      item.relevance_score = numericScore;
+    } else if (data.relevance_score !== undefined && data.score === undefined) {
+      const numericScore = Number(data.relevance_score) || 0;
+      item.relevance_score = numericScore;
+      item.score = numericScore;
+    } else if ((!item.score || item.score === 0) && item.relevance_score > 0) {
+      item.score = item.relevance_score;
+    } else if ((!item.relevance_score || item.relevance_score === 0) && item.score > 0) {
+      item.relevance_score = item.score;
+    }
 
     if (data.weatherType && !data.category) item.category = data.weatherType;
     if (data.areaName && !data.area) item.area = data.areaName;
