@@ -58,7 +58,12 @@ import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
-import { onRescuerApplicationSubmitted, onRescuerVerificationChanged, onRescueTeamsUpdated } from '@/services/socketService';
+import {
+  onRescuerApplicationSubmitted,
+  onRescuerVerificationChanged,
+  onRescueTeamsUpdated,
+  onAssignmentUpdated,
+} from '@/services/socketService';
 import {
   SPECIALIZATION_LABELS,
   OPERATIONAL_STATUS_LABELS,
@@ -725,10 +730,15 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       loadData();
     });
 
+    const unsubAssign = onAssignmentUpdated(() => {
+      loadData();
+    });
+
     return () => {
       unsubApp();
       unsubVer();
       unsubTeams();
+      unsubAssign();
     };
   }, [loadData]);
 

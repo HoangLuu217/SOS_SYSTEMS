@@ -25,14 +25,11 @@ import { MissionDispatch } from './dispatch/MissionDispatch';
 import {
   ShieldAlert,
   LogOut,
-  Map as MapIcon,
-  Layers,
   AlertTriangle,
   X,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import { useApp } from '@/context/AppContext';
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '@/services/appRouter';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated, onRescueTeamsUpdated, getSocket } from '@/services/socketService';
@@ -55,8 +52,6 @@ interface Props {
 }
 
 export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
-  const { mapMode, setMapMode } = useApp();
-
   // Domain D data
   const [areas, setAreas] = useState<AdministrativeArea[]>([]);
   const [authorities, setAuthorities] = useState<AuthorityOrganization[]>([]);
@@ -466,44 +461,58 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           };
         });
 
-        // Đồng bộ các phân công tác chiến thực tế vào domainDService
+        // Đồng bộ các phân công tác chiến thực tế vào domainDService (hỗ trợ đa đội & xóa bản ghi tạm/cũ bị kẹt)
+        const serverSosIds: string[] = [];
+        const syncedAssignIds = new Set<string>();
         res.data.forEach((item: any) => {
-          if (item.assignment) {
-            const assign = item.assignment;
-            const assignId = assign._id || item.assignmentId;
-            domainDService.syncRealAssignment({
-              id: assignId,
-              sosRequestId: item._id,
-              authorityOrganizationId: assign.authorityOrganizationId?._id || assign.authorityOrganizationId || '',
-              authorityOrganizationName: assign.authorityOrganizationId?.name || '',
-              rescueTeamId: assign.rescueTeamId?._id || assign.rescueTeamId || '',
-              rescueTeamName: assign.rescueTeamId?.name || '',
-              rescuerId: assign.rescuerId?._id || assign.rescuerId || '',
-              rescuerName: assign.rescuerId?.fullName || assign.rescuerName || '',
-              rescuerRole: assign.rescuerRole || '',
-              vehicleId: assign.vehicleId?._id || assign.vehicleId || '',
-              vehicleName: assign.vehicleId?.plateNumber || assign.vehicleName || '',
-              vehicleCapacity: String(assign.vehicleId?.capacity ?? ''),
-              status: assign.status,
-              priority: item.priority as any,
-              assignedAt: assign.assignedAt || assign.createdAt || '',
-              rescuerLocation: assign.rescuerLocation || null,
-              distanceRemainingKm: assign.distanceRemainingKm ?? 0,
-              etaMinutes: assign.etaMinutes ?? 0,
-              supplies: Array.isArray(assign.supplies) ? assign.supplies : [],
-              requestedSupplies: Array.isArray(assign.requestedSupplies) ? assign.requestedSupplies : [],
+          if (item?._id) serverSosIds.push(String(item._id));
+          const rawPrimaryAssignments =
+            Array.isArray(item.assignments) && item.assignments.length > 0
+              ? item.assignments.filter((a: any) => a && a.missionType !== 'SHORE_HANDOFF')
+              : item.assignment && item.assignment.missionType !== 'SHORE_HANDOFF'
+                ? [item.assignment]
+                : [];
+
+          if (rawPrimaryAssignments.length > 0) {
+            rawPrimaryAssignments.forEach((assign: any) => {
+              const assignId = assign._id || item.assignmentId;
+              if (!assignId) return;
+              syncedAssignIds.add(String(assignId));
+              domainDService.syncRealAssignment({
+                id: String(assignId),
+                sosRequestId: String(item._id),
+                authorityOrganizationId: assign.authorityOrganizationId?._id || assign.authorityOrganizationId || '',
+                authorityOrganizationName: assign.authorityOrganizationId?.name || '',
+                rescueTeamId: assign.rescueTeamId?._id || assign.rescueTeamId || '',
+                rescueTeamName: assign.rescueTeamId?.name || '',
+                rescuerId: assign.rescuerId?._id || assign.rescuerId || '',
+                rescuerName: assign.rescuerId?.fullName || assign.rescuerName || '',
+                rescuerRole: assign.rescuerRole || '',
+                vehicleId: assign.vehicleId?._id || assign.vehicleId || '',
+                vehicleName: assign.vehicleId?.plateNumber || assign.vehicleName || '',
+                vehicleCapacity: String(assign.vehicleId?.capacity ?? ''),
+                status: assign.status,
+                priority: item.priority as any,
+                assignedAt: assign.assignedAt || assign.createdAt || '',
+                rescuerLocation: assign.rescuerLocation || null,
+                distanceRemainingKm: assign.distanceRemainingKm ?? 0,
+                etaMinutes: assign.etaMinutes ?? 0,
+                supplies: Array.isArray(assign.supplies) ? assign.supplies : [],
+                requestedSupplies: Array.isArray(assign.requestedSupplies) ? assign.requestedSupplies : [],
+              });
             });
           } else {
             // Khi ca SOS trên server không còn assignment (đã hủy), đồng bộ hủy trong domainDService
             const existingAssign = domainDService.getAssignmentBySosId(item._id);
-            if (existingAssign && existingAssign.status !== 'CANCELLED') {
+            if (existingAssign && existingAssign.status !== 'CANCELLED' && existingAssign.status !== 'COMPLETED') {
               domainDService.cancelAssignment(existingAssign.id, 'Đã hủy trên máy chủ');
             }
           }
         });
+        domainDService.pruneAssignmentsForSosIds(serverSosIds, syncedAssignIds);
 
         domainDService.syncRealSosRequests(realMapped);
-        setSosRequests(domainDService.getSosRequests());
+        setSosRequests([...domainDService.getSosRequests()]);
 
         const currentUrlId = getCurrentSosIdFromUrl();
         const activeReal = realMapped.find((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
@@ -658,7 +667,9 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     const handleAssignmentRealtime = (assignmentData: any) => {
       if (!assignmentData) return;
       const assignId = assignmentData._id || assignmentData.id;
-      const targetSosId = assignmentData.sosRequestId || assignmentData.sosId || (assignmentData.sosRequest?._id || assignmentData.sosRequest?.id);
+      const rawSosRef = assignmentData.sosRequestId || assignmentData.sosId || assignmentData.sosRequest;
+      const targetSosId =
+        typeof rawSosRef === 'object' && rawSosRef ? String(rawSosRef._id || rawSosRef.id || '') : String(rawSosRef || '');
       const newStatus = assignmentData.status;
       const isShoreHandoffAssign = assignmentData.missionType === 'SHORE_HANDOFF';
 
@@ -689,16 +700,16 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
         const existingAssign = domainDService.getAssignmentBySosId(targetSosId);
         domainDService.syncRealAssignment({
-          id: assignId,
+          id: String(assignId),
           sosRequestId: targetSosId,
           authorityOrganizationId: assignmentData.authorityOrganizationId?._id || assignmentData.authorityOrganizationId || '',
           authorityOrganizationName: assignmentData.authorityOrganizationId?.name || '',
-          rescueTeamId: typeof teamObj === 'object' && teamObj ? teamObj._id : (assignmentData.rescueTeamId || ''),
+          rescueTeamId: typeof teamObj === 'object' && teamObj ? String(teamObj._id || '') : String(assignmentData.rescueTeamId || ''),
           rescueTeamName: teamName,
-          rescuerId: typeof rescuerObj === 'object' && rescuerObj ? rescuerObj._id : (assignmentData.rescuerId || ''),
+          rescuerId: typeof rescuerObj === 'object' && rescuerObj ? String(rescuerObj._id || '') : String(assignmentData.rescuerId || ''),
           rescuerName: rescuerName,
           rescuerRole: 'LEADER',
-          vehicleId: typeof vehicleObj === 'object' && vehicleObj ? vehicleObj._id : (assignmentData.vehicleId || ''),
+          vehicleId: typeof vehicleObj === 'object' && vehicleObj ? String(vehicleObj._id || '') : String(assignmentData.vehicleId || ''),
           vehicleName: vehiclePlate,
           vehicleCapacity: String(vehicleObj?.capacity ?? ''),
           status: newStatus,
@@ -739,6 +750,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         setSosRequests([...domainDService.getSosRequests()]);
       }
 
+      window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
       syncRealSosFromApi(activeOfficer);
     };
 
@@ -794,6 +806,36 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       if (!data) return;
       const plate = data.shoreHandoff?.assignedVehiclePlate || data.assignedVehiclePlate || 'Xe cứu hộ';
       showToast(`🚑 Đã điều động xe ${plate} đến bến đón nạn nhân!`, 'success');
+      window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    const handleShoreHandoffCompleted = (data: any) => {
+      if (!data) return;
+      const targetId = data.sosId || data.sosRequestId || data._id;
+      if (targetId) {
+        if (data.shoreHandoff) {
+          domainDService.updateShoreHandoffState(String(targetId), data.shoreHandoff);
+        }
+        domainDService.updateShoreHandoffAssignment(String(targetId), { status: 'COMPLETED' });
+        setSosRequests([...domainDService.getSosRequests()]);
+      }
+      showToast(
+        `✅ Đội xe tiếp vận đã hoàn tất đón nạn nhân ca ${data.sosCode ? `#${data.sosCode}` : 'SOS'}!`,
+        'success'
+      );
+      window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    const handleShoreHandoffCancelled = (data: any) => {
+      if (!data) return;
+      const targetId = data.sosId || data.sosRequestId || data._id;
+      if (targetId) {
+        domainDService.updateShoreHandoffState(String(targetId), data.shoreHandoff);
+        setSosRequests([...domainDService.getSosRequests()]);
+      }
+      window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
       syncRealSosFromApi(activeOfficer);
     };
 
@@ -803,6 +845,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('assignment:cancelled', handleRealtimeSync);
     socket.on('assignment:deleted', handleRealtimeSync);
     socket.on('assignment:updated', handleAssignmentRealtime);
+    socket.on('assignment:completed', handleAssignmentRealtime);
     socket.on('sos:sync', handleRealtimeSync);
     socket.on('rescue_teams_updated', handleRealtimeSync);
     socket.on('sos:updated', handleRealtimeSync);
@@ -812,6 +855,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('sos:assignment:status_changed', handleAssignmentRealtime);
     socket.on('sos:shore_handoff_requested', handleShoreHandoffRequested);
     socket.on('sos:shore_handoff_assigned', handleShoreHandoffAssigned);
+    socket.on('sos:shore_handoff_completed', handleShoreHandoffCompleted);
+    socket.on('sos:shore_handoff_cancelled', handleShoreHandoffCancelled);
 
     const handleSupplyRequested = (data: any) => {
       if (!data) return;
@@ -865,6 +910,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('assignment:cancelled', handleRealtimeSync);
       socket.off('assignment:deleted', handleRealtimeSync);
       socket.off('assignment:updated', handleAssignmentRealtime);
+      socket.off('assignment:completed', handleAssignmentRealtime);
       socket.off('sos:sync', handleRealtimeSync);
       socket.off('rescue_teams_updated', handleRealtimeSync);
       socket.off('sos:updated', handleRealtimeSync);
@@ -874,6 +920,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('sos:assignment:status_changed', handleAssignmentRealtime);
       socket.off('sos:shore_handoff_requested', handleShoreHandoffRequested);
       socket.off('sos:shore_handoff_assigned', handleShoreHandoffAssigned);
+      socket.off('sos:shore_handoff_completed', handleShoreHandoffCompleted);
+      socket.off('sos:shore_handoff_cancelled', handleShoreHandoffCancelled);
       socket.off('assignment:supply_requested', handleSupplyRequested);
       socket.off('assignment:supply_approved', handleSupplyApproved);
       socket.off('assignment:supply_rejected', handleSupplyRejected);
@@ -1173,13 +1221,19 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     domainDService.updateAssignmentStatus(assignmentId, nextStatus);
     if (nextStatus === 'COMPLETED') {
       const targetSos = domainDService.getSosRequests().find((r) => r.assignmentId === assignmentId);
-      if (targetSos) {
+      const handoffStatus = String(targetSos?.shoreHandoff?.status || '').toUpperCase();
+      const hasPendingShoreRelay = Boolean(
+        handoffStatus && !['NONE', 'COMPLETED', 'CANCELLED'].includes(handoffStatus) && !targetSos?.shoreHandoff?.completedAt
+      );
+      if (targetSos && !hasPendingShoreRelay) {
         domainDService.updateSosStatus(targetSos.id, 'COMPLETED');
+        setSelectedSosId('');
+        showToast('Nhiệm vụ đã hoàn tất thành công! Ca cứu nạn đã chuyển lưu trữ vào Theo dõi SOS.', 'success');
+      } else {
+        showToast('Đội cứu hộ đã hoàn tất phần việc tại hiện trường — đang chờ đội xe đón bờ hoàn thành!', 'success');
       }
-      setSelectedSosId('');
-      showToast('Nhiệm vụ đã hoàn tất thành công! Ca cứu nạn đã chuyển lưu trữ vào Theo dõi SOS.', 'success');
     }
-    setSosRequests(domainDService.getSosRequests());
+    setSosRequests([...domainDService.getSosRequests()]);
 
     try {
       if (assignmentId && !assignmentId.startsWith('assign-')) {
@@ -1312,38 +1366,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                 : 'Trực ban 24/7'}
             </span>
           </div>
-
-          {/* Live Connection Status Indicator */}
-          <div className={`author-live-connection-chip ${isOnline ? '' : 'offline'}`} title={isOnline ? 'Đang kết nối máy chủ theo thời gian thực' : 'Mất kết nối - đang thử lại'}>
-            <span className="author-live-connection-dot" />
-            <span>{isOnline ? 'LIVE' : 'OFFLINE'}</span>
-          </div>
         </div>
 
-        {/* Right: Map Mode, Theme, Officer Profile, Logout */}
+        {/* Right: Actions, Officer Profile, Logout */}
         <div className="author-right-controls">
-          {/* Map Mode Segmented Control */}
-          <div className="author-segmented-map" title="Chế độ hiển thị bản đồ tác chiến">
-            <button
-              type="button"
-              onClick={() => setMapMode('street')}
-              className={`author-map-btn ${mapMode === 'street' ? 'active' : ''}`}
-              title="Bản đồ đường phố"
-            >
-              <MapIcon size={12} />
-              <span>Đường phố</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapMode('satellite')}
-              className={`author-map-btn ${mapMode === 'satellite' ? 'active' : ''}`}
-              title="Bản đồ vệ tinh"
-            >
-              <Layers size={12} />
-              <span>Vệ tinh</span>
-            </button>
-          </div>
-
           {/* Điểm Nguy Hiểm Shortcut */}
           <button
             type="button"

@@ -87,7 +87,10 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
   const handler = (data: any) => {
     const id = data?._id || data?.sosCode || '';
     const status = data?.status || '';
-    const signature = `${id}-${status}`;
+    const assignStatus = data?.assignment?.status || '';
+    const handoffStatus = data?.shoreHandoff?.status || '';
+    const handoffAssignStatus = data?.shoreHandoffAssignment?.status || '';
+    const signature = `${id}-${status}-${assignStatus}-${handoffStatus}-${handoffAssignStatus}`;
     const now = Date.now();
 
     // Chống trùng lặp do backend phát đồng thời cả 'sos:updated' và 'sos:status_changed'
@@ -146,6 +149,7 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
   s.on('assignment:created', handler);
   s.on('assignment:new', handler);
   s.on('assignment:cancelled', handler);
+  s.on('assignment:completed', handler);
 
   return () => {
     s.off('assignment:status_updated', handler);
@@ -153,6 +157,7 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
     s.off('assignment:created', handler);
     s.off('assignment:new', handler);
     s.off('assignment:cancelled', handler);
+    s.off('assignment:completed', handler);
   };
 };
 
