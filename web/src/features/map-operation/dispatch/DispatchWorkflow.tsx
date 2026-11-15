@@ -99,6 +99,8 @@ export const DispatchWorkflow = ({
   const [dispatchTab, setDispatchTab] = useState<'AI' | 'TEAMS'>('AI');
   const [realtimeSyncTick, setRealtimeSyncTick] = useState(0);
   const advisorRequestRef = useRef(0);
+  const isAdvisorInFlightRef = useRef(false);
+  const pendingOccupancyRefreshRef = useRef(false);
   const smartRecsRef = useRef<DispatchRecommendationsData | null>(null);
   smartRecsRef.current = smartRecs;
 
@@ -109,11 +111,15 @@ export const DispatchWorkflow = ({
       const requestId = ++advisorRequestRef.current;
       const requestedSosId = selectedSos?.id;
       if (!selectedSos?.id || selectedSos.id.startsWith('sos-') || ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos.status))) {
+        isAdvisorInFlightRef.current = false;
         setSmartRecs(null);
         setIsLoadingAdvisor(false);
         return;
       }
-      if (withAi && !silent) setIsLoadingAdvisor(true);
+      if (withAi) {
+        isAdvisorInFlightRef.current = true;
+        if (!silent) setIsLoadingAdvisor(true);
+      }
       try {
         const res = await fetchDispatchRecommendationsApi(selectedSos.id, {
           ai: withAi,
@@ -127,16 +133,29 @@ export const DispatchWorkflow = ({
       } catch (err) {
         console.warn('Smart dispatch recommendation warning:', err);
       } finally {
-        if (withAi && !silent && requestId === advisorRequestRef.current) setIsLoadingAdvisor(false);
+        if (requestId === advisorRequestRef.current) {
+          if (withAi) isAdvisorInFlightRef.current = false;
+          setIsLoadingAdvisor(false);
+          if (pendingOccupancyRefreshRef.current) {
+            pendingOccupancyRefreshRef.current = false;
+            window.setTimeout(() => {
+              loadSmartRecommendations(Boolean(smartRecsRef.current?.aiAdvisor) || withAi, false, true);
+            }, 150);
+          }
+        }
       }
     },
     [selectedSos?.id, selectedSos?.status, aiAnalyzedAt, isAdmin, activeOfficer?.jurisdictionAreaId, activeOfficer?.jurisdictionAreaName]
   );
 
   useEffect(() => {
+    pendingOccupancyRefreshRef.current = false;
     setSmartRecs(null);
     loadSmartRecommendations(true);
-    return () => { advisorRequestRef.current += 1; };
+    return () => {
+      advisorRequestRef.current += 1;
+      isAdvisorInFlightRef.current = false;
+    };
   }, [loadSmartRecommendations]);
 
   // Chữ ký tổng hợp tình trạng bận của các đội trên tất cả ca SOS để recompute & refresh gợi ý realtime khi có đội hoàn thành/hủy/bàn giao
@@ -160,6 +179,10 @@ export const DispatchWorkflow = ({
     if (prevOccupancySigRef.current === teamOccupancySignature) return;
     prevOccupancySigRef.current = teamOccupancySignature;
     if (!selectedSos?.id || selectedSos.id.startsWith('sos-') || ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos.status))) {
+      return;
+    }
+    if (isAdvisorInFlightRef.current) {
+      pendingOccupancyRefreshRef.current = true;
       return;
     }
     const timer = window.setTimeout(() => {

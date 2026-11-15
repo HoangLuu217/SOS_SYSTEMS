@@ -182,16 +182,25 @@ async function checkPointInAuthorityJurisdiction(
   let authArea = null;
 
   if (userAreaId) {
-    authArea = await AdministrativeAreaModel.findById(userAreaId);
+    authArea = await AdministrativeAreaModel.findById(userAreaId)
+      .select('_id name code type parentId boundary')
+      .lean();
   }
 
   if (!authArea && deptStr) {
-    const allAreas = await AdministrativeAreaModel.find({ status: 'ACTIVE' });
-    authArea = allAreas.find((a) => {
+    const allAreas = await AdministrativeAreaModel.find({ status: 'ACTIVE' })
+      .select('_id name type parentId')
+      .lean();
+    const matched = allAreas.find((a) => {
       if (!a.name) return false;
       const clean = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã)\s+/i, '').trim();
       return clean.length > 2 && (deptStr.includes(clean) || posStr.includes(clean));
     });
+    if (matched) {
+      authArea = await AdministrativeAreaModel.findById(matched._id)
+        .select('_id name code type parentId boundary')
+        .lean();
+    }
   }
 
   // 4. City-level authority (Toàn Thành phố Đà Nẵng / Cấp Tỉnh-Thành phố)
@@ -227,11 +236,13 @@ async function checkPointInAuthorityJurisdiction(
   if (authArea) {
     jurisdictionAreaIdStrings.add(authArea._id.toString());
 
-    // If assigned area is PROVINCE or DISTRICT, find all descendants
+    // If assigned area is PROVINCE or DISTRICT, find all descendants (IDs only)
     const childAreas = await AdministrativeAreaModel.find({
       parentId: authArea._id,
       status: 'ACTIVE',
-    }).select('_id boundary').lean();
+    })
+      .select('_id')
+      .lean();
 
     childAreas.forEach((c) => jurisdictionAreaIdStrings.add(c._id.toString()));
   } else if (userAreaId) {
@@ -368,10 +379,15 @@ async function getRootProvinceIdsForArea(areaId, AdministrativeAreaModel) {
  * Collect all descendant area ObjectIds (BFS) starting from an area, optionally merging
  * sibling PROVINCE trees with the same normalized province name.
  */
-async function getDescendantAreaIds(rootAreaId, AdministrativeAreaModel, { includeEquivalentProvinces = true } = {}) {
+async function getDescendantAreaIds(
+  rootAreaId,
+  AdministrativeAreaModel,
+  { includeEquivalentProvinces = true, includeBoundaries = true } = {}
+) {
   if (!rootAreaId) return { areaIds: [], boundedAreas: [] };
+  const areaSelect = includeBoundaries ? '_id parentId boundary' : '_id parentId';
   const rootDoc = await AdministrativeAreaModel.findById(rootAreaId)
-    .select('_id name type boundary')
+    .select(includeBoundaries ? '_id name type boundary' : '_id name type')
     .lean();
   if (!rootDoc) return { areaIds: [rootAreaId], boundedAreas: [] };
 
@@ -381,7 +397,7 @@ async function getDescendantAreaIds(rootAreaId, AdministrativeAreaModel, { inclu
       : [rootDoc._id];
 
   const allAreas = await AdministrativeAreaModel.find({ status: 'ACTIVE' })
-    .select('_id parentId boundary')
+    .select(areaSelect)
     .lean();
 
   const selectedIds = new Set(seedIds.map((id) => id.toString()));
@@ -400,13 +416,15 @@ async function getDescendantAreaIds(rootAreaId, AdministrativeAreaModel, { inclu
     }
   }
 
-  const boundedAreas = allAreas.filter(
-    (area) =>
-      selectedIds.has(area._id.toString()) &&
-      area.boundary?.type &&
-      Array.isArray(area.boundary.coordinates) &&
-      area.boundary.coordinates.length > 0
-  );
+  const boundedAreas = includeBoundaries
+    ? allAreas.filter(
+        (area) =>
+          selectedIds.has(area._id.toString()) &&
+          area.boundary?.type &&
+          Array.isArray(area.boundary.coordinates) &&
+          area.boundary.coordinates.length > 0
+      )
+    : [];
 
   return { areaIds, boundedAreas };
 }

@@ -250,6 +250,9 @@ const startServer = async () => {
       console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
       console.log(`🧹 Auto-cleanup: Bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày sẽ tự động được xóa vĩnh viễn định kỳ.`);
       console.log(`🩸 Blood Donation Reminders: Tự động gửi nhắc nhở (cách 1 ngày & sắp đến giờ) đang hoạt động ngầm mỗi 10 phút.`);
+      // Làm nóng cache bản đồ hành chính (polygon ranh giới) ngay khi server khởi động
+      const smartDispatchService = require('./services/smartDispatch.service');
+      smartDispatchService.warmAreaCache().catch(() => {});
     });
 
     const mongoose = require('mongoose');

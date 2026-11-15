@@ -98,18 +98,22 @@ class VehicleService {
       const { AdministrativeArea } = require('../models');
       let targetArea = null;
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        targetArea = await AdministrativeArea.findById(query.areaId)
+          .select('_id name code parentId')
+          .lean();
       }
       if (!targetArea) {
         targetArea = await AdministrativeArea.findOne({
           $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
+        })
+          .select('_id name code parentId')
+          .lean();
       }
 
       let areaConditions = [];
       if (targetArea) {
         const relevantAreaIds = [targetArea._id];
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id').lean();
         childWards.forEach((w) => relevantAreaIds.push(w._id));
         if (targetArea.parentId) {
           relevantAreaIds.push(targetArea.parentId);
@@ -127,7 +131,7 @@ class VehicleService {
         areaConditions = [{ areaId: query.areaId }];
       }
 
-      const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
+      const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id').lean();
       const teamIds = teamsInArea.map((t) => t._id);
       if (!filter.teamId) {
         filter.$or = [
@@ -154,7 +158,8 @@ class VehicleService {
         })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Vehicle.countDocuments(filter),
     ]);
 
@@ -173,14 +178,16 @@ class VehicleService {
    * Lấy chi tiết 1 phương tiện
    */
   async getVehicleById(id) {
-    const vehicle = await Vehicle.findById(id).populate({
-      path: 'teamId',
-      select: 'name type leaderId areaId authorityId status',
-      populate: [
-        { path: 'leaderId', select: 'fullName phone' },
-        { path: 'areaId', select: 'name code' },
-      ],
-    });
+    const vehicle = await Vehicle.findById(id)
+      .populate({
+        path: 'teamId',
+        select: 'name type leaderId areaId authorityId status',
+        populate: [
+          { path: 'leaderId', select: 'fullName phone' },
+          { path: 'areaId', select: 'name code' },
+        ],
+      })
+      .lean();
 
     if (!vehicle) {
       throw new ApiError(404, 'Không tìm thấy thông tin phương tiện');

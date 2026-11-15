@@ -74,7 +74,9 @@ class HazardReportService {
             { code: codeCandidate },
             { name: new RegExp(cleanAreaId, 'i') },
           ],
-        });
+        })
+          .select('_id')
+          .lean();
         if (matchedArea) {
           targetAreaId = matchedArea._id;
         } else if (!cleanAreaId.startsWith('area-')) {
@@ -96,7 +98,9 @@ class HazardReportService {
 
     if (!targetAreaId || !mongoose.Types.ObjectId.isValid(targetAreaId)) {
       const addressStr = String(address || '').toLowerCase();
-      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
+        .select('_id name')
+        .lean();
       const matched = allAreas.find((a) => {
         if (!a.name) return false;
         const cleanName = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã)\s+/i, '').trim();
@@ -105,7 +109,9 @@ class HazardReportService {
       if (matched) {
         targetAreaId = matched._id;
       } else {
-        const defaultArea = (await AdministrativeArea.findOne({ code: 'DANANG' })) || (await AdministrativeArea.findOne());
+        const defaultArea =
+          (await AdministrativeArea.findOne({ code: 'DANANG' }).select('_id').lean()) ||
+          (await AdministrativeArea.findOne().select('_id').lean());
         targetAreaId = defaultArea ? defaultArea._id : null;
       }
     }
@@ -256,20 +262,19 @@ class HazardReportService {
       ];
     }
 
-    const [reports, total] = await Promise.all([
+    const [reports, total, statsAgg] = await Promise.all([
       HazardReport.find(filter)
         .populate('reportedBy', 'fullName phone email roles avatarUrl')
         .populate('reviewedBy', 'fullName phone email')
         .populate('areaId', 'name code type')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       HazardReport.countDocuments(filter),
-    ]);
-
-    // Thống kê nhanh số lượng theo trạng thái
-    const statsAgg = await HazardReport.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
+      HazardReport.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
     ]);
     const counts = {
       TOTAL: 0,
@@ -308,7 +313,8 @@ class HazardReportService {
     const report = await HazardReport.findById(id)
       .populate('reportedBy', 'fullName phone email roles avatarUrl')
       .populate('reviewedBy', 'fullName phone email')
-      .populate('areaId', 'name code type');
+      .populate('areaId', 'name code type')
+      .lean();
 
     if (!report) {
       throw new ApiError(404, 'Không tìm thấy điểm nguy hiểm này');

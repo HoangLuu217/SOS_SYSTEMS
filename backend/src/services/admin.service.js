@@ -17,6 +17,10 @@ const fs = require('fs');
 const ApiError = require('../utils/apiError');
 const { hashToken } = require('../utils/token.util');
 
+const STATS_CACHE_TTL_MS = 15 * 1000;
+let statisticsCache = { data: null, expiresAt: 0 };
+let statisticsInFlight = null;
+
 const getLogoPath = () => {
   const backendAsset = path.join(__dirname, '../../assets/logoSOS.png');
   if (fs.existsSync(backendAsset)) return backendAsset;
@@ -90,7 +94,8 @@ class AdminService {
         .select('-passwordHash')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       User.countDocuments(filter),
     ]);
 
@@ -183,11 +188,13 @@ class AdminService {
 
       let matchedAreaDoc = null;
       if (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId)) {
-        matchedAreaDoc = await AdministrativeArea.findById(newAreaId);
+        matchedAreaDoc = await AdministrativeArea.findById(newAreaId).select('_id name').lean();
       }
       if (!matchedAreaDoc && newAreaName) {
         const cleanName = newAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
-        matchedAreaDoc = await AdministrativeArea.findOne({ name: new RegExp(cleanName, 'i') });
+        matchedAreaDoc = await AdministrativeArea.findOne({ name: new RegExp(cleanName, 'i') })
+          .select('_id name')
+          .lean();
       }
 
       const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId) ? newAreaId : (user.authority?.areaId || new mongoose.Types.ObjectId()));
@@ -320,7 +327,7 @@ class AdminService {
 
       let matchedAreaDoc = null;
       if (inputAreaId && mongoose.Types.ObjectId.isValid(inputAreaId)) {
-        matchedAreaDoc = await AdministrativeArea.findById(inputAreaId);
+        matchedAreaDoc = await AdministrativeArea.findById(inputAreaId).select('_id name').lean();
       }
       if (!matchedAreaDoc && (inputAreaName || inputAreaId)) {
         const cleanName = (inputAreaName || inputAreaId)
@@ -331,10 +338,14 @@ class AdminService {
           .trim();
         matchedAreaDoc = await AdministrativeArea.findOne({
           name: new RegExp(cleanName, 'i'),
-        });
+        })
+          .select('_id name')
+          .lean();
       }
       if (!matchedAreaDoc) {
-        matchedAreaDoc = (await AdministrativeArea.findOne({ name: /Hòa Cường|Cẩm Lệ|Hải Châu/i })) || (await AdministrativeArea.findOne({}));
+        matchedAreaDoc =
+          (await AdministrativeArea.findOne({ name: /Hòa Cường|Cẩm Lệ|Hải Châu/i }).select('_id name').lean()) ||
+          (await AdministrativeArea.findOne({}).select('_id name').lean());
       }
 
       const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : new mongoose.Types.ObjectId();
@@ -723,86 +734,96 @@ class AdminService {
   // ─────────────────────────────────────────────
 
   /**
-   * Tổng hợp thống kê toàn hệ thống
+   * Tổng hợp thống kê toàn hệ thống (dùng $facet giảm số round-trip Mongo + cache 15s)
    */
   async getStatistics() {
-    const now = new Date();
+    if (statisticsCache.data && Date.now() < statisticsCache.expiresAt) {
+      return statisticsCache.data;
+    }
+    if (statisticsInFlight) {
+      return statisticsInFlight;
+    }
 
-    const [
-      totalUsers,
-      totalCitizens,
-      totalRescuers,
-      totalTeams,
-      totalVehicles,
-      totalSos,
-      sosByStatus,
-      sosByPriority,
-      sosByEmergencyType,
-      completedMissions,
-      activeAlerts,
-    ] = await Promise.all([
-      // Tổng users
-      User.countDocuments(),
+    statisticsInFlight = (async () => {
+      try {
+        const now = new Date();
 
-      // Tổng citizens
-      User.countDocuments({ roles: 'CITIZEN' }),
+        const [
+          userFacetRes,
+          sosFacetRes,
+          totalTeams,
+          totalVehicles,
+          completedMissions,
+          activeAlerts,
+        ] = await Promise.all([
+          User.aggregate([
+            {
+              $facet: {
+                total: [{ $count: 'count' }],
+                citizens: [{ $match: { roles: 'CITIZEN' } }, { $count: 'count' }],
+                rescuers: [{ $match: { roles: 'RESCUER' } }, { $count: 'count' }],
+              },
+            },
+          ]),
+          SosRequest.aggregate([
+            {
+              $facet: {
+                total: [{ $count: 'count' }],
+                byStatus: [
+                  { $group: { _id: '$status', count: { $sum: 1 } } },
+                  { $project: { status: '$_id', count: 1, _id: 0 } },
+                  { $sort: { status: 1 } },
+                ],
+                byPriority: [
+                  { $group: { _id: '$priority', count: { $sum: 1 } } },
+                  { $project: { priority: '$_id', count: 1, _id: 0 } },
+                  { $sort: { priority: 1 } },
+                ],
+                byEmergencyType: [
+                  { $group: { _id: '$emergencyType', count: { $sum: 1 } } },
+                  { $project: { emergencyType: '$_id', count: 1, _id: 0 } },
+                  { $sort: { emergencyType: 1 } },
+                ],
+              },
+            },
+          ]),
+          RescueTeam.countDocuments(),
+          Vehicle.countDocuments(),
+          SosAssignment.countDocuments({ status: 'COMPLETED' }),
+          HazardReport.countDocuments({ status: 'APPROVED' }),
+        ]);
 
-      // Tổng rescuers
-      User.countDocuments({ roles: 'RESCUER' }),
+        const userFacet = userFacetRes[0] || {};
+        const sosFacet = sosFacetRes[0] || {};
 
-      // Tổng đội cứu hộ
-      RescueTeam.countDocuments(),
+        const result = {
+          overview: {
+            totalUsers: userFacet.total?.[0]?.count || 0,
+            totalCitizens: userFacet.citizens?.[0]?.count || 0,
+            totalRescuers: userFacet.rescuers?.[0]?.count || 0,
+            totalTeams,
+            totalVehicles,
+            totalSos: sosFacet.total?.[0]?.count || 0,
+            completedMissions,
+            activeAlerts,
+          },
+          sosByStatus: sosFacet.byStatus || [],
+          sosByPriority: sosFacet.byPriority || [],
+          sosByEmergencyType: sosFacet.byEmergencyType || [],
+          generatedAt: now,
+        };
 
-      // Tổng phương tiện
-      Vehicle.countDocuments(),
+        statisticsCache = {
+          data: result,
+          expiresAt: Date.now() + STATS_CACHE_TTL_MS,
+        };
+        return result;
+      } finally {
+        statisticsInFlight = null;
+      }
+    })();
 
-      // Tổng SOS requests
-      SosRequest.countDocuments(),
-
-      // SOS phân theo status
-      SosRequest.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $project: { status: '$_id', count: 1, _id: 0 } },
-        { $sort: { status: 1 } },
-      ]),
-
-      // SOS phân theo priority
-      SosRequest.aggregate([
-        { $group: { _id: '$priority', count: { $sum: 1 } } },
-        { $project: { priority: '$_id', count: 1, _id: 0 } },
-        { $sort: { priority: 1 } },
-      ]),
-
-      // SOS phân theo emergencyType
-      SosRequest.aggregate([
-        { $group: { _id: '$emergencyType', count: { $sum: 1 } } },
-        { $project: { emergencyType: '$_id', count: 1, _id: 0 } },
-        { $sort: { emergencyType: 1 } },
-      ]),
-
-      // Nhiệm vụ hoàn thành (SosAssignment COMPLETED)
-      SosAssignment.countDocuments({ status: 'COMPLETED' }),
-
-      // Điểm nguy hiểm đang hoạt động (APPROVED)
-      HazardReport.countDocuments({ status: 'APPROVED' }),
-    ]);
-
-    return {
-      overview: {
-        totalUsers,
-        totalCitizens,
-        totalRescuers,
-        totalTeams,
-        totalVehicles,
-        totalSos,
-        completedMissions,
-        activeAlerts,
-      },
-      sosByStatus,
-      sosByPriority,
-      sosByEmergencyType,
-      generatedAt: now,
-    };
+    return statisticsInFlight;
   }
 }
 

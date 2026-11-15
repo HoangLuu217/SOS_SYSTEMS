@@ -137,99 +137,107 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const flyoutTimerRef = useRef<any>(null);
   const resourcesItemRef = useRef<HTMLDivElement | null>(null);
 
-  // Đồng bộ số liệu thời gian thực
+  const isFetchingCountsRef = useRef(false);
+
+  // Đồng bộ số liệu thời gian thực (chạy song song 3 API, tránh chồng chéo request)
   const fetchRealCounts = useCallback(async () => {
+    if (isFetchingCountsRef.current) return;
+    isFetchingCountsRef.current = true;
+
     try {
       const fetchParams: Record<string, string> = {};
       if (!isAdmin && user?.authority?.areaId) {
         fetchParams.areaId = user.authority.areaId;
       }
-      const res = await fetchSosRequests(fetchParams);
-      if (res.success && Array.isArray(res.data)) {
-        // Số ca chưa được điều phối (bao gồm PENDING mới gửi và VERIFIED đã xác minh nhưng chưa giao đội)
-        const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-        const active = res.data.filter((s) =>
-          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
-        ).length;
-        setSosCounts({ unassigned, active });
-      } else {
-        const fallback = domainDService
-          .getSosRequests()
-          .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
-        const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-        const active = fallback.filter((s) =>
-          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
-        ).length;
-        setSosCounts({ unassigned, active });
-      }
-    } catch {
-      // Không ép fallback 6 vụ
-    }
 
-    try {
-      const rescuerRes = await fetchAdminUsers({ role: 'RESCUER', limit: '100' });
-      if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
-        let rescuers = rescuerRes.data.users;
+      const [sosResult, rescuerResult, chatResult] = await Promise.allSettled([
+        fetchSosRequests(fetchParams),
+        fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
+        fetchChatConversations(),
+      ]);
 
-        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
-
-        if (!isAdminUser) {
-          const activeOfficer = domainDService.getActiveOfficer();
-          const userAreaId =
-            user?.authority?.areaId ||
-            (user?.authority as any)?.administrativeAreaId ||
-            (user?.authority as any)?.jurisdictionAreaId ||
-            activeOfficer?.jurisdictionAreaId;
-
-          const userAreaName =
-            user?.authority?.areaName ||
-            (user?.authority as any)?.jurisdictionAreaName ||
-            activeOfficer?.jurisdictionAreaName ||
-            '';
-
-          const localCommuneName = (userAreaName || '').split(',')[0].trim();
-          const cleanLocalCommune = localCommuneName
-            .replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '')
-            .trim()
-            .toLowerCase();
-
-          if (cleanLocalCommune || userAreaId) {
-            const normalizeStr = (s: string) =>
-              s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-            const normCommune = normalizeStr(cleanLocalCommune);
-
-            rescuers = rescuers.filter((u: any) => {
-              const rescuerAreaId = u.rescuer?.areaId?._id || u.rescuer?.areaId || u.areaId?._id || u.areaId || u.citizen?.areaId?._id || u.citizen?.areaId;
-              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId || String(rescuerAreaId || '') === String(userAreaId))) {
-                return true;
-              }
-              const addrStr = typeof u.address === 'string'
-                ? u.address
-                : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
-              const target = `${u.rescuer?.areaName || ''} ${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
-              return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
-            });
-          }
+      if (sosResult.status === 'fulfilled') {
+        const res = sosResult.value;
+        if (res.success && Array.isArray(res.data)) {
+          const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+          const active = res.data.filter((s) =>
+            ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+          ).length;
+          setSosCounts({ unassigned, active });
+        } else {
+          const fallback = domainDService
+            .getSosRequests()
+            .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
+          const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+          const active = fallback.filter((s) =>
+            ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
+          ).length;
+          setSosCounts({ unassigned, active });
         }
-
-        const pendingCount = rescuers.filter(
-          (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
-        ).length;
-        setPendingRescuersCount(pendingCount);
       }
-    } catch {
-      // ignore
-    }
 
-    // Đếm số lượng tin nhắn chưa đọc trong Kênh trao đổi
-    try {
-      const chatRes = await fetchChatConversations();
-      if (chatRes.success && Array.isArray(chatRes.data)) {
-        const total = chatRes.data.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
-        setChatUnreadCount(total);
+      if (rescuerResult.status === 'fulfilled') {
+        const rescuerRes = rescuerResult.value;
+        if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
+          let rescuers = rescuerRes.data.users;
+
+          const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
+
+          if (!isAdminUser) {
+            const activeOfficer = domainDService.getActiveOfficer();
+            const userAreaId =
+              user?.authority?.areaId ||
+              (user?.authority as any)?.administrativeAreaId ||
+              (user?.authority as any)?.jurisdictionAreaId ||
+              activeOfficer?.jurisdictionAreaId;
+
+            const userAreaName =
+              user?.authority?.areaName ||
+              (user?.authority as any)?.jurisdictionAreaName ||
+              activeOfficer?.jurisdictionAreaName ||
+              '';
+
+            const localCommuneName = (userAreaName || '').split(',')[0].trim();
+            const cleanLocalCommune = localCommuneName
+              .replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '')
+              .trim()
+              .toLowerCase();
+
+            if (cleanLocalCommune || userAreaId) {
+              const normalizeStr = (s: string) =>
+                s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const normCommune = normalizeStr(cleanLocalCommune);
+
+              rescuers = rescuers.filter((u: any) => {
+                const rescuerAreaId = u.rescuer?.areaId?._id || u.rescuer?.areaId || u.areaId?._id || u.areaId || u.citizen?.areaId?._id || u.citizen?.areaId;
+                if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId || String(rescuerAreaId || '') === String(userAreaId))) {
+                  return true;
+                }
+                const addrStr = typeof u.address === 'string'
+                  ? u.address
+                  : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
+                const target = `${u.rescuer?.areaName || ''} ${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
+                return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
+              });
+            }
+          }
+
+          const pendingCount = rescuers.filter(
+            (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
+          ).length;
+          setPendingRescuersCount(pendingCount);
+        }
       }
-    } catch {
-      // ignore
+
+      if (chatResult.status === 'fulfilled') {
+        const chatRes = chatResult.value;
+        if (chatRes.success && Array.isArray(chatRes.data)) {
+          const total = chatRes.data.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+          setChatUnreadCount(total);
+        }
+      }
+    } finally {
+      isFetchingCountsRef.current = false;
     }
   }, [user, isAdmin]);
 
