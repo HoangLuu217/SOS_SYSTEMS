@@ -343,6 +343,7 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               return 'CITIZEN';
             })(),
             shoreHandoff: item.shoreHandoff || undefined,
+            citizenFeedback: item.citizenFeedback || undefined,
             requestedSupplies: Array.isArray(item.assignment?.requestedSupplies)
               ? item.assignment.requestedSupplies
               : Array.isArray(item.requestedSupplies)
