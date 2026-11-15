@@ -13,6 +13,7 @@ const {
   resolveTargetScopeForArea,
 } = require('../utils/geoUtils');
 const eventBus = require('./eventBus');
+const rescueTeamService = require('./rescueTeam.service');
 
 class SafetyCheckService {
   /**
@@ -478,6 +479,11 @@ class SafetyCheckService {
           },
         });
         sosRequestId = newSos._id;
+        try {
+          await rescueTeamService.deactivateLeaderTeamsOnSos(currentUser._id, newSos);
+        } catch (leaderTeamErr) {
+          console.warn('Auto-deactivate leader team on safetyCheck SOS error:', leaderTeamErr?.message || leaderTeamErr);
+        }
       }
     }
 

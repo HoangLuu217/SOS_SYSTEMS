@@ -6,6 +6,7 @@ import { domainDService } from '@/services/domainDService';
 import { logoutApi } from '@/api';
 import { parseRoute, buildRouteUrl, navigateTo } from '@/services/appRouter';
 import { ToastContainer } from '@/components/common/ToastContainer';
+import { toast } from '@/components/common/toast';
 import type { User } from '@/types/auth';
 import './App.css';
 
@@ -113,10 +114,24 @@ function MainRouter() {
       }
     };
 
+    const handleAuthExpired = (e: Event) => {
+      const detail = (e as CustomEvent<{ message?: string }>).detail;
+      setAuthUser(null);
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+      toast.warning(
+        detail?.message || 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.',
+        'Phiên đăng nhập hết hạn',
+        5000
+      );
+    };
+
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('storage', checkRouteAccess);
     window.addEventListener('sos_user_profile_updated', handleProfileUpdated);
     window.addEventListener('sos_navigate_tab', handleNavigateTab);
+    window.addEventListener('sos_auth_expired', handleAuthExpired);
 
     // Initial check: Nếu đang ở luồng reset mật khẩu từ email thì không auto-redirect vào dashboard
     if (checkIsResetPasswordFlow()) {
@@ -147,6 +162,7 @@ function MainRouter() {
       window.removeEventListener('storage', checkRouteAccess);
       window.removeEventListener('sos_user_profile_updated', handleProfileUpdated);
       window.removeEventListener('sos_navigate_tab', handleNavigateTab);
+      window.removeEventListener('sos_auth_expired', handleAuthExpired);
     };
   }, [checkRouteAccess]);
 

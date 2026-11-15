@@ -262,6 +262,15 @@ class RescuerService {
     user.rescuer.availabilityStatus = availabilityStatus;
     await user.save();
 
+    if (availabilityStatus === 'AVAILABLE') {
+      try {
+        const rescueTeamService = require('./rescueTeam.service');
+        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(user._id, null, { onlyIfNoTrackedSos: true });
+      } catch (restoreErr) {
+        console.warn('Restore leader team on rescuer AVAILABLE error:', restoreErr?.message || restoreErr);
+      }
+    }
+
     return {
       userId: user._id,
       availabilityStatus: user.rescuer.availabilityStatus,

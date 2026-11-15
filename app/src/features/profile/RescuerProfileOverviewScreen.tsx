@@ -668,12 +668,20 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                     ? freshTeam.vehicles
                     : prev?.vehicles || [],
               }));
+              setTransferLeaderTeam((prev) =>
+                prev && prev._id === freshTeam._id ? { ...prev, ...freshTeam } : prev
+              );
             }
           } catch {
             const matched = combinedTeams.find(
               (t: any) => t._id === selectedTeamIdRef.current
             );
-            if (matched) setSelectedTeamForDetail(matched);
+            if (matched) {
+              setSelectedTeamForDetail(matched);
+            } else {
+              setShowTeamDetailModal(false);
+              setSelectedTeamForDetail(null);
+            }
           }
         }
       }

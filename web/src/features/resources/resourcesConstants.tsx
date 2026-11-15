@@ -1,10 +1,58 @@
+import React, { useState } from 'react';
 import { LifeBuoy, Plane, Bike, Truck, Wrench } from 'lucide-react';
 import type { VehicleItem, VehicleTerrainCapability } from '@/types/dashboard';
 import { API_BASE } from '@/api/client';
 
 export const resolveProofImageSrc = (imgUrl: string): string => {
-  const match = imgUrl.match(/\/uploads\/([^\s?#]+)/i);
-  return match && match[1] ? `${API_BASE}/uploads/${match[1]}` : imgUrl;
+  const trimmed = String(imgUrl || '').trim();
+  if (!trimmed) return '';
+  // Giữ nguyên URL Cloudinary hoặc HTTPS công khai từ server khác (không ép viết lại sang localhost)
+  if (/^https?:\/\//i.test(trimmed) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(trimmed)) {
+    return trimmed;
+  }
+  const match = trimmed.match(/\/uploads\/([^\s?#]+)/i);
+  return match && match[1] ? `${API_BASE}/uploads/${match[1]}` : trimmed;
+};
+
+export const ProofImagePreview: React.FC<{
+  src: string;
+  alt: string;
+  height: number;
+  fallbackLabel?: string;
+}> = ({ src, alt, height, fallbackLabel }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError || !src) {
+    return (
+      <div
+        style={{
+          height,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 10,
+          textAlign: 'center',
+          color: '#64748b',
+          fontSize: 11.5,
+          gap: 4,
+          background: '#f8fafc',
+        }}
+      >
+        <span style={{ fontWeight: 700, color: '#475569' }}>{fallbackLabel || alt}</span>
+        <span>Không tải được ảnh (tệp cục bộ cũ hoặc chưa đồng bộ Cloudinary)</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setHasError(true)}
+      style={{ width: '100%', height, objectFit: 'cover', display: 'block' }}
+    />
+  );
 };
 
 export const STANDARD_EQUIPMENT_CATALOG = [

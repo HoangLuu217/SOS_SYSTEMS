@@ -214,16 +214,23 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       ? { lat: Number(t.baseLocation.coordinates[1]), lng: Number(t.baseLocation.coordinates[0]) }
       : null;
 
+  const effectiveRawStatus =
+    t.status === 'INACTIVE' || t.status === 'SUSPENDED' || t.operationalStatus === 'INACTIVE'
+      ? 'INACTIVE'
+      : t.status;
+
   return {
     id: t._id,
     name: t.name,
     code: extractedCode,
     teamType: t.type || 'WATER_RESCUE',
     teamStatus: t.status,
+    operationalStatus: t.operationalStatus,
+    leaderId: leaderId || undefined,
     description: t.description,
     authorityOrganizationId: authObj?._id || t.authorityId || '',
     authorityName: authObj?.name || undefined,
-    status: mapTeamStatus(t.status),
+    status: mapTeamStatus(effectiveRawStatus),
     availableRescuersCount: rescuers.length,
     rescuers,
     vehicles: mappedVehicles,
@@ -407,6 +414,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             wardName,
             districtId,
             districtName,
+            citizenId:
+              typeof item.citizenId === 'object' && item.citizenId
+                ? item.citizenId._id
+                : item.citizenId || undefined,
             citizenName,
             citizenPhone,
             affectedPeople: item.people ?? 0,
@@ -698,7 +709,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     };
 
     const unsubAssignment = onAssignmentUpdated(handleAssignmentRealtime);
-    const unsubTeams = onRescueTeamsUpdated(() => syncRealSosFromApi(activeOfficer));
+    const unsubTeams = onRescueTeamsUpdated((data?: any) => {
+      if (data?.action === 'LEADER_LEFT_TEAM_INACTIVE') {
+        const name = data?.teamName ? `"${data.teamName}"` : 'cứu hộ';
+        showToast(`⚠️ Đội ${name} đã tạm ngưng hoạt động do Đội trưởng rời đội.`, 'error');
+      }
+      syncRealSosFromApi(activeOfficer);
+    });
 
     const socket = getSocket();
     const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
@@ -753,6 +770,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('assignment:deleted', handleRealtimeSync);
     socket.on('assignment:updated', handleAssignmentRealtime);
     socket.on('sos:sync', handleRealtimeSync);
+    socket.on('rescue_teams_updated', handleRealtimeSync);
     socket.on('sos:updated', handleRealtimeSync);
     socket.on('sos:status_changed', handleRealtimeSync);
     socket.on('assignment:status_updated', handleAssignmentRealtime);
@@ -804,6 +822,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('assignment:deleted', handleRealtimeSync);
       socket.off('assignment:updated', handleAssignmentRealtime);
       socket.off('sos:sync', handleRealtimeSync);
+      socket.off('rescue_teams_updated', handleRealtimeSync);
       socket.off('sos:updated', handleRealtimeSync);
       socket.off('sos:status_changed', handleRealtimeSync);
       socket.off('assignment:status_updated', handleAssignmentRealtime);
