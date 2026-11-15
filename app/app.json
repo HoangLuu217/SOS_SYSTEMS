@@ -48,11 +48,6 @@
           "cameraPermission": "Ứng dụng SOS cần quyền truy cập camera để quét mã QR trên thẻ CCCD định danh cứu hộ viên."
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "916c50bd-5208-4465-bb4d-ec1d3746cc4e"
-      }
-    }
+    ]
   }
 }

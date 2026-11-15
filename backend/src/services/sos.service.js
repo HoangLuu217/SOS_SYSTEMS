@@ -476,12 +476,12 @@ const getSosRequests = async (query = {}, user = null) => {
     });
 
     if (query.sortBy === 'risk') {
-      // Unassessed cases are surfaced first for human review; this is queue ordering, not a danger score.
+      // Unassessed cases are surfaced first for human review; ties put newer requests first.
       const priorityOrder = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
       sosList.sort((a, b) => {
         const diff = (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4);
         if (diff !== 0) return diff;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
     }
   }

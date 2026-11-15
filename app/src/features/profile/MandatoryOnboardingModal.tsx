@@ -488,7 +488,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
   if (!isVisible) return null;
 
   return (
-    <Modal visible={isVisible} animationType="slide" transparent={false} statusBarTranslucent>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]}>
       <View style={styles.container}>
         {/* ===================== CỐ ĐỊNH PHẦN ĐẦU (KHÔNG CUỘN) ===================== */}
         <View style={styles.fixedHeader}>
@@ -1230,7 +1230,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
           )
         )}
       </View>
-    </Modal>
+    </View>
   );
 };
 
