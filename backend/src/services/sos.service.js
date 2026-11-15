@@ -618,7 +618,7 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
 
   if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus) && sos.citizenId) {
     try {
-      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, sos._id);
     } catch (restoreErr) {
       console.warn('Restore leader team on SOS status change error:', restoreErr?.message || restoreErr);
     }
@@ -813,7 +813,7 @@ const deleteSos = async (id, user) => {
 
   if (sos.citizenId) {
     try {
-      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, id);
     } catch (restoreErr) {
       console.warn('Restore leader team on SOS delete error:', restoreErr?.message || restoreErr);
     }
@@ -863,7 +863,7 @@ const clearCancelledSos = async (user, sosIds = []) => {
     await SosRequest.deleteMany({ _id: { $in: ids } });
     for (const cId of citizenIds) {
       try {
-        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(cId);
+        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(cId, ids);
       } catch (_) {}
     }
   }
@@ -1334,7 +1334,7 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
 
     if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
       try {
-        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, sos._id);
       } catch (restoreErr) {
         console.warn('Restore leader team on shore handoff complete error:', restoreErr?.message || restoreErr);
       }

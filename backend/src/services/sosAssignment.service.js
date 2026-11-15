@@ -723,7 +723,7 @@ class SosAssignmentService {
 
         if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
           try {
-            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, sos._id);
           } catch (restoreErr) {
             console.warn('Restore leader team on assignment update error:', restoreErr?.message || restoreErr);
           }
@@ -1211,7 +1211,7 @@ class SosAssignmentService {
 
         if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
           try {
-            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, sos._id);
           } catch (restoreErr) {
             console.warn('Restore leader team on assignment update error:', restoreErr?.message || restoreErr);
           }

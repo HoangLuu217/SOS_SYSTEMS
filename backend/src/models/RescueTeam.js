@@ -138,6 +138,11 @@ const rescueTeamSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    autoDeactivatedSosIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'SosRequest',
+      default: [],
+    },
   },
   {
     timestamps: true,

@@ -427,10 +427,12 @@ class RescueTeamService {
     if (updateData.status !== undefined) {
       team.status = updateData.status;
       team.autoDeactivatedByLeaderSos = false;
+      team.autoDeactivatedSosIds = [];
     }
     if (updateData.operationalStatus !== undefined) {
       team.operationalStatus = updateData.operationalStatus;
       team.autoDeactivatedByLeaderSos = false;
+      team.autoDeactivatedSosIds = [];
       if (updateData.operationalStatus === 'INACTIVE') {
         team.status = 'INACTIVE';
       } else {
@@ -986,7 +988,11 @@ class RescueTeamService {
     const leaderTeams = await RescueTeam.find({
       leaderId: uid,
       status: { $ne: 'SUSPENDED' },
-      $or: [{ status: 'ACTIVE' }, { operationalStatus: { $ne: 'INACTIVE' } }],
+      $or: [
+        { status: 'ACTIVE' },
+        { operationalStatus: { $ne: 'INACTIVE' } },
+        { autoDeactivatedByLeaderSos: true },
+      ],
     });
 
     if (!leaderTeams || leaderTeams.length === 0) return [];
@@ -999,10 +1005,17 @@ class RescueTeamService {
     } catch (_) {}
 
     for (const team of leaderTeams) {
-      team.status = 'INACTIVE';
-      team.operationalStatus = 'INACTIVE';
-      team.autoDeactivatedByLeaderSos = true;
-      await team.save();
+      const updateOps = {
+        $set: {
+          status: 'INACTIVE',
+          operationalStatus: 'INACTIVE',
+          autoDeactivatedByLeaderSos: true,
+        },
+      };
+      if (sos?._id) {
+        updateOps.$addToSet = { autoDeactivatedSosIds: sos._id };
+      }
+      await RescueTeam.updateOne({ _id: team._id }, updateOps);
       updatedTeamIds.push(team._id.toString());
 
       if (io) {
@@ -1028,7 +1041,7 @@ class RescueTeamService {
    * Khi các yêu cầu SOS do Đội trưởng gửi đã đóng/hủy/xóa hết, tự động khôi phục
    * trạng thái hoạt động (ACTIVE / READY) cho đội từng bị tạm dừng do SOS của đội trưởng.
    */
-  async restoreLeaderTeamsIfNoActiveSos(citizenId) {
+  async restoreLeaderTeamsIfNoActiveSos(citizenId, closedSosId = null, options = {}) {
     if (!citizenId) return [];
     const uid = typeof citizenId === 'object' && citizenId._id ? citizenId._id : citizenId;
 
@@ -1039,14 +1052,13 @@ class RescueTeamService {
 
     if (!autoPausedTeams || autoPausedTeams.length === 0) return [];
 
+    const closedIds = (Array.isArray(closedSosId) ? closedSosId : closedSosId ? [closedSosId] : [])
+      .map((v) => String(v))
+      .filter(Boolean);
+    const closedIdSet = new Set(closedIds);
+
     const { SosRequest, SosAssignment } = require('../models');
     const activeSosStatuses = ['PENDING', 'VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'];
-    const hasOpenLeaderSos = await SosRequest.exists({
-      citizenId: uid,
-      status: { $in: activeSosStatuses },
-    });
-
-    if (hasOpenLeaderSos) return [];
 
     const restoredTeamIds = [];
     let io = null;
@@ -1056,14 +1068,49 @@ class RescueTeamService {
     } catch (_) {}
 
     for (const team of autoPausedTeams) {
+      const trackedIds = Array.isArray(team.autoDeactivatedSosIds)
+        ? team.autoDeactivatedSosIds.map((v) => String(v))
+        : [];
+      const hadTracked = trackedIds.length > 0;
+      const remainingTrackedIds = trackedIds.filter((idStr) => !closedIdSet.has(idStr));
+
+      if (remainingTrackedIds.length > 0) {
+        const stillOpenIds = await SosRequest.find({
+          _id: { $in: remainingTrackedIds },
+          status: { $in: activeSosStatuses },
+        }).distinct('_id');
+
+        if (stillOpenIds.length > 0) {
+          await RescueTeam.updateOne(
+            { _id: team._id },
+            { $set: { autoDeactivatedSosIds: stillOpenIds } }
+          );
+          continue;
+        }
+      } else if (!hadTracked && !options.onlyIfNoTrackedSos && closedIdSet.size === 0) {
+        const hasOpenLeaderSos = await SosRequest.exists({
+          citizenId: uid,
+          status: { $in: activeSosStatuses },
+        });
+        if (hasOpenLeaderSos) continue;
+      }
+
       const hasOpenAssign = await SosAssignment.exists({
         $or: [{ rescueTeamId: team._id }, { teamId: team._id }],
         status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
       });
-      team.status = 'ACTIVE';
-      team.operationalStatus = hasOpenAssign ? 'ON_MISSION' : 'READY';
-      team.autoDeactivatedByLeaderSos = false;
-      await team.save();
+      const restoredOperationalStatus = hasOpenAssign ? 'ON_MISSION' : 'READY';
+      await RescueTeam.updateOne(
+        { _id: team._id },
+        {
+          $set: {
+            status: 'ACTIVE',
+            operationalStatus: restoredOperationalStatus,
+            autoDeactivatedByLeaderSos: false,
+            autoDeactivatedSosIds: [],
+          },
+        }
+      );
       restoredTeamIds.push(team._id.toString());
 
       if (io) {
@@ -1071,7 +1118,7 @@ class RescueTeamService {
           teamId: team._id.toString(),
           action: 'LEADER_SOS_RESTORED',
           status: 'ACTIVE',
-          operationalStatus: team.operationalStatus,
+          operationalStatus: restoredOperationalStatus,
         });
       }
     }

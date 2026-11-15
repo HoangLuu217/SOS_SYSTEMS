@@ -770,6 +770,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('assignment:deleted', handleRealtimeSync);
     socket.on('assignment:updated', handleAssignmentRealtime);
     socket.on('sos:sync', handleRealtimeSync);
+    socket.on('rescue_teams_updated', handleRealtimeSync);
     socket.on('sos:updated', handleRealtimeSync);
     socket.on('sos:status_changed', handleRealtimeSync);
     socket.on('assignment:status_updated', handleAssignmentRealtime);
@@ -821,6 +822,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('assignment:deleted', handleRealtimeSync);
       socket.off('assignment:updated', handleAssignmentRealtime);
       socket.off('sos:sync', handleRealtimeSync);
+      socket.off('rescue_teams_updated', handleRealtimeSync);
       socket.off('sos:updated', handleRealtimeSync);
       socket.off('sos:status_changed', handleRealtimeSync);
       socket.off('assignment:status_updated', handleAssignmentRealtime);
