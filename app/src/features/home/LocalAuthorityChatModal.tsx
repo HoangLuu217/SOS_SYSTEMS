@@ -121,6 +121,41 @@ const POPULAR_WARDS: WardOption[] = [
   { ward: 'Xã Bà Nà', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Bà Nà, Thành phố Đà Nẵng' },
 ];
 
+interface AuthorityAvatarViewProps {
+  avatarUrl?: string | null;
+  size?: number;
+  iconSize?: number;
+}
+
+const AuthorityAvatarView: React.FC<AuthorityAvatarViewProps> = ({
+  avatarUrl,
+  size = 32,
+  iconSize = 13,
+}) => {
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    setLoadError(false);
+  }, [avatarUrl]);
+
+  if (avatarUrl && !loadError) {
+    return (
+      <Image
+        source={{ uri: avatarUrl }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        }}
+        resizeMode="cover"
+        onError={() => setLoadError(true)}
+      />
+    );
+  }
+
+  return <FontAwesome5 name="landmark" size={iconSize} color="#0066FF" />;
+};
+
 interface LocalAuthorityChatModalProps {
   visible: boolean;
   onClose: () => void;
@@ -1263,10 +1298,20 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           isMe ? styles.messageRowMe : styles.messageRowOther,
         ]}
       >
-        {/* Avatar bên trái cho tin nhắn Cán bộ địa phương */}
+        {/* Avatar bên trái cho tin nhắn Cán bộ / Chính quyền địa phương */}
         {!isMe && (
           <View style={styles.authorityAvatarWrap}>
-            <FontAwesome5 name="landmark" size={13} color="#0066FF" />
+            <AuthorityAvatarView
+              avatarUrl={
+                (typeof item.senderId === 'object' && item.senderId?.avatarUrl) ||
+                (item as any).senderAvatarUrl ||
+                (item as any).avatarUrl ||
+                localInfo?.authority?.avatarUrl ||
+                null
+              }
+              size={32}
+              iconSize={13}
+            />
           </View>
         )}
 
@@ -1389,9 +1434,13 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             <Ionicons name="chevron-back" size={26} color="#0F172A" />
           </TouchableOpacity>
 
-          {/* Avatar địa phương với icon tòa nhà và chấm trạng thái online */}
+          {/* Avatar chính quyền địa phương với ảnh đại diện và chấm trạng thái online */}
           <View style={styles.headerAvatarBox}>
-            <FontAwesome5 name="landmark" size={17} color="#0066FF" />
+            <AuthorityAvatarView
+              avatarUrl={localInfo?.authority?.avatarUrl}
+              size={38}
+              iconSize={17}
+            />
             <View
               style={[
                 styles.headerStatusDot,
@@ -2332,6 +2381,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 1,
     borderColor: '#DBEAFE',
+    overflow: 'hidden',
   },
   bubbleCol: {
     maxWidth: '82%',
