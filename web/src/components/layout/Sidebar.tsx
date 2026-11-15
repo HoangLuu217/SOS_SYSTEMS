@@ -1534,51 +1534,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <label className="sos-profile-section-label">
                         <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
                         <span>Địa bàn phụ trách quản lý:</span>
-                        <span className="sos-profile-area-locked-badge">
-                          <i className="bi bi-lock-fill"></i> Cố định theo phân quyền
-                        </span>
                       </label>
-
-                      <div className="sos-profile-area-dropdowns">
-                        <div className="sos-profile-area-col">
-                          <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
-                          <select
-                            value={selectedProvinceCode}
-                            onChange={handleProvinceChange}
-                            disabled={true}
-                            title="Tỉnh/Thành phố được khóa theo tài khoản địa phương"
-                          >
-                            <option value="">
-                              {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
-                            </option>
-                            {provinces.map((p) => (
-                              <option key={p.code} value={p.code}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="sos-profile-area-col">
-                          <span className="sos-profile-sublabel">
-                            Phường / Xã:
-                            {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
-                          </span>
-                          <select
-                            value={selectedWardCode}
-                            onChange={handleWardChange}
-                            disabled={true}
-                            title="Phường/Xã được khóa theo tài khoản địa phương"
-                          >
-                            <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
-                            {wards.map((w) => (
-                              <option key={w.code} value={w.code}>
-                                {w.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
 
                       <div className="sos-profile-managed-area">
                         <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
@@ -1587,7 +1543,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           required
                           readOnly
                           disabled={true}
-                          value={localProfile.managedArea}
+                          value={(() => {
+                            const baseArea = localProfile.managedArea || '';
+                            const cityFromDept = user?.authority?.department?.match(/\(([^)]+)\)/)?.[1]?.trim();
+                            if (
+                              baseArea &&
+                              cityFromDept &&
+                              !baseArea.toLowerCase().includes(cityFromDept.toLowerCase())
+                            ) {
+                              return `${baseArea}, ${cityFromDept}`;
+                            }
+                            return baseArea;
+                          })()}
                           placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
                           title="Địa bàn phân quyền cố định, liên hệ Ban chỉ huy nếu cần điều chỉnh"
                         />

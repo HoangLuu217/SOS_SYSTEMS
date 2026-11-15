@@ -2,10 +2,16 @@ import { io, Socket } from 'socket.io-client';
 import type { ChatMessageItem, ChatSSEPayload } from '@/types/chat';
 
 let socket: Socket | null = null;
+const joinedChannels = new Set<string>();
+let registeredUserId: string | null = null;
 
 const getSocketUrl = (): string => {
   if (import.meta.env.VITE_BACKEND_URL) {
     return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  }
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
+    return apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined') {
     return window.location.port === '5173'
@@ -35,6 +41,12 @@ export const getSocket = (): Socket => {
 
     socket.on('connect', () => {
       console.log('⚡ [Socket.IO Web] Đã kết nối thành công tới máy chủ Realtime:', socket?.id);
+      if (registeredUserId) {
+        socket?.emit('register_user', registeredUserId);
+      }
+      joinedChannels.forEach((ch) => {
+        socket?.emit('join_channel', ch);
+      });
     });
 
     socket.on('connect_error', (err) => {
@@ -206,13 +218,11 @@ export const onRescuerVerificationChanged = (callback: (data: any) => void): (()
  * Tham gia vào phòng chat của một kênh
  */
 export function joinChannelRoom(channel: string) {
+  if (!channel) return;
+  joinedChannels.add(channel);
   const s = getSocket();
   if (s.connected) {
     s.emit('join_channel', channel);
-  } else {
-    s.once('connect', () => {
-      s.emit('join_channel', channel);
-    });
   }
 }
 
@@ -220,6 +230,8 @@ export function joinChannelRoom(channel: string) {
  * Rời khỏi phòng chat của một kênh
  */
 export function leaveChannelRoom(channel: string) {
+  if (!channel) return;
+  joinedChannels.delete(channel);
   const s = getSocket();
   if (s.connected) {
     s.emit('leave_channel', channel);
@@ -230,13 +242,11 @@ export function leaveChannelRoom(channel: string) {
  * Đăng ký ID người dùng để nhận tin nhắn trực tiếp
  */
 export function registerUserSocket(userId: string) {
+  if (!userId) return;
+  registeredUserId = userId;
   const s = getSocket();
   if (s.connected) {
     s.emit('register_user', userId);
-  } else {
-    s.once('connect', () => {
-      s.emit('register_user', userId);
-    });
   }
 }
 
