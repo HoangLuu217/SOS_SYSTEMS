@@ -1,7 +1,7 @@
 <div align="center">
 
-# 🚨 RescueSOS (SOS_SYSTEMS)
-### Hệ Thống Điều Phối Cứu Hộ Khẩn Cấp & Quản Trị Địa Bàn Thông Minh
+# 🚨 Cứu Hộ Cứu Nạn
+### Hệ Thống Điều Phối Cứu Hộ Khẩn Cấp & Quản Lý Địa Bàn
 
 [![Node.js](https://img.shields.io/badge/Node.js-Express%205-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose%209-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
@@ -26,7 +26,6 @@
 - [6. Cấu trúc thư mục dự án](#-6-cấu-trúc-thư-mục-dự-án)
 - [7. Hệ thống API & Sự kiện Realtime](#-7-hệ-thống-api--sự-kiện-realtime)
 - [8. Hướng dẫn cài đặt & Khởi chạy](#-8-hướng-dẫn-cài-đặt--khởi-chạy)
-- [9. Thông tin đồ án](#-9-thông-tin-đồ-án)
 
 ---
 
@@ -47,36 +46,38 @@ Trong các tình huống thiên tai (bão, ngập lụt, sạt lở đất) và 
 Hệ thống tuân theo kiến trúc **Client – Server – Realtime Event-Driven** gồm 2 ứng dụng Client (`web` và `app`), 1 tầng API/Socket trung tâm (`backend`) và cơ sở dữ liệu MongoDB có chỉ mục không gian địa lý `2dsphere`.
 
 ```mermaid
-flowchart TD
-    subgraph Clients["Tầng Giao Diện Người Dùng"]
-        App["Mobile App (Expo / React Native)\nNgười dân & Cứu hộ viên"]
-        Web["Web Dashboard (React + Vite + Leaflet)\nBan Chỉ Huy Địa Phương & Admin"]
+flowchart LR
+    classDef client fill:#EFF6FF,stroke:#2563EB,stroke-width:1.5px,color:#1E3A8A
+    classDef core fill:#ECFDF5,stroke:#059669,stroke-width:1.5px,color:#064E3B
+    classDef infra fill:#FFF7ED,stroke:#EA580C,stroke-width:1.5px,color:#7C2D12
+
+    subgraph C["1. Tầng Client"]
+        App["Mobile App\nExpo / React Native"]:::client
+        Web["Web Dashboard\nReact 19 + Vite + Leaflet"]:::client
     end
 
-    subgraph Backend["Backend Core (Node.js + Express 5 + Socket.IO)"]
-        API["REST API Gateway (/api/*)\nJWT Auth & Role RBAC"]
-        Socket["Socket.IO Realtime Engine\nĐồng bộ SOS, Đội & Điều phối"]
-        Dispatch["Smart Dispatch & Risk Triage\nChấm điểm rủi ro + Chống xung đột đội"]
+    subgraph B["2. Tầng Xử Lý Backend"]
+        API["REST API Gateway\nExpress 5 + JWT RBAC"]:::core
+        Dispatch["Smart Dispatch & Triage\nChấm điểm & Điều phối"]:::core
+        Socket["Socket.IO Server\nĐồng bộ thời gian thực"]:::core
     end
 
-    subgraph Data["Lưu Trữ & Dịch Vụ Ngoài"]
-        Mongo["MongoDB + Mongoose\n21 Models & GeoJSON 2dsphere"]
-        Gemini["Google Gemini AI\nPhân tích SOS & Cố vấn điều phối"]
-        Cloud["Cloudinary / Local Storage\nLưu trữ ảnh hiện trường & minh chứng"]
-        Ext["OAuth / n8n Weather / SerpAPI\nĐăng nhập, Bản tin thời tiết, Địa điểm"]
+    subgraph D["3. Dữ Liệu & Dịch Vụ Ngoài"]
+        Mongo[("MongoDB + Mongoose\n21 Models & 2dsphere")]:::infra
+        Gemini["Google Gemini AI\nPhân tích & Cố vấn"]:::infra
+        Ext["Cloudinary / OAuth / n8n\nMedia, Auth & Thời tiết"]:::infra
     end
 
-    App <-->|"HTTPS / REST"| API
-    Web <-->|"HTTPS / REST"| API
+    App <-->|"REST / HTTPS"| API
+    Web <-->|"REST / HTTPS"| API
     App <-->|"WebSocket"| Socket
     Web <-->|"WebSocket"| Socket
 
     API --> Dispatch
     API --> Mongo
+    API --> Ext
     Dispatch --> Mongo
     Dispatch --> Gemini
-    API --> Cloud
-    API --> Ext
     Dispatch --> Socket
 ```
 
@@ -131,25 +132,93 @@ Hệ thống sử dụng **MongoDB** thông qua **21 Mongoose Models** tại [`b
 
 ```mermaid
 erDiagram
-    ADMINISTRATIVE_AREAS ||--o{ ADMINISTRATIVE_AREAS : "parentId (cây địa bàn)"
-    ADMINISTRATIVE_AREAS ||--o{ AUTHORITY_ORGANIZATIONS : "areaId"
-    ADMINISTRATIVE_AREAS ||--o{ SOS_REQUESTS : "areaId"
-    ADMINISTRATIVE_AREAS ||--o{ RESCUE_TEAMS : "areaId"
+    AdminArea {
+        ObjectId _id PK
+        string name
+        string code UK
+        string type "COUNTRY | PROVINCE | DISTRICT | WARD"
+        ObjectId parentId FK "Cây hành chính cha-con"
+        Polygon boundary "GeoJSON Polygon"
+    }
 
-    AUTHORITY_ORGANIZATIONS ||--o{ RESCUE_TEAMS : "authorityId"
-    AUTHORITY_ORGANIZATIONS ||--o{ USERS : "authority.organizationId"
+    AuthorityOrg {
+        ObjectId _id PK
+        string name
+        string code UK
+        ObjectId areaId FK
+        string type
+    }
 
-    USERS ||--o{ SOS_REQUESTS : "citizenId"
-    USERS ||--o{ RESCUE_TEAMS : "leaderId / members.rescuerId"
-    USERS ||--o{ AUDIT_LOGS : "actorId"
+    User {
+        ObjectId _id PK
+        string phone UK
+        string email
+        string fullName
+        Array roles "CITIZEN | RESCUER | LOCAL_AUTHORITY | ADMIN"
+        Object rescuer "Embedded profile & availability"
+        Object authority "Embedded organizationId & areaId"
+    }
 
-    RESCUE_TEAMS ||--o{ VEHICLES : "teamId"
-    RESCUE_TEAMS ||--o{ EQUIPMENTS : "teamId"
-    RESCUE_TEAMS ||--o{ SOS_ASSIGNMENTS : "rescueTeamId"
+    RescueTeam {
+        ObjectId _id PK
+        string name
+        ObjectId leaderId FK
+        ObjectId authorityId FK
+        ObjectId areaId FK
+        string status "ACTIVE | INACTIVE | SUSPENDED"
+        string operationalStatus "READY | ON_MISSION | INACTIVE"
+        boolean autoDeactivatedByLeaderSos
+        Array autoDeactivatedSosIds "ObjectId[] tracking active leader SOS"
+        Array members "Embedded rescuerId & role"
+    }
 
-    SOS_REQUESTS ||--o{ SOS_ASSIGNMENTS : "sosRequestId"
-    SOS_REQUESTS ||--o{ SOS_STATUS_HISTORY : "sosId"
-    SOS_REQUESTS ||--o{ CHAT_MESSAGES : "sosId"
+    Vehicle {
+        ObjectId _id PK
+        ObjectId teamId FK
+        string plateNumber UK
+        string type "BOAT | AMBULANCE | TRUCK..."
+        number capacity
+        string status
+    }
+
+    SosRequest {
+        ObjectId _id PK
+        string sosCode UK
+        ObjectId citizenId FK
+        ObjectId areaId FK
+        Point location "2dsphere GeoJSON"
+        string priority "UNASSESSED | LOW | MEDIUM | HIGH | CRITICAL"
+        string status "PENDING | ASSIGNED | COMPLETED | CANCELLED"
+    }
+
+    SosAssignment {
+        ObjectId _id PK
+        ObjectId sosRequestId FK
+        ObjectId rescueTeamId FK
+        ObjectId rescuerId FK
+        ObjectId vehicleId FK
+        string missionType "SOS_RESCUE | RELIEF_DISPATCH | SHORE_HANDOFF"
+        string status
+    }
+
+    SosStatusHistory {
+        ObjectId _id PK
+        ObjectId sosId FK
+        string oldStatus
+        string newStatus
+        ObjectId changedBy FK
+    }
+
+    AdminArea ||--o{ AuthorityOrg : "areaId"
+    AdminArea ||--o{ RescueTeam : "areaId"
+    AdminArea ||--o{ SosRequest : "areaId"
+    AuthorityOrg ||--o{ RescueTeam : "authorityId"
+    User ||--o{ SosRequest : "citizenId"
+    User ||--o{ RescueTeam : "leaderId"
+    RescueTeam ||--o{ Vehicle : "teamId"
+    RescueTeam ||--o{ SosAssignment : "rescueTeamId"
+    SosRequest ||--o{ SosAssignment : "sosRequestId"
+    SosRequest ||--o{ SosStatusHistory : "sosId"
 ```
 
 ### Danh mục Collections & Models trong `backend/src/models/`
@@ -158,7 +227,7 @@ erDiagram
 | :--- | :--- | :--- |
 | **Người dùng & Tổ chức** | `User`, `AuthorityOrganization`, `AdministrativeArea` | Tài khoản đa vai trò (`CITIZEN`, `RESCUER`, `LOCAL_AUTHORITY`, `ADMIN`), hồ sơ nhúng `citizen`/`rescuer`/`authority`, cây địa bàn & ranh giới GeoJSON `Polygon` |
 | **Lực lượng & Hậu cần** | `RescueTeam`, `Vehicle`, `Equipment` | Đội cứu hộ (`leaderId`, `members[]`, `operationalStatus`, `autoDeactivatedByLeaderSos`, `autoDeactivatedSosIds`, `baseLocation`), phương tiện (`BOAT`, `AMBULANCE`, `TRUCK`, ...), vật tư kho/đội |
-| **Nghiệp vụ SOS & Điều phối** | `SosRequest`, `SosAssignment`, `SosStatusHistory`, `File` | Yêu cầu SOS (`location` `2dsphere`, `priority`, `aiAssessment`, `riskScore`, `shoreHandoff`), lệnh điều động (`PRIMARY`/`SHORE_HANDOFF`/`RELIEF_DISPATCH`), lịch sử trạng thái, file minh chứng |
+| **Nghiệp vụ SOS & Điều phối** | `SosRequest`, `SosAssignment`, `SosStatusHistory`, `File` | Yêu cầu SOS (`location` `2dsphere`, `priority`, `aiAssessment`, `riskScore`, `shoreHandoff`), lệnh điều động (`SOS_RESCUE`/`RELIEF_DISPATCH`/`SHORE_HANDOFF`), lịch sử trạng thái, file minh chứng |
 | **An toàn & Cộng đồng** | `SafeLocation`, `HazardReport`, `SafetyCheck`, `SafetyCheckResponse`, `BloodDonationEvent`, `BloodDonationRegistration`, `WeatherArticle` | Điểm trú ẩn sức chứa thực tế, báo cáo vùng ngập/sạt lở, chiến dịch kiểm tra an toàn, sự kiện hiến máu, bản tin thời tiết |
 | **Giao tiếp & Giám sát** | `Notification`, `ChatMessage`, `AuditLog` | Thông báo đẩy/hệ thống, kênh trao đổi tác chiến, nhật ký kiểm toán mọi thao tác nhạy cảm |
 
@@ -333,17 +402,6 @@ Sau khi khởi chạy thành công:
 
 ---
 
-## 🎓 9. Thông tin đồ án
-
-| Hạng mục | Thông tin |
-| :--- | :--- |
-| **Tên đề tài** | Xây dựng hệ thống hỗ trợ tìm kiếm, điều phối cứu hộ khẩn cấp và quản trị địa bàn theo thời gian thực (**RescueSOS**) |
-| **Kho lưu trữ** | [HoangLuu217/SOS_SYSTEMS](https://github.com/HoangLuu217/SOS_SYSTEMS) |
-| **Giảng viên hướng dẫn** | *(Điền tên giảng viên hướng dẫn của bạn)* |
-| **Sinh viên thực hiện** | *(Điền họ tên & MSSV nhóm sinh viên thực hiện)* |
-
----
-
 <div align="center">
-<sub>Được xây dựng phục vụ đồ án tốt nghiệp — Hệ thống Điều Phối Cứu Hộ Khẩn Cấp RescueSOS.</sub>
+<sub>Được xây dựng phục vụ đồ án tốt nghiệp — Hệ thống Điều Phối Cứu Hộ Cứu Nạn.</sub>
 </div>
