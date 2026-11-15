@@ -500,15 +500,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'safety_checks',
           label: 'Kiểm tra an toàn',
           icon: <ShieldCheck size={18} className="sos-nav-icon" />,
-          badge: safetyCheckCount > 0 ? `${safetyCheckCount}` : undefined,
-          badgeType: 'info',
         },
         {
           key: 'blood_donations',
           label: 'Hiến máu',
           icon: <Droplet size={18} className="sos-nav-icon" />,
-          badge: bloodDonationCount > 0 ? `${bloodDonationCount}` : undefined,
-          badgeType: 'info',
         },
         ...(isAdmin
           ? [
@@ -524,18 +520,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Điểm trú ẩn',
           useCase: 'UC-L12',
           icon: <Home size={18} className="sos-nav-icon" />,
-          badge: shelterCount > 0 ? `${shelterCount}` : undefined,
-          badgeType: 'info',
-
         },
         {
           key: 'hazard_reports',
           label: 'Điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
-          badge: hazardCount > 0 ? `${hazardCount}` : undefined,
-          badgeType: 'info',
-
         },
       ],
     },

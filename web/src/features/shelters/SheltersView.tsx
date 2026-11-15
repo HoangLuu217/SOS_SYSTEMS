@@ -50,7 +50,6 @@ import {
   SHELTER_TYPE_CARDS,
   ShelterMiniMap,
   getShelterMarkerHtml,
-  getMaxAllowedShelterOccupancy,
   getShelterOccupancyMetrics,
   validateShelterOccupancyLimit,
 } from './shelterConstants';
@@ -78,7 +77,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
   const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
   const [shelterFilter, setShelterFilter] = useState<'ALL' | 'ACTIVE' | 'FULL' | 'MAINTENANCE' | 'INACTIVE'>('ALL');
   const [shelterTypeFilter, setShelterTypeFilter] = useState<'ALL' | 'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('ALL');
-  const [shelterManagementScope, setShelterManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
   const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
   const [shelterSearchText, setShelterSearchText] = useState('');
   const [shelterPage, setShelterPage] = useState<number>(1);
@@ -179,6 +177,39 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setAreas(propAreas);
     }
   }, [propAreas.length]);
+
+  // Tự động mở modal chi tiết điểm trú ẩn khi điều hướng từ bản đồ sang (/authority/shelters/:id hoặc /admin/shelters/:id)
+  useEffect(() => {
+    if (shelters.length === 0) return;
+    let targetId = '';
+    try {
+      const raw = sessionStorage.getItem('sos_open_detail_id');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.key === 'shelters' && parsed?.id) {
+          targetId = String(parsed.id);
+          sessionStorage.removeItem('sos_open_detail_id');
+        }
+      }
+    } catch {}
+    if (!targetId) {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'shelters' || p === 'shelter' || p === 'safe_locations');
+      if (idx !== -1 && parts[idx + 1]) {
+        targetId = parts[idx + 1];
+      }
+    }
+    if (!targetId) return;
+    const matched = shelters.find((s) => s._id === targetId);
+    if (matched) {
+      setDetailShelter(matched);
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'shelters' || p === 'shelter' || p === 'safe_locations');
+      if (idx !== -1 && parts[idx + 1]) {
+        window.history.replaceState(null, '', `/${parts.slice(0, idx + 1).join('/')}`);
+      }
+    }
+  }, [shelters]);
 
   const {
     daNangProvince,
@@ -550,12 +581,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     const localShelters = displayShelters.filter((s) => isShelterInOfficerJurisdiction(s));
 
-    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ lọc theo Địa phương vs Tổng khu vực
+    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ chỉ xem địa phương mình
     const baseScopedShelters = isAdmin
       ? (selectedAdminProvince === 'ALL'
           ? displayShelters
           : displayShelters.filter((s) => isShelterInProvince(s, selectedAdminProvince)))
-      : (shelterManagementScope === 'LOCAL' ? localShelters : displayShelters);
+      : localShelters;
 
     // Lọc theo Tab trạng thái, Phân loại cơ sở & Tìm kiếm từ khóa
     const filteredShelters = baseScopedShelters.filter((s) => {
@@ -1304,7 +1335,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       occupancyPlaceholder?: string;
       errors: { capacity?: string; occupancy?: string };
     }) => {
-      const maxAllowed = getMaxAllowedShelterOccupancy(capacity);
       const liveOccupancyErr = validateShelterOccupancyLimit(capacity, occupancy);
       const activeOccupancyErr = errors.occupancy || liveOccupancyErr;
       const metrics = getShelterOccupancyMetrics(occupancy, capacity);
@@ -1348,7 +1378,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
             <input
               type="number"
               min={0}
-              max={maxAllowed > 0 ? maxAllowed : undefined}
               value={occupancy}
               onChange={(e) => onOccupancyChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
               placeholder={occupancyPlaceholder}
@@ -1371,17 +1400,57 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               </div>
             ) : capacity > 0 && metrics.isOverloaded ? (
               <div style={{ marginTop: '4px', color: '#b45309', fontSize: '11.5px', fontWeight: 600 }}>
-                Quá tải ({metrics.percent}% • tối đa 120%: {maxAllowed.toLocaleString()} người)
-              </div>
-            ) : capacity > 0 ? (
-              <div style={{ marginTop: '4px', color: '#64748b', fontSize: '11px' }}>
-                Tối đa 120% sức chứa: {maxAllowed.toLocaleString()} người
+                Quá tải ({metrics.percent}% • vượt {metrics.overloadCount.toLocaleString()} người)
               </div>
             ) : null}
           </div>
         </div>
       );
     };
+
+    const actionButtons = (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="sos-btn-flat"
+          onClick={handleExportSheltersCsv}
+          style={{
+            padding: '8px 14px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          title="Xuất danh sách điểm trú ẩn đang lọc ra file CSV"
+        >
+          <Download size={15} />
+          <span>Xuất CSV</span>
+        </button>
+
+        <button
+          type="button"
+          className="sos-btn-flat primary"
+          onClick={handleOpenCreateShelterModal}
+          style={{
+            padding: '8px 16px',
+            fontSize: '13px',
+            backgroundColor: '#0284c7',
+            color: '#ffffff',
+            borderColor: '#0284c7',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <PlusCircle size={15} />
+          <span>Thêm Điểm Trú Ẩn Mới</span>
+        </button>
+      </div>
+    );
 
     return (
       <div
@@ -1395,196 +1464,119 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           gap: '8px',
         }}
       >
-        {/* 1. TIÊU ĐỀ TRANG & ĐỊA BÀN PHỤ TRÁCH (CỐ ĐỊNH) */}
-        <div
-          className="sos-shelters-header-card"
-          style={{
-            flexShrink: 0,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '8px 14px',
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-            flexWrap: 'wrap',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MapPin size={16} color="#0284c7" />
-            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
-              {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
-            </span>
-            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-              {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : accountAreaWithCity}
-            </strong>
+        {/* 1. TIÊU ĐỀ TRANG & ĐỊA BÀN PHỤ TRÁCH (Chỉ hiển thị cho Admin) */}
+        {isAdmin && (
+          <div
+            className="sos-shelters-header-card"
+            style={{
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '8px 14px',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <MapPin size={16} color="#0284c7" />
+              <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+                Phạm vi quản trị:
+              </span>
+              <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+                {daNangProvince?.name || 'Thành phố Đà Nẵng'}
+              </strong>
+            </div>
+
+            {actionButtons}
           </div>
+        )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="sos-btn-flat"
-              onClick={handleExportSheltersCsv}
-              style={{
-                padding: '8px 14px',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-              title="Xuất danh sách điểm trú ẩn đang lọc ra file CSV"
-            >
-              <Download size={15} />
-              <span>Xuất CSV</span>
-            </button>
+        {/* 2. CHỌN PHẠM VI XEM (Chỉ hiển thị cho Admin) */}
+        {isAdmin && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', flexShrink: 0 }}>
+            <div className="sos-scope-tabs" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <button
+                type="button"
+                className="sos-scope-tab active"
+                onClick={() => {
+                  setSelectedAdminProvince('ALL');
+                  setShelterPage(1);
+                }}
+                title="Hiển thị tất cả điểm trú ẩn tại Đà Nẵng"
+              >
+                <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
+                <span className="sos-scope-badge">{baseScopedShelters.length}</span>
+              </button>
 
-            <button
-              type="button"
-              className="sos-btn-flat primary"
-              onClick={handleOpenCreateShelterModal}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
-                borderColor: '#0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <PlusCircle size={15} />
-              <span>Thêm Điểm Trú Ẩn Mới</span>
-            </button>
-
-            <button
-              type="button"
-              className="sos-btn-flat"
-              onClick={() => onOpenMap()}
-              style={{ padding: '8px 16px', fontSize: '13px' }}
-            >
-              <MapPin size={15} />
-              <span>Mở Bản Đồ Tác Chiến</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. CHỌN PHẠM VI XEM: ADMIN (1 TAB TOÀN QUỐC + DROPDOWN CHỌN TỈNH/THÀNH) VS CÁN BỘ ĐỊA PHƯƠNG (2 TAB) + KPI NĂNG LỰC */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', flexShrink: 0 }}>
-          <div className="sos-scope-tabs" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            {isAdmin ? (
-              <>
-                <button
-                  type="button"
-                  className="sos-scope-tab active"
-                  onClick={() => {
-                    setSelectedAdminProvince('ALL');
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '2px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                  Phường / Xã:
+                </span>
+                <SearchableSelect
+                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
+                  searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                  value={selectedAdminProvince}
+                  onChange={(val) => {
+                    setSelectedAdminProvince(val);
                     setShelterPage(1);
                   }}
-                  title="Hiển thị tất cả điểm trú ẩn tại Đà Nẵng"
-                >
-                  <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
-                  <span className="sos-scope-badge">{baseScopedShelters.length}</span>
-                </button>
+                  triggerStyle={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    fontWeight: 500,
+                    minWidth: '215px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  }}
+                  options={[
+                    {
+                      value: 'ALL',
+                      label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
+                      keywords: 'tat ca toan thanh pho da nang',
+                    },
+                    ...daNangWards.map((a) => ({
+                      value: a.name,
+                      label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
+                      badgeText: a.code || undefined,
+                      keywords: `${a.name} ${a.code || ''}`,
+                    })),
+                  ]}
+                />
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '2px' }}>
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                    Phường / Xã:
-                  </span>
-                  <SearchableSelect
-                    ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                    searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
-                    value={selectedAdminProvince}
-                    onChange={(val) => {
-                      setSelectedAdminProvince(val);
+                {selectedAdminProvince !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAdminProvince('ALL');
                       setShelterPage(1);
                     }}
-                    triggerStyle={{
-                      padding: '4px 10px',
+                    title="Quay lại xem Toàn Đà Nẵng"
+                    style={{
+                      padding: '5px 10px',
                       fontSize: '12px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      backgroundColor: '#ffffff',
-                      color: '#0f172a',
-                      fontWeight: 500,
-                      minWidth: '215px',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      color: '#0284c7',
+                      backgroundColor: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
                     }}
-                    options={[
-                      {
-                        value: 'ALL',
-                        label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
-                        keywords: 'tat ca toan thanh pho da nang',
-                      },
-                      ...daNangWards.map((a) => ({
-                        value: a.name,
-                        label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
-                        badgeText: a.code || undefined,
-                        keywords: `${a.name} ${a.code || ''}`,
-                      })),
-                    ]}
-                  />
-
-                  {selectedAdminProvince !== 'ALL' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedAdminProvince('ALL');
-                        setShelterPage(1);
-                      }}
-                      title="Quay lại xem Toàn Đà Nẵng"
-                      style={{
-                        padding: '5px 10px',
-                        fontSize: '12px',
-                        color: '#0284c7',
-                        backgroundColor: '#f0f9ff',
-                        border: '1px solid #bae6fd',
-                        borderRadius: '5px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                      }}
-                    >
-                      ✕ Xem Toàn Đà Nẵng
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className={`sos-scope-tab ${shelterManagementScope === 'LOCAL' ? 'active' : ''}`}
-                  onClick={() => {
-                    setShelterManagementScope('LOCAL');
-                    setShelterPage(1);
-                  }}
-                >
-                  <span>{localTabLabel}</span>
-                  <span className="sos-scope-badge">{localShelters.length}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`sos-scope-tab ${shelterManagementScope === 'CITY' ? 'active' : ''}`}
-                  onClick={() => {
-                    setShelterManagementScope('CITY');
-                    setShelterPage(1);
-                  }}
-                >
-                  <span>{cityTabLabel}</span>
-                  <span className="sos-scope-badge">{displayShelters.length}</span>
-                </button>
-              </>
-            )}
+                  >
+                    ✕ Xem Toàn Đà Nẵng
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-
-        </div>
+        )}
 
         {/* 3. THANH CÔNG CỤ: TAB LỌC TRẠNG THÁI, LOẠI CƠ SỞ, SẮP XẾP & TÌM KIẾM */}
         <div className="sos-clean-toolbar" style={{ flexShrink: 0 }}>
@@ -1652,31 +1644,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               </select>
             </div>
 
-            {/* Sắp xếp đa tiêu chí */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Sắp xếp:</span>
-              <select
-                className="sos-clean-sort-select"
-                value={`${shelterSortField}-${shelterSortOrder}`}
-                onChange={(e) => {
-                  const [f, o] = e.target.value.split('-') as [any, any];
-                  setShelterSortField(f);
-                  setShelterSortOrder(o);
-                  setShelterPage(1);
-                }}
-              >
-                <option value="createdAt-desc">Mới nhất trước</option>
-                <option value="createdAt-asc">Cũ nhất trước</option>
-                <option value="name-asc">Tên cơ sở (A → Z)</option>
-                <option value="name-desc">Tên cơ sở (Z → A)</option>
-                <option value="capacity-desc">Sức chứa: Cao đến thấp</option>
-                <option value="capacity-asc">Sức chứa: Thấp đến cao</option>
-                <option value="occupancyRate-desc">Tỷ lệ lưu trú: Đầy nhất</option>
-                <option value="district-asc">Địa phương (A → Z)</option>
-                <option value="status-asc">Trạng thái cơ sở</option>
-              </select>
-            </div>
-
             {/* Ô tìm kiếm từ khóa */}
             <div className="sos-clean-search">
               <Search size={14} color="#94a3b8" />
@@ -1702,6 +1669,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 </button>
               )}
             </div>
+            {!isAdmin && actionButtons}
           </div>
         </div>
 
