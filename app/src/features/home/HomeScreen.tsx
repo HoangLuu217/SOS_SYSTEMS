@@ -921,14 +921,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </View>
               </View>
 
-              {/* Logo & Tiêu đề: HỖ TRỢ CỨU NẠN */}
+              {/* Logo & Tiêu đề: CỨU HỘ CỨU NẠN */}
               <View style={styles.brandRow}>
                 <View style={styles.logoBadge}>
                   <LogoSOS style={styles.logoImage} resizeMode="contain" />
                 </View>
 
                 <View style={styles.brandTextColumn}>
-                  <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
+                  <Text style={styles.brandTitle}>CỨU HỘ CỨU NẠN</Text>
                   <Text style={styles.brandSubtitle}>
                     Không ai phải đối mặt với thiên tai một mình
                   </Text>

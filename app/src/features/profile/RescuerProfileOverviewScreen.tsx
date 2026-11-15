@@ -1039,7 +1039,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
               resizeMode="contain"
             />
           </View>
-          <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
+          <Text style={styles.brandTitle}>CỨU HỘ CỨU NẠN</Text>
         </View>
 
         <View style={styles.headerRightRow}>

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
 import type { AdministrativeArea } from '@/types/domainD';
-import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 import { DANANG_EXTERIOR_LAND_MASK } from '@/constants/danangExteriorLandMask';
 import { SOVEREIGN_ISLANDS_GEOJSON, SOVEREIGN_LABELS_GEOJSON } from '@/constants/sovereignIslandsGeoJSON';
 import { isPointInAreaBoundary } from '@/services/mapGeoService';
@@ -298,11 +298,11 @@ export function mapBackendSosForAdmin(
 
       const priorityGroups = (() => {
         if (Array.isArray(item.priorityGroups) && item.priorityGroups.length > 0) {
-          return item.priorityGroups;
+          return item.priorityGroups.map(formatPriorityGroupLabel).filter(Boolean);
         }
         const match = rawDesc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
         return match?.[1]
-          ? match[1].split(',').map((s) => s.trim()).filter(Boolean)
+          ? match[1].split(',').map((s) => formatPriorityGroupLabel(s)).filter(Boolean)
           : [];
       })();
 

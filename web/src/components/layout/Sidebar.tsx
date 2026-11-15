@@ -549,6 +549,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return key === 'rescuers'; // Fallback active cho Đội cứu hộ địa phương
   };
 
+  // Chuẩn hóa chức danh cán bộ (chỉ dùng Chỉ huy cho cấp khu vực)
+  const normalizePosition = (pos?: string | null) => {
+    if (isAdmin) return pos || 'Quản trị viên hệ thống';
+    if (!pos || /phó\s*trưởng|trưởng\s*ban|cán\s*bộ/i.test(pos)) return 'Chỉ huy khu vực';
+    return pos;
+  };
+
   // Thông tin user hiển thị ở Profile Bar & Modal chỉnh sửa Profile
   const [localProfile, setLocalProfile] = useState<{
     fullName: string;
@@ -575,7 +582,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const lng = user?.authority?.longitude ?? fallbackCoords.lng;
     return {
       fullName: user?.fullName || 'Cán Bộ Phụ Trách',
-      position: user?.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
+      position: normalizePosition(user?.authority?.position),
       organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
       phone: (user as any)?.phoneNumber || (user as any)?.phone || '112',
       email: user?.email || 'canbo@sos.gov.vn',
@@ -654,7 +661,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       setLocalProfile({
         fullName: user.fullName || 'Cán Bộ Phụ Trách',
-        position: user.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
+        position: normalizePosition(user.authority?.position),
         organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
         phone: p,
         email: user.email || 'canbo@sos.gov.vn',
@@ -879,7 +886,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^)]*\)/g, '').trim() || rawUserName;
-  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
+  const displayUserRole = normalizePosition(localProfile.position || user?.authority?.position);
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -892,7 +899,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           1. HEADER / LOGO: SOS SYSTEMS & NÚT THU GỌN
           =================================================================== */}
       <div className="sos-sidebar-header">
-        <div className="sos-brand" title="Hỗ Trợ Cứu Nạn">
+        <div className="sos-brand" title="Cứu Hộ Cứu Nạn">
           <div className="sos-brand-logo-wrap">
             <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo" />
             <span className="sos-brand-pulse" />
@@ -900,7 +907,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {!collapsed && (
             <div className="sos-brand-info">
-              <span className="sos-brand-title">Hỗ Trợ Cứu Nạn</span>
+              <span className="sos-brand-title">Cứu Hộ Cứu Nạn</span>
             </div>
           )}
         </div>
@@ -1038,7 +1045,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
-                <span className="sos-user-role" style={{ fontSize: 11, color: '#64748b', display: 'block', lineHeight: 1.2 }} title={displayUserRole}>
+                <span className="sos-user-role" title={displayUserRole}>
                   {displayUserRole}
                 </span>
               </div>

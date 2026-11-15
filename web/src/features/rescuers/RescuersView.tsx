@@ -1255,9 +1255,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     return list;
   }, [authorizedTeams]);
 
-  // Operational KPI Counts (Tính toán thực từ authorizedTeams thuộc phạm vi quản lý)
-  const pendingMembersTotal = allPendingJoinRequests.length;
-
   // Bộ lọc địa bàn (cho Admin), chuyên môn, trạng thái và từ khóa tìm kiếm
   const filteredTeams = useMemo(() => {
     return authorizedTeams.filter((team) => {
@@ -1680,32 +1677,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 )}
 
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {pendingMembersTotal > 0 && (
-                    <button
-                      type="button"
-                      className="coordination-action-btn warning"
-                      onClick={() => setIsJoinRequestsModalOpen(true)}
-                      title="Xét duyệt đơn xin gia nhập Đội cứu hộ của người cứu trợ"
-                      style={{
-                        background: '#fef3c7',
-                        borderColor: '#f59e0b',
-                        color: '#b45309',
-                        fontWeight: 700,
-                        fontSize: 12.5,
-                        padding: '6px 12px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        borderRadius: 6,
-                        border: '1px solid #f59e0b',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <UserCheck size={14} />
-                      <span>Duyệt TV ({pendingMembersTotal})</span>
-                    </button>
-                  )}
-
                   <button
                     className="ra-refresh-btn"
                     onClick={refreshData}
@@ -1770,30 +1741,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <table className="ra-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '22%' }}>TÊN ĐỘI &amp; CHUYÊN MÔN</th>
-                      <th style={{ width: '16%' }}>CHỈ HUY ĐỘI</th>
-                      <th style={{ width: '17%' }}>PHÂN VÙNG PHỤ TRÁCH</th>
-                      <th style={{ width: '13%' }}>NHÂN LỰC</th>
-                      <th style={{ width: '13%' }}>PHƯƠNG TIỆN</th>
-                      <th style={{ width: '14%' }}>NHIỆM VỤ &amp; HIỆU SUẤT</th>
-                      <th style={{ width: '5%', textAlign: 'center' }}>THAO TÁC</th>
+                      <th style={{ width: '25%' }}>TÊN ĐỘI &amp; CHUYÊN MÔN</th>
+                      <th style={{ width: '19%' }}>CHỈ HUY ĐỘI</th>
+                      <th style={{ width: '21%' }}>PHÂN VÙNG PHỤ TRÁCH</th>
+                      <th style={{ width: '14%' }}>NHÂN LỰC</th>
+                      <th style={{ width: '14%' }}>PHƯƠNG TIỆN</th>
+                      <th style={{ width: '7%', textAlign: 'center' }}>THAO TÁC</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedTeams.map((team) => {
-                      const hasActiveMission = team.activeMissions && team.activeMissions.length > 0;
-                      const primaryMission = hasActiveMission ? team.activeMissions[0] : null;
-                      const allMissionsList = team.allMissions || [];
-                      const totalMissionsCount = allMissionsList.length;
-                      const completedMissions = allMissionsList.filter(
-                        (m) => String(m.status).toUpperCase() === 'COMPLETED'
-                      );
-                      const completedMissionsCount = completedMissions.length;
-                      const closedOtherCount = allMissionsList.filter((m) =>
-                        ['CANCELLED', 'REJECTED'].includes(String(m.status).toUpperCase())
-                      ).length;
-                      const latestCompletedOrAnyMission = completedMissions[0] || allMissionsList[0] || null;
-
                       let specClass = 'general';
                       if (team.specialization === 'WATER_RESCUE' || team.specialization === 'FLOOD_RESCUE') specClass = 'water';
                       else if (team.specialization === 'EVACUATION') specClass = 'evacuation';
@@ -1921,89 +1878,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                             </div>
                           </td>
 
-                          {/* Cột 6: Nhiệm vụ & Hiệu suất (click mở thẳng tab Nhiệm vụ) */}
-                          <td
-                            className="mission-cell-trigger"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenTeamDetail(team, 'missions');
-                            }}
-                            title={
-                              totalMissionsCount > 0
-                                ? `Tổng ${totalMissionsCount} lượt điều phối (${team.activeMissions.length} đang chạy, ${completedMissionsCount} hoàn thành, ${closedOtherCount} hủy/từ chối). Bấm để xem chi tiết.`
-                                : 'Chưa phát sinh nhiệm vụ nào. Bấm để xem tab Nhiệm vụ.'
-                            }
-                          >
-                            {hasActiveMission && primaryMission ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                <span className="active-mission-pill">
-                                  <Radio size={11} className="animate-pulse" />
-                                  <span>{primaryMission.sosCode}</span>
-                                </span>
-                                <span style={{ fontSize: 10.5, color: '#b45309', fontWeight: 700 }}>
-                                  {getMissionStatusMeta(primaryMission.status).label}
-                                  {team.activeMissions.length > 1
-                                    ? ` • +${team.activeMissions.length - 1} ca`
-                                    : ''}
-                                </span>
-                              </div>
-                            ) : totalMissionsCount > 0 && latestCompletedOrAnyMission ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                <span
-                                  className={
-                                    team.operationalStatus === 'INACTIVE'
-                                      ? 'no-mission-pill'
-                                      : 'ready-mission-pill'
-                                  }
-                                >
-                                  {team.operationalStatus !== 'INACTIVE' && <CheckCircle2 size={11} />}
-                                  <span>
-                                    {team.operationalStatus === 'INACTIVE'
-                                      ? 'Đang tạm ngừng'
-                                      : 'Sẵn sàng nhận lệnh'}
-                                  </span>
-                                </span>
-                                <span style={{ fontSize: 10.5, color: '#475569', fontWeight: 600 }}>
-                                  {completedMissionsCount > 0
-                                    ? `Xong ${completedMissionsCount} ca • Gần nhất: ${latestCompletedOrAnyMission.sosCode}`
-                                    : `Gần nhất: ${latestCompletedOrAnyMission.sosCode} (${getMissionStatusMeta(latestCompletedOrAnyMission.status).label})`}
-                                </span>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                <span
-                                  className={
-                                    team.operationalStatus === 'INACTIVE'
-                                      ? 'no-mission-pill'
-                                      : 'ready-mission-pill'
-                                  }
-                                >
-                                  {team.operationalStatus === 'INACTIVE'
-                                    ? 'Đang tạm ngừng'
-                                    : 'Sẵn sàng nhận lệnh'}
-                                </span>
-                                <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 500 }}>
-                                  Chưa phát sinh ca nào
-                                </span>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Cột 7: Thao tác */}
+                          {/* Cột 6: Thao tác */}
                           <td onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                              {team.pendingMembersCount > 0 && (
-                                <button
-                                  type="button"
-                                  className="coordination-action-btn warning compact"
-                                  style={{ background: '#fffbeb', borderColor: '#f59e0b', color: '#b45309', fontSize: 11.5, padding: '4px 8px', fontWeight: 700 }}
-                                  onClick={() => handleOpenTeamDetail(team, 'members')}
-                                  title={'Đội này có ' + team.pendingMembersCount + ' cứu hộ viên chờ duyệt gia nhập'}
-                                >
-                                  <UserCheck size={12} />
-                                  <span>Duyệt TV ({team.pendingMembersCount})</span>
-                                </button>
-                              )}
                               <button
                                 type="button"
                                 className="ra-view-btn"
