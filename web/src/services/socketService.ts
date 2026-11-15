@@ -35,7 +35,7 @@ export const getSocket = (): Socket => {
     const socketUrl = getSocketUrl();
 
     socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       withCredentials: false,
       autoConnect: true,
       reconnection: true,
