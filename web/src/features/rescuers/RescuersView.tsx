@@ -141,12 +141,89 @@ interface TeamMissionDetail {
   id: string;
   sosCode: string;
   location: string;
-  status: 'ASSIGNED' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED' | 'CANCELLED';
+  status: string;
+  priority?: string;
   assignedAt: string;
+  completedAt?: string;
+  timeRangeLabel?: string;
   missionType: string;
   description: string;
   peopleCount?: number;
+  rescuerName?: string | null;
+  vehiclePlate?: string | null;
 }
+
+const MISSION_STATUS_META: Record<
+  string,
+  { label: string; pillClass: string; toneClass: 'tone-active' | 'tone-completed' | 'tone-cancelled' }
+> = {
+  COMPLETED: { label: 'Hoàn thành', pillClass: 'ready', toneClass: 'tone-completed' },
+  CANCELLED: { label: 'Đã hủy', pillClass: 'inactive', toneClass: 'tone-cancelled' },
+  REJECTED: { label: 'Đã từ chối', pillClass: 'inactive', toneClass: 'tone-cancelled' },
+  PENDING: { label: 'Chờ tiếp nhận', pillClass: 'on_mission', toneClass: 'tone-active' },
+  ACCEPTED: { label: 'Đã nhận lệnh', pillClass: 'on_mission', toneClass: 'tone-active' },
+  DISPATCHED: { label: 'Đang xuất kích', pillClass: 'on_mission', toneClass: 'tone-active' },
+  EN_ROUTE: { label: 'Đang di chuyển', pillClass: 'on_mission', toneClass: 'tone-active' },
+  ARRIVED: { label: 'Đã tới hiện trường', pillClass: 'on_mission', toneClass: 'tone-active' },
+  IN_PROGRESS: { label: 'Đang tác chiến', pillClass: 'on_mission', toneClass: 'tone-active' },
+  ON_SCENE: { label: 'Đang tác chiến', pillClass: 'on_mission', toneClass: 'tone-active' },
+};
+
+const getMissionStatusMeta = (status: string) => {
+  const key = String(status || '').toUpperCase();
+  return MISSION_STATUS_META[key] || { label: 'Đang tác chiến', pillClass: 'on_mission', toneClass: 'tone-active' as const };
+};
+
+const formatMissionTimeRange = (startRaw?: string | Date | null, endRaw?: string | Date | null) => {
+  if (!startRaw) return '';
+  const start = new Date(startRaw);
+  if (Number.isNaN(start.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const startHm = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+  const dateStr = `${pad(start.getDate())}/${pad(start.getMonth() + 1)}`;
+  if (!endRaw) return `${startHm} (${dateStr})`;
+  const end = new Date(endRaw);
+  if (Number.isNaN(end.getTime())) return `${startHm} (${dateStr})`;
+  const endHm = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  return `${startHm} - ${endHm} (${dateStr})`;
+};
+
+const parseMissionDetails = (description: string, location: string) => {
+  const raw = String(description || '').trim();
+  if (!raw) return { summaryText: '', compactMetric: '', highlights: [] as string[] };
+
+  const segments = raw
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const normalizedLoc = String(location || '').trim().toLowerCase();
+  const mainParts: string[] = [];
+  const highlights: string[] = [];
+  let compactMetric = '';
+
+  for (const seg of segments) {
+    const cleanSeg = seg.replace(/^\[Lệnh xuất cấp cứu trợ\]\s*/i, '').trim();
+    if (normalizedLoc && cleanSeg.toLowerCase() === normalizedLoc) {
+      continue;
+    }
+    if (/^(Tổng hàng bàn giao|Thời gian hoàn thành|Người nhận|Số lượng)/i.test(seg)) {
+      highlights.push(seg);
+      const qtyMatch = seg.match(/^Tổng hàng bàn giao:\s*(.+)$/i);
+      if (qtyMatch && !compactMetric) {
+        compactMetric = qtyMatch[1].replace(/\s*\([^)]*\)\s*$/, '').trim();
+      }
+    } else {
+      mainParts.push(cleanSeg);
+    }
+  }
+
+  return {
+    summaryText: mainParts.join(' • '),
+    compactMetric,
+    highlights,
+  };
+};
 
 interface TeamActivityLog {
   id: string;
@@ -203,6 +280,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [selectedTeamDetail, setSelectedTeamDetail] = useState<EnrichedRescueTeam | null>(null);
   const [isDrawerClosing, setIsDrawerClosing] = useState(false);
   const [detailActiveTab, setDetailActiveTab] = useState<'overview' | 'members' | 'vehicles' | 'equipment' | 'missions' | 'history'>('overview');
+  const [missionFilter, setMissionFilter] = useState<'ALL' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null);
   const [selectedApplicantDetail, setSelectedApplicantDetail] = useState<any | null>(null);
   const [teamToDelete, setTeamToDelete] = useState<EnrichedRescueTeam | null>(null);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
@@ -238,6 +317,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     setIsDrawerClosing(false);
     setSelectedTeamDetail(team);
     setDetailActiveTab(tab);
+    setMissionFilter('ALL');
+    setExpandedMissionId(null);
   }, []);
 
   // Quản lý trạng thái hoạt động của Đội cứu hộ (Tạm dừng / Kích hoạt)
@@ -971,10 +1052,15 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         sosCode: a.sosCode || (a.sosRequestId ? `SOS #${String(a.sosRequestId).slice(-4)}` : a._id || ''),
         location: a.location || a.locationName || '',
         status: a.status || 'ASSIGNED',
+        priority: a.priority || 'MEDIUM',
         assignedAt: a.assignedAt ? new Date(a.assignedAt).toLocaleString('vi-VN') : '',
+        completedAt: a.completedAt ? new Date(a.completedAt).toLocaleString('vi-VN') : undefined,
+        timeRangeLabel: formatMissionTimeRange(a.assignedAt, a.completedAt || a.cancelledAt),
         missionType: a.missionType || a.emergencyType || '',
         description: a.note || a.description || '',
         peopleCount: a.peopleCount ?? a.affectedPeople ?? 0,
+        rescuerName: a.rescuerName || null,
+        vehiclePlate: a.vehiclePlate || null,
       }));
       const activeMissions: TeamMissionDetail[] = allMissions.filter(
         (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(m.status).toUpperCase())
@@ -2989,94 +3075,267 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               )}
 
               {/* TAB 4: NHIỆM VỤ */}
-              {detailActiveTab === 'missions' && (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
-                      Lịch sử phân công cứu nạn ({selectedTeamDetail.allMissions.length} ca)
-                    </span>
-                    <button
-                      type="button"
-                      className="coordination-action-btn primary compact"
-                      onClick={() => {
-                        setSelectedTeamDetail(null);
-                        window.history.pushState(null, '', '/localauthor/coordination');
-                        window.dispatchEvent(new PopStateEvent('popstate'));
-                      }}
-                      title="Mở phân hệ điều phối tác chiến"
-                    >
-                      <ExternalLink size={12} />
-                      <span>Mở module điều phối cứu hộ</span>
-                    </button>
-                  </div>
+              {detailActiveTab === 'missions' && (() => {
+                const allList = selectedTeamDetail.allMissions || [];
+                const activeList = selectedTeamDetail.activeMissions || [];
+                const historyList = allList.filter((m) =>
+                  ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(m.status).toUpperCase())
+                );
+                const completedCount = historyList.filter(
+                  (m) => String(m.status).toUpperCase() === 'COMPLETED'
+                ).length;
+                const cancelledCount = historyList.filter((m) =>
+                  ['CANCELLED', 'REJECTED'].includes(String(m.status).toUpperCase())
+                ).length;
 
-                  {selectedTeamDetail.allMissions.length === 0 ? (
-                    <div className="operations-empty-state" style={{ padding: '30px 20px' }}>
-                      <Compass size={32} color="#94A3B8" />
-                      <p style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-                        Chưa có nhiệm vụ nào được phân công
-                      </p>
-                      <p style={{ margin: 0, fontSize: 12.5, color: '#64748B' }}>
-                        Đội đang trực chiến sẵn sàng tiếp nhận yêu cầu SOS cứu hộ thực địa.
-                      </p>
+                const filteredHistory = historyList.filter((m) => {
+                  const st = String(m.status).toUpperCase();
+                  if (missionFilter === 'COMPLETED') return st === 'COMPLETED';
+                  if (missionFilter === 'CANCELLED') return st === 'CANCELLED' || st === 'REJECTED';
+                  return true;
+                });
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Thanh tiêu đề gọn + nút điều phối */}
+                    <div className="mission-tab-toolbar">
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>
+                        {activeList.length > 0
+                          ? `${activeList.length} đang tác chiến • ${historyList.length} lịch sử`
+                          : `Tổng cộng ${allList.length} nhiệm vụ đã tiếp nhận`}
+                      </span>
+                      <button
+                        type="button"
+                        className="coordination-action-btn outline compact"
+                        onClick={() => {
+                          setSelectedTeamDetail(null);
+                          window.history.pushState(null, '', '/localauthor/coordination');
+                          window.dispatchEvent(new PopStateEvent('popstate'));
+                        }}
+                        title="Mở phân hệ điều phối tác chiến"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          color: '#0284C7',
+                          borderColor: '#BAE6FD',
+                          background: '#F0F9FF',
+                        }}
+                      >
+                        <ExternalLink size={12} />
+                        <span>Mở điều phối cứu hộ</span>
+                      </button>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {selectedTeamDetail.allMissions.map((mission) => (
-                        <div
-                          key={mission.id}
-                          className={`drawer-mission-card ${mission.status === 'ON_SCENE' ? 'active-mission' : ''}`}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span className="active-mission-pill">
-                                <span>{mission.sosCode}</span>
-                              </span>
-                              <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
-                                {mission.missionType}
-                              </span>
-                            </div>
-                            <span
-                              className={`operational-status-pill ${
-                                mission.status === 'COMPLETED'
-                                  ? 'ready'
-                                  : mission.status === 'CANCELLED' || mission.status === 'REJECTED'
-                                    ? 'inactive'
-                                    : 'on_mission'
-                              }`}
-                            >
-                              {mission.status === 'COMPLETED'
-                                ? 'Đã hoàn thành'
-                                : mission.status === 'CANCELLED'
-                                  ? 'Đã hủy'
-                                  : mission.status === 'REJECTED'
-                                    ? 'Đã từ chối'
-                                    : mission.status === 'PENDING'
-                                      ? 'Chờ tiếp nhận'
-                                      : 'Đang tác chiến'}
-                            </span>
-                          </div>
 
-                          <p style={{ margin: 0, fontSize: 13, color: '#334155', lineHeight: 1.5 }}>
-                            {mission.description}
-                          </p>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#64748B', borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <MapPin size={13} color="#0284C7" />
-                              <span>{mission.location}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Clock size={13} />
-                              <span>Thời gian: {mission.assignedAt}</span>
-                            </div>
-                          </div>
+                    {/* VÙNG 1: CA ĐANG TÁC CHIẾN (Nổi bật khi có ca, thu gọn 1 dòng khi đội đang rảnh) */}
+                    {activeList.length > 0 ? (
+                      <div className="mission-active-section">
+                        <div className="mission-section-heading">
+                          <span>Đang tác chiến ({activeList.length})</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+                        {activeList.map((mission) => {
+                          const statusMeta = getMissionStatusMeta(mission.status);
+                          const { summaryText, compactMetric } = parseMissionDetails(
+                            mission.description,
+                            mission.location
+                          );
+                          const isSupplyMission =
+                            mission.missionType.toLowerCase().includes('tiếp tế') ||
+                            mission.missionType.toLowerCase().includes('cứu trợ');
+
+                          return (
+                            <div key={mission.id} className="mission-active-card">
+                              <div className="mission-active-top">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span className="mission-active-code">
+                                    {isSupplyMission ? <Package size={12} /> : <Radio size={12} />}
+                                    <span>{mission.sosCode}</span>
+                                  </span>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>
+                                    {mission.missionType}
+                                    {compactMetric ? ` (${compactMetric})` : ''}
+                                  </span>
+                                  {String(mission.priority || '').toUpperCase() === 'CRITICAL' && (
+                                    <span className="mission-history-priority">• Khẩn cấp</span>
+                                  )}
+                                </div>
+                                <span className={`operational-status-pill ${statusMeta.pillClass}`}>
+                                  <span className="pulse-dot amber" />
+                                  <span>{statusMeta.label}</span>
+                                </span>
+                              </div>
+
+                              {summaryText && (
+                                <p style={{ margin: 0, fontSize: 12.5, color: '#1E293B', lineHeight: 1.45 }}>
+                                  {summaryText}
+                                </p>
+                              )}
+
+                              {mission.location && (
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 12.5, color: '#334155' }}>
+                                  <MapPin size={13} color="#0284C7" style={{ marginTop: 2, flexShrink: 0 }} />
+                                  <span>{mission.location}</span>
+                                </div>
+                              )}
+
+                              <div className="mission-active-meta">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                  {mission.rescuerName && <span>Phụ trách: {mission.rescuerName}</span>}
+                                  {mission.vehiclePlate && <span>Xe: {mission.vehiclePlate}</span>}
+                                  {(mission.peopleCount ?? 0) > 0 && <span>{mission.peopleCount} người</span>}
+                                </div>
+                                <span>Giao lúc: {mission.timeRangeLabel || mission.assignedAt}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mission-idle-strip">
+                        <div className="mission-idle-strip-left">
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: '#10B981',
+                              display: 'inline-block',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span>Hiện không có ca đang chạy — đội sẵn sàng tiếp nhận lệnh điều phối mới.</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* VÙNG 2: LỊCH SỬ NHIỆM VỤ DẠNG DANH SÁCH PHẲNG */}
+                    {historyList.length > 0 && (
+                      <div className="mission-history-shell">
+                        <div className="mission-history-shell-header">
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                            Lịch sử nhiệm vụ ({filteredHistory.length})
+                          </span>
+                          {cancelledCount > 0 && (
+                            <div className="mission-history-filter-pills">
+                              <button
+                                type="button"
+                                className={`mission-history-filter-btn ${missionFilter === 'ALL' ? 'active' : ''}`}
+                                onClick={() => setMissionFilter('ALL')}
+                              >
+                                Tất cả ({historyList.length})
+                              </button>
+                              <button
+                                type="button"
+                                className={`mission-history-filter-btn ${missionFilter === 'COMPLETED' ? 'active' : ''}`}
+                                onClick={() => setMissionFilter('COMPLETED')}
+                              >
+                                Hoàn thành ({completedCount})
+                              </button>
+                              <button
+                                type="button"
+                                className={`mission-history-filter-btn ${missionFilter === 'CANCELLED' ? 'active' : ''}`}
+                                onClick={() => setMissionFilter('CANCELLED')}
+                              >
+                                Đã hủy ({cancelledCount})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          {filteredHistory.map((mission) => {
+                            const statusMeta = getMissionStatusMeta(mission.status);
+                            const isCompleted = String(mission.status).toUpperCase() === 'COMPLETED';
+                            const isExpanded = expandedMissionId === mission.id;
+                            const { summaryText, compactMetric } = parseMissionDetails(
+                              mission.description,
+                              mission.location
+                            );
+
+                            return (
+                              <div
+                                key={mission.id}
+                                className="mission-history-row"
+                                onClick={() => setExpandedMissionId(isExpanded ? null : mission.id)}
+                                title="Bấm để xem hoặc thu gọn ghi chú chi tiết"
+                              >
+                                {/* Dòng 1: Mã + Loại + Số lượng tóm tắt | Trạng thái gọn */}
+                                <div className="mission-history-row-line1">
+                                  <div className="mission-history-row-title">
+                                    <span className="mission-history-code">{mission.sosCode}</span>
+                                    <span style={{ color: '#CBD5E1' }}>•</span>
+                                    <span className="mission-history-type">{mission.missionType}</span>
+                                    {compactMetric && (
+                                      <span className="mission-history-qty">({compactMetric})</span>
+                                    )}
+                                    {(mission.peopleCount ?? 0) > 0 && !compactMetric && (
+                                      <span className="mission-history-qty">({mission.peopleCount} người)</span>
+                                    )}
+                                    {String(mission.priority || '').toUpperCase() === 'CRITICAL' && (
+                                      <span className="mission-history-priority">• Khẩn cấp</span>
+                                    )}
+                                  </div>
+
+                                  <span className={`mission-history-status ${isCompleted ? 'completed' : 'cancelled'}`}>
+                                    {isCompleted ? <Check size={13} /> : <X size={13} />}
+                                    <span>{statusMeta.label}</span>
+                                  </span>
+                                </div>
+
+                                {/* Dòng 2: Địa điểm • Phụ trách • Thời gian */}
+                                <div className="mission-history-row-line2">
+                                  {mission.location && (
+                                    <>
+                                      <span className="mission-history-location" title={mission.location}>
+                                        {mission.location}
+                                      </span>
+                                      <span style={{ color: '#CBD5E1' }}>•</span>
+                                    </>
+                                  )}
+                                  {mission.rescuerName && (
+                                    <>
+                                      <span>{mission.rescuerName}</span>
+                                      <span style={{ color: '#CBD5E1' }}>•</span>
+                                    </>
+                                  )}
+                                  {mission.vehiclePlate && (
+                                    <>
+                                      <span>Xe {mission.vehiclePlate}</span>
+                                      <span style={{ color: '#CBD5E1' }}>•</span>
+                                    </>
+                                  )}
+                                  <span>{mission.timeRangeLabel || mission.assignedAt}</span>
+                                </div>
+
+                                {/* Chi tiết mở rộng khi bấm vào dòng */}
+                                {isExpanded && (
+                                  <div className="mission-history-expanded">
+                                    {mission.location && (
+                                      <div>
+                                        <strong>Địa điểm:</strong> {mission.location}
+                                      </div>
+                                    )}
+                                    {summaryText && (
+                                      <div>
+                                        <strong>Ghi chú:</strong> {summaryText}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <strong>Thời gian:</strong> Giao {mission.assignedAt || '—'}
+                                      {mission.completedAt ? ` → Xong ${mission.completedAt}` : ''}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* TAB 5: LỊCH SỬ HOẠT ĐỘNG */}
               {detailActiveTab === 'history' && (
