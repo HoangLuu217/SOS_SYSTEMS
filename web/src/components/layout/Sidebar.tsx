@@ -47,7 +47,6 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  LayoutDashboard,
   Users,
   UserCheck,
   Building2,
@@ -87,7 +86,6 @@ export type NavItemKey =
   | 'chat'
   | 'settings'
   // Nhóm Quản trị (Admin)
-  | 'admin_overview'
   | 'citizens'
   | 'rescuers_admin'
   | 'authorities'
@@ -568,11 +566,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'QUẢN TRỊ HỆ THỐNG',
       items: [
-        {
-          key: 'admin_overview',
-          label: 'Tổng quan',
-          icon: <LayoutDashboard size={18} className="sos-nav-icon" />,
-        },
         {
           key: 'citizens',
           label: 'Người dân',

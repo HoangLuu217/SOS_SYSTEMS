@@ -128,97 +128,62 @@ flowchart LR
 
 Hệ thống sử dụng **MongoDB** thông qua **21 Mongoose Models** tại [`backend/src/models/`](backend/src/models/index.js), tận dụng **Embedded Documents** (cho hồ sơ `citizen`/`rescuer`/`authority` trong `users` và danh sách `members` trong `rescue_teams`) kết hợp **References** và chỉ mục không gian **`2dsphere`**.
 
-### Sơ đồ quan hệ thực thể cốt lõi (ER Diagram)
+### Sơ đồ quan hệ thực thể toàn hệ thống (ER Diagram)
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#f8fafc',
+    'primaryTextColor': '#0f172a',
+    'primaryBorderColor': '#cbd5e1',
+    'lineColor': '#64748b',
+    'tertiaryColor': '#f1f5f9',
+    'edgeLabelBackground': '#ffffff'
+  },
+  'er': {
+    'layoutDirection': 'LR',
+    'minEntityWidth': 155,
+    'minEntityHeight': 48,
+    'entityPadding': 12
+  }
+}}%%
 erDiagram
-    AdminArea {
-        ObjectId _id PK
-        string name
-        string code UK
-        string type "COUNTRY | PROVINCE | DISTRICT | WARD"
-        ObjectId parentId FK "Cây hành chính cha-con"
-        Polygon boundary "GeoJSON Polygon"
-    }
+    Area ||--o{ Authority : "areaId"
+    Area ||--o{ SosRequest : "areaId"
+    Area ||--o{ RescueTeam : "areaId"
+    Area ||--o{ SafeLocation : "areaId"
+    Area ||--o{ HazardReport : "areaId"
+    Area ||--o{ SafetyCheck : "areaId"
+    Area ||--o{ BloodEvent : "areaId"
 
-    AuthorityOrg {
-        ObjectId _id PK
-        string name
-        string code UK
-        ObjectId areaId FK
-        string type
-    }
+    Authority ||--o{ User : "organizationId"
+    Authority ||--o{ RescueTeam : "authorityId"
+    Authority ||--o{ Equipment : "providedBy"
 
-    User {
-        ObjectId _id PK
-        string phone UK
-        string email
-        string fullName
-        Array roles "CITIZEN | RESCUER | LOCAL_AUTHORITY | ADMIN"
-        Object rescuer "Embedded profile & availability"
-        Object authority "Embedded organizationId & areaId"
-    }
-
-    RescueTeam {
-        ObjectId _id PK
-        string name
-        ObjectId leaderId FK
-        ObjectId authorityId FK
-        ObjectId areaId FK
-        string status "ACTIVE | INACTIVE | SUSPENDED"
-        string operationalStatus "READY | ON_MISSION | INACTIVE"
-        boolean autoDeactivatedByLeaderSos
-        Array autoDeactivatedSosIds "ObjectId[] tracking active leader SOS"
-        Array members "Embedded rescuerId & role"
-    }
-
-    Vehicle {
-        ObjectId _id PK
-        ObjectId teamId FK
-        string plateNumber UK
-        string type "BOAT | AMBULANCE | TRUCK..."
-        number capacity
-        string status
-    }
-
-    SosRequest {
-        ObjectId _id PK
-        string sosCode UK
-        ObjectId citizenId FK
-        ObjectId areaId FK
-        Point location "2dsphere GeoJSON"
-        string priority "UNASSESSED | LOW | MEDIUM | HIGH | CRITICAL"
-        string status "PENDING | ASSIGNED | COMPLETED | CANCELLED"
-    }
-
-    SosAssignment {
-        ObjectId _id PK
-        ObjectId sosRequestId FK
-        ObjectId rescueTeamId FK
-        ObjectId rescuerId FK
-        ObjectId vehicleId FK
-        string missionType "SOS_RESCUE | RELIEF_DISPATCH | SHORE_HANDOFF"
-        string status
-    }
-
-    SosStatusHistory {
-        ObjectId _id PK
-        ObjectId sosId FK
-        string oldStatus
-        string newStatus
-        ObjectId changedBy FK
-    }
-
-    AdminArea ||--o{ AuthorityOrg : "areaId"
-    AdminArea ||--o{ RescueTeam : "areaId"
-    AdminArea ||--o{ SosRequest : "areaId"
-    AuthorityOrg ||--o{ RescueTeam : "authorityId"
     User ||--o{ SosRequest : "citizenId"
     User ||--o{ RescueTeam : "leaderId"
+    User ||--o{ SafetyResp : "userId"
+    User ||--o{ BloodReg : "userId"
+    User ||--o{ Notification : "userId"
+    User ||--o{ ChatMessage : "senderId"
+    User ||--o{ File : "uploadedBy"
+    User ||--o{ AuditLog : "actorId"
+
     RescueTeam ||--o{ Vehicle : "teamId"
+    RescueTeam ||--o{ Equipment : "teamId"
     RescueTeam ||--o{ SosAssignment : "rescueTeamId"
+
     SosRequest ||--o{ SosAssignment : "sosRequestId"
-    SosRequest ||--o{ SosStatusHistory : "sosId"
+    SosRequest ||--o{ SosHistory : "sosId"
+    SosRequest ||--o{ File : "sosId"
+    SosRequest ||--o{ ChatMessage : "sosRequestId"
+    SosRequest ||--o{ Notification : "sosId"
+
+    SafetyCheck ||--o{ SafetyResp : "safetyCheckId"
+    BloodEvent ||--o{ BloodReg : "eventId"
+
+    WeatherArticle
 ```
 
 ### Danh mục Collections & Models trong `backend/src/models/`
