@@ -40,7 +40,7 @@ export function BloodDonationModal({
   onUpdated,
 }: BloodDonationModalProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'PRE_REGISTER' | 'EVENTS'>('PRE_REGISTER');
+  const [activeTab, setActiveTab] = useState<'PRE_REGISTER' | 'EVENTS' | 'HISTORY'>('PRE_REGISTER');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedbackBanner, setFeedbackBanner] = useState<{
@@ -428,7 +428,25 @@ export function BloodDonationModal({
     }
   };
 
-  const unrespondedCount = activeEvents.filter((e) => !e.myResponse).length;
+  const upcomingEvents = activeEvents.filter((ev) => ev.myResponse?.status !== 'COMPLETED');
+  const historyItems =
+    donationHistory.length > 0
+      ? donationHistory
+      : activeEvents
+          .filter((ev) => ev.myResponse?.status === 'COMPLETED')
+          .map((ev) => ({
+            ...(ev.myResponse as BloodDonationRegistrationItem),
+            eventId: {
+              _id: ev._id,
+              title: ev.title,
+              locationName: ev.locationName,
+              address: ev.address,
+              eventDate: ev.eventDate,
+              startTime: ev.startTime,
+              endTime: ev.endTime,
+              organizerName: ev.organizerName,
+            },
+          }));
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -444,10 +462,43 @@ export function BloodDonationModal({
                 <Ionicons name="water" size={22} color="#DC2626" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.headerTitle}>Hiến Máu Tình Nguyện</Text>
+                <Text style={styles.headerTitle}>Hiến Máu</Text>
+                {activeTab === 'HISTORY' && (
+                  <Text style={styles.headerSubtitle}>
+                    Lịch sử hiến máu ({historyItems.length})
+                  </Text>
+                )}
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {historyItems.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.historyHeaderBtn,
+                    activeTab === 'HISTORY' && styles.historyHeaderBtnActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedEvent(null);
+                    setFeedbackBanner(null);
+                    setActiveTab((prev) => (prev === 'HISTORY' ? 'EVENTS' : 'HISTORY'));
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={activeTab === 'HISTORY' ? 'arrow-back' : 'time-outline'}
+                    size={15}
+                    color={activeTab === 'HISTORY' ? '#0284C7' : '#475569'}
+                  />
+                  <Text
+                    style={[
+                      styles.historyHeaderBtnText,
+                      activeTab === 'HISTORY' && { color: '#0284C7' },
+                    ]}
+                  >
+                    {activeTab === 'HISTORY' ? 'Quay lại' : 'Lịch sử'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
                 <Ionicons name="close" size={22} color="#64748B" />
               </TouchableOpacity>
@@ -695,33 +746,90 @@ export function BloodDonationModal({
                     </TouchableOpacity>
                   </View>
                 </View>
+              ) : activeTab === 'HISTORY' ? (
+                /* ================= LỊCH SỬ HIẾN MÁU ================= */
+                <View>
+                  <Text style={styles.sectionLabel}>
+                    Lịch sử hiến máu ({historyItems.length}):
+                  </Text>
+                  {historyItems.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <Ionicons name="time-outline" size={44} color="#94A3B8" />
+                      <Text style={styles.emptyTitle}>Chưa có lịch sử hiến máu</Text>
+                      <Text style={styles.emptySubtitle}>
+                        Các đợt bạn đã hoàn thành hiến máu sẽ được lưu tại đây.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 10 }}>
+                      {historyItems.map((item) => {
+                        const evInfo =
+                          typeof item.eventId === 'object' && item.eventId
+                            ? item.eventId
+                            : null;
+                        const matchingActiveEvent = evInfo?._id
+                          ? activeEvents.find((e) => e._id === evInfo._id)
+                          : undefined;
+
+                        return (
+                          <TouchableOpacity
+                            key={item._id}
+                            style={styles.historyCard}
+                            disabled={!matchingActiveEvent}
+                            onPress={() => {
+                              if (matchingActiveEvent) {
+                                setActiveTab('EVENTS');
+                                selectEventItem(matchingActiveEvent, myPreRegistration);
+                                setFeedbackBanner(null);
+                              }
+                            }}
+                            activeOpacity={matchingActiveEvent ? 0.75 : 1}
+                          >
+                            <View style={styles.historyCardTop}>
+                              <Text style={styles.historyCardTitle}>
+                                {evInfo?.title || 'Đợt hiến máu tình nguyện'}
+                              </Text>
+                              <View style={styles.historyDoneBadge}>
+                                <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                                <Text style={styles.historyDoneBadgeText}>Đã hiến máu</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.historyCardMeta}>
+                              📍 {evInfo?.locationName || item.areaName || '—'}
+                              {evInfo?.address ? ` • ${evInfo.address}` : ''}
+                            </Text>
+                            <Text style={styles.historyCardMeta}>
+                              🗓️ {formatDate(evInfo?.eventDate || item.respondedAt || item.createdAt)}
+                              {evInfo?.startTime && evInfo?.endTime
+                                ? ` (${evInfo.startTime} - ${evInfo.endTime})`
+                                : ''}
+                            </Text>
+                            <View style={styles.historyMetaRow}>
+                              {item.bloodType && item.bloodType !== 'UNKNOWN' && (
+                                <View style={styles.historyBloodChip}>
+                                  <Text style={styles.historyBloodChipText}>
+                                    Nhóm {item.bloodType}
+                                  </Text>
+                                </View>
+                              )}
+                              {item.donatedVolumeMl ? (
+                                <View style={styles.historyVolChip}>
+                                  <Text style={styles.historyVolChipText}>
+                                    {item.donatedVolumeMl} ml
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
               ) : (
                 /* ================= TAB 2: SỰ KIỆN HIẾN MÁU & XÁC NHẬN THAM GIA ================= */
                 <View>
-                  {!selectedEvent ? (() => {
-                    const upcomingEvents = activeEvents.filter(
-                      (ev) => ev.myResponse?.status !== 'COMPLETED'
-                    );
-                    const historyItems =
-                      donationHistory.length > 0
-                        ? donationHistory
-                        : activeEvents
-                            .filter((ev) => ev.myResponse?.status === 'COMPLETED')
-                            .map((ev) => ({
-                              ...(ev.myResponse as BloodDonationRegistrationItem),
-                              eventId: {
-                                _id: ev._id,
-                                title: ev.title,
-                                locationName: ev.locationName,
-                                address: ev.address,
-                                eventDate: ev.eventDate,
-                                startTime: ev.startTime,
-                                endTime: ev.endTime,
-                                organizerName: ev.organizerName,
-                              },
-                            }));
-
-                    return (
+                  {!selectedEvent ? (
                     <View>
                       {/* Cài đặt thông báo gọn gàng nằm trên */}
                       <TouchableOpacity
@@ -748,27 +856,30 @@ export function BloodDonationModal({
                       </TouchableOpacity>
 
                       {upcomingEvents.length === 0 ? (
-                        historyItems.length === 0 ? (
-                          <View style={styles.emptyBox}>
-                            <Ionicons name="calendar-clear-outline" size={44} color="#94A3B8" />
-                            <Text style={styles.emptyTitle}>
-                              Chưa có đợt hiến máu nào đang mở
-                            </Text>
-                            <Text style={styles.emptySubtitle}>
-                              Bạn có thể cài đặt thông báo ở trên để nhận tin ngay khi địa phương
-                              tổ chức sự kiện hiến máu mới.
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={styles.noUpcomingBox}>
-                            <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                            <Text style={styles.noUpcomingText}>
-                              Hiện không còn đợt hiến máu mới đang mở.
-                            </Text>
-                          </View>
-                        )
+                        <View style={styles.emptyBox}>
+                          <Ionicons name="calendar-clear-outline" size={44} color="#94A3B8" />
+                          <Text style={styles.emptyTitle}>
+                            Chưa có đợt hiến máu nào đang mở
+                          </Text>
+                          <Text style={styles.emptySubtitle}>
+                            Bạn có thể cài đặt thông báo ở trên để nhận tin ngay khi địa phương
+                            tổ chức sự kiện hiến máu mới.
+                          </Text>
+                          {historyItems.length > 0 && (
+                            <TouchableOpacity
+                              style={styles.historyEmptyBtn}
+                              onPress={() => setActiveTab('HISTORY')}
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons name="time-outline" size={15} color="#0284C7" />
+                              <Text style={styles.historyEmptyBtnText}>
+                                Xem lịch sử ({historyItems.length})
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       ) : (
-                        /* 1. CHỈ HIỂN THỊ DANH SÁCH CÁC ĐỢT HIẾN MÁU CHƯA HIẾN */
+                        /* CHỈ HIỂN THỊ DANH SÁCH CÁC ĐỢT HIẾN MÁU CHƯA HIẾN */
                         <>
                           <Text style={styles.sectionLabel}>
                             Chọn sự kiện hiến máu để xem chi tiết ({upcomingEvents.length}):
@@ -831,74 +942,8 @@ export function BloodDonationModal({
                           </View>
                         </>
                       )}
-
-                      {/* 2. LỊCH SỬ HIẾN MÁU (HIỂN THỊ CÁC ĐỢT ĐÃ HIẾN KÈM LƯỢNG MÁU) */}
-                      {historyItems.length > 0 && (
-                        <View style={{ marginTop: 14 }}>
-                          <Text style={styles.sectionLabel}>
-                            Lịch sử hiến máu ({historyItems.length}):
-                          </Text>
-                          <View style={styles.eventListBox}>
-                            {historyItems.map((item) => {
-                              const evInfo =
-                                typeof item.eventId === 'object' && item.eventId
-                                  ? item.eventId
-                                  : null;
-                              const matchingActiveEvent = evInfo?._id
-                                ? activeEvents.find((e) => e._id === evInfo._id)
-                                : undefined;
-
-                              return (
-                                <TouchableOpacity
-                                  key={item._id}
-                                  style={styles.eventSelectorItem}
-                                  disabled={!matchingActiveEvent}
-                                  onPress={() => {
-                                    if (matchingActiveEvent) {
-                                      selectEventItem(matchingActiveEvent, myPreRegistration);
-                                      setFeedbackBanner(null);
-                                    }
-                                  }}
-                                  activeOpacity={matchingActiveEvent ? 0.7 : 1}
-                                >
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={styles.eventSelectorTitle} numberOfLines={1}>
-                                      {evInfo?.title || 'Đợt hiến máu tình nguyện'}
-                                    </Text>
-                                    <Text style={styles.eventSelectorMeta} numberOfLines={1}>
-                                      📍 {evInfo?.locationName || item.areaName || '—'} • 🗓️{' '}
-                                      {formatDate(evInfo?.eventDate || item.respondedAt || item.createdAt)}
-                                    </Text>
-                                    <View style={styles.historyMetaRow}>
-                                      {item.bloodType && item.bloodType !== 'UNKNOWN' && (
-                                        <View style={styles.historyBloodChip}>
-                                          <Text style={styles.historyBloodChipText}>
-                                            Nhóm {item.bloodType}
-                                          </Text>
-                                        </View>
-                                      )}
-                                      {item.donatedVolumeMl ? (
-                                        <View style={styles.historyVolChip}>
-                                          <Text style={styles.historyVolChipText}>
-                                            {item.donatedVolumeMl} ml
-                                          </Text>
-                                        </View>
-                                      ) : null}
-                                      <Text style={styles.historyDoneText}>✓ Đã hiến máu</Text>
-                                    </View>
-                                  </View>
-                                  {matchingActiveEvent && (
-                                    <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
-                                  )}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                        </View>
-                      )}
                     </View>
-                    );
-                  })() : (
+                  ) : (
                     /* 2. NHẤN VÀO MỚI MỞ TRONG: CHI TIẾT & FORM XÁC NHẬN */
                     <View>
                       <TouchableOpacity
@@ -1828,6 +1873,84 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#16A34A',
+  },
+  historyHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  historyHeaderBtnActive: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+  },
+  historyHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  historyEmptyBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  historyEmptyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  historyCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  historyCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+  historyCardTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 20,
+  },
+  historyCardMeta: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  historyDoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#DCFCE7',
+  },
+  historyDoneBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
   },
 });
 

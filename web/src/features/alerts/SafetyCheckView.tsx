@@ -38,6 +38,7 @@ import {
   ArrowUp,
   ArrowDown,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import './SafetyCheckView.css';
 
@@ -377,24 +378,33 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     }
   };
 
-  // Đóng đợt kiểm tra an toàn
-  const handleCloseCheck = async (check: SafetyCheckItem) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn đóng đợt kiểm tra an toàn "${check.title}"?`)) {
-      return;
-    }
+  const [closingTarget, setClosingTarget] = useState<SafetyCheckItem | null>(null);
+  const [submittingClose, setSubmittingClose] = useState(false);
 
+  // Mở modal xác nhận đóng đợt kiểm tra an toàn
+  const handleCloseCheck = (check: SafetyCheckItem) => {
+    setClosingTarget(check);
+  };
+
+  // Xác nhận đóng đợt kiểm tra an toàn
+  const confirmCloseCheck = async () => {
+    if (!closingTarget || submittingClose) return;
+    setSubmittingClose(true);
     try {
-      const res = await closeSafetyCheckApi(check._id);
+      const res = await closeSafetyCheckApi(closingTarget._id);
       if (res.success) {
         toast.success('Đã kết thúc đợt kiểm tra an toàn.');
         loadSafetyChecks();
         window.dispatchEvent(new CustomEvent('sos_data_updated'));
-        if (viewingCheck?._id === check._id) {
+        if (viewingCheck?._id === closingTarget._id) {
           setViewingCheck({ ...viewingCheck, status: 'CLOSED' });
         }
+        setClosingTarget(null);
       }
     } catch (err: any) {
       toast.error('Lỗi khi đóng đợt: ' + err.message);
+    } finally {
+      setSubmittingClose(false);
     }
   };
 
@@ -1962,6 +1972,92 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC NHẬN ĐÓNG ĐỢT KIỂM TRA AN TOÀN */}
+      {closingTarget && (
+        <div
+          className="sc-modal-overlay"
+          style={{ zIndex: 10010 }}
+          onClick={() => !submittingClose && setClosingTarget(null)}
+        >
+          <div
+            className="sc-modal-card"
+            style={{ maxWidth: 460 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sc-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: '#FEF2F2',
+                    color: '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>Xác nhận đóng đợt kiểm tra</h3>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    Hành động này sẽ kết thúc đợt tiếp nhận phản hồi
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="sc-modal-close"
+                onClick={() => !submittingClose && setClosingTarget(null)}
+                disabled={submittingClose}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sc-modal-body" style={{ fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
+              Bạn có chắc chắn muốn đóng đợt kiểm tra an toàn{' '}
+              <strong style={{ color: '#0F172A' }}>"{closingTarget.title}"</strong>?
+            </div>
+
+            <div className="sc-modal-footer">
+              <button
+                type="button"
+                className="sos-btn-flat"
+                onClick={() => setClosingTarget(null)}
+                disabled={submittingClose}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="sos-btn-flat"
+                style={{
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  borderColor: '#DC2626',
+                }}
+                onClick={confirmCloseCheck}
+                disabled={submittingClose}
+              >
+                {submittingClose ? (
+                  <>
+                    <RefreshCw size={14} className="fa-spin" /> Đang đóng...
+                  </>
+                ) : (
+                  <>
+                    <Square size={14} /> Đóng đợt
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

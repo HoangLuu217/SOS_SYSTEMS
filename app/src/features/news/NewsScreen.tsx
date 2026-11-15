@@ -29,11 +29,16 @@ interface NewsScreenProps {
 
 const WEATHER_CATEGORY_LABELS: Record<string, string> = {
   mua_lu: 'Mưa lũ',
+  ngap_lut: 'Ngập lụt',
   bao: 'Bão & Áp thấp',
   du_bao: 'Dự báo thời tiết',
   canh_bao: 'Cảnh báo thiên tai',
   nang_nong: 'Nắng nóng',
+  ret_dam: 'Rét đậm',
   trieu_cuong: 'Triều cường',
+  sat_lo: 'Sạt lở',
+  han_han: 'Hạn hán',
+  dong_loc: 'Dông lốc',
   khac: 'Thời tiết',
 };
 
@@ -238,7 +243,7 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({ isActive = false }) => {
                 <View style={styles.cardMetaRow}>
                   <View style={styles.tagBadge}>
                     <Text style={styles.tagBadgeText}>
-                      {WEATHER_CATEGORY_LABELS[article.category] || article.category || 'THỜI TIẾT'}
+                      {WEATHER_CATEGORY_LABELS[(article.category || '').toLowerCase()] || 'Thời tiết'}
                     </Text>
                   </View>
 
