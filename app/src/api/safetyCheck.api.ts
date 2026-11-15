@@ -85,6 +85,7 @@ export class SafetyCheckApi {
       activeCheck: SafetyCheckItem | null;
       myResponse: SafetyCheckResponseItem | null;
       activeChecks?: SafetyCheckItem[];
+      closedChecks?: SafetyCheckItem[];
       myResponses?: SafetyCheckResponseItem[];
     }>
   > {
