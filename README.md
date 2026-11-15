@@ -291,11 +291,11 @@ Backend phục vụ API dưới cả tiền tố `/api/*` và `/*` tại cổng 
 
 ### Triển khai production bằng Docker trên Linux + Cloudflare Tunnel
 
-Frontend được phục vụ ở cổng `5173` trên localhost. Nginx trong container web proxy `/api` và `/socket.io` tới backend, vì vậy Cloudflare Tunnel chỉ cần một Public Hostname trỏ tới `http://localhost:5173`. Không mở cổng web hoặc API trực tiếp ra Internet.
+Frontend được phục vụ ở cổng `5173` trên localhost. Backend được bind riêng trên `127.0.0.1:5001` để Cloudflare Tunnel cung cấp API tại hostname riêng. Nginx trong web tiếp tục proxy `/api` và `/socket.io` nội bộ cho web. Các cổng chỉ bind loopback, không mở trực tiếp ra Internet.
 
 1. Trên máy Linux, cài Docker Engine và Docker Compose plugin, clone repo rồi vào thư mục dự án.
 2. Tạo `backend/.env` từ `backend/.env.example`. Đặt `NODE_ENV=production`, `PORT=5000`, các secret JWT dài và ngẫu nhiên, và `CLIENT_URL=https://<domain-cua-ban>`. Compose sẽ ghi đè `MONGODB_URI` để backend kết nối MongoDB container nội bộ (`mongodb://mongodb:27017/sos_systems`). Điền các khóa dịch vụ mà hệ thống sử dụng. Không dùng các secret mẫu trong `.env.example`.
-3. Trong Cloudflare Zero Trust, cấu hình hostname cho Tunnel trỏ tới `http://localhost:3000` (hoặc địa chỉ Docker host phù hợp nếu Tunnel chạy trong container).
+3. Trong cấu hình Tunnel, trỏ hostname web tới `http://localhost:5173` và hostname API, ví dụ `api.example.com`, tới `http://localhost:5001`.
 4. Khởi động tại thư mục repo:
 
    ```bash
@@ -304,13 +304,13 @@ Frontend được phục vụ ở cổng `5173` trên localhost. Nginx trong con
    docker compose logs -f
    ```
 
-   Kiểm tra `http://localhost:5173/api/health` trên Linux và sau đó mở hostname HTTPS của bạn.
+   Kiểm tra `http://localhost:5173/api/health` và `http://localhost:5001/api/health` trên Linux, sau đó mở hostname HTTPS.
 
 MongoDB lưu dữ liệu trong Docker volume `mongodb_data`, tồn tại qua các lần cập nhật container. Sao lưu volume này định kỳ. Dữ liệu hiện có trên Atlas không tự động được nhập vào MongoDB container.
 
 Để cập nhật phiên bản, chạy `git pull` rồi `docker compose up -d --build`. Dữ liệu upload nằm trong `backend/uploads`; hãy sao lưu thư mục này nếu ứng dụng lưu file cục bộ. Nếu các file được lưu trên Cloudinary, cấu hình Cloudinary trong backend env và có thể bỏ qua lưu trữ ảnh cục bộ.
 
-**Lưu ý:** URL web dùng `/api` và `/socket.io` cùng origin, nên không cần khai báo IP/domain public lúc build frontend. Mobile app là client riêng; khi phát hành app, đặt `EXPO_PUBLIC_API_URL` thành `https://<domain-cua-ban>/api` và build lại app.
+**Lưu ý:** URL web dùng `/api` và `/socket.io` cùng origin, nên không cần khai báo IP/domain public lúc build frontend. Mobile app dùng hostname API riêng; đặt `EXPO_PUBLIC_API_URL=https://api.example.com/api` trong `app/.env` rồi build lại app. Socket.IO của app kết nối cùng hostname API.
 
 ### Yêu cầu môi trường
 - **Node.js** `>= 20.x` và **npm**
