@@ -1434,13 +1434,9 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             <Ionicons name="chevron-back" size={26} color="#0F172A" />
           </TouchableOpacity>
 
-          {/* Avatar chính quyền địa phương với ảnh đại diện và chấm trạng thái online */}
+          {/* Avatar địa phương với icon tòa nhà và chấm trạng thái online */}
           <View style={styles.headerAvatarBox}>
-            <AuthorityAvatarView
-              avatarUrl={localInfo?.authority?.avatarUrl}
-              size={38}
-              iconSize={17}
-            />
+            <FontAwesome5 name="landmark" size={17} color="#0066FF" />
             <View
               style={[
                 styles.headerStatusDot,
