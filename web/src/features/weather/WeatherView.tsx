@@ -21,6 +21,7 @@ import {
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
+import { exportWeatherArticlesExcel } from './exportWeatherExcel';
 import {
   CloudSun,
   RefreshCw,
@@ -164,6 +165,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [detailItem, setDetailItem] = useState<WeatherArticleItem | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [runningWorkflow, setRunningWorkflow] = useState<boolean>(false);
+  const [exportingWeather, setExportingWeather] = useState<boolean>(false);
 
   // Modal Duyệt & Đăng thông báo
   const [broadcastModalItem, setBroadcastModalItem] = useState<WeatherArticleItem | null>(null);
@@ -742,66 +744,71 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     return <span className="weather-status-pill khac">{status || 'Khác'}</span>;
   };
 
-  // Xuất CSV danh sách bản tin thời tiết hiện tại
-  const handleExportWeatherCsv = () => {
-    const escapeCsvCell = (val: unknown): string => {
-      const str = val === null || val === undefined ? '' : String(val);
-      return `"${str.replace(/"/g, '""')}"`;
-    };
+  // Xuất biểu mẫu Excel (.xlsx) danh sách bản tin thời tiết theo tab & bộ lọc hiện tại
+  const handleExportWeatherExcel = async () => {
+    setExportingWeather(true);
+    try {
+      const queryStatus =
+        activeTab === 'approved'
+          ? 'approved'
+          : activeTab === 'pending'
+            ? 'pending'
+            : activeTab === 'archived'
+              ? 'archived'
+              : undefined;
 
-    const getStatusText = (status?: string) => {
-      const s = (status || '').toUpperCase();
-      if (s === 'ACTIVE' || s === 'APPROVED') return 'Đã phát hành';
-      if (s === 'PENDING') return 'Chờ kiểm duyệt';
-      if (s === 'ARCHIVED' || s === 'REJECTED') return 'Lưu trữ';
-      return status || 'Khác';
-    };
+      let exportList = articles;
+      let exportCounts = globalCounts;
 
-    const headers = [
-      'STT',
-      'Tiêu đề bản tin',
-      'Phân loại',
-      'Trạng thái',
-      'Điểm độ tin cậy',
-      'Khu vực',
-      'Nguồn tin',
-      'Tóm tắt nội dung',
-      'Thời gian xuất bản',
-      'Link bài viết gốc',
-    ];
+      if (totalPages > 1 || totalItems > articles.length) {
+        const res = await fetchWeatherArticlesApi({
+          search: searchTerm.trim() || undefined,
+          category: selectedCategory !== 'ALL' ? selectedCategory : undefined,
+          status: queryStatus,
+          sortBy,
+          all: true,
+        });
+        if (res && res.success && Array.isArray(res.data)) {
+          exportList = res.data;
+          const meta = res.meta || res.pagination;
+          if (meta?.counts) {
+            exportCounts = meta.counts;
+          }
+        }
+      }
 
-    const nonPendingArticles = articles.filter(
-      (item) => (item.status || '').toUpperCase() !== 'PENDING'
-    );
+      if (exportList.length === 0) {
+        toast.warning('Không có bản tin thời tiết nào phù hợp để xuất.');
+        return;
+      }
 
-    const rows = nonPendingArticles.map((item, idx) => [
-      idx + 1,
-      item.title || '',
-      item.category || '',
-      getStatusText(item.status),
-      item.relevance_score ?? item.score ?? 50,
-      item.area || (typeof item.areaId === 'object' ? item.areaId?.name : '') || 'Toàn quốc',
-      item.sourceName || item.source_name || 'Hệ thống',
-      item.summary || (item.content ? item.content.slice(0, 200) : ''),
-      item.publishedAt || item.published_at || item.createdAt
-        ? new Date((item.publishedAt || item.published_at || item.createdAt) as string).toLocaleString('vi-VN')
-        : '',
-      item.articleUrl || item.source_url || '',
-    ]);
+      const categoryLabels = Object.fromEntries(
+        Object.entries(CATEGORY_MAP).map(([key, val]) => [key, val.label])
+      );
+      const exporterName = user?.fullName
+        ? user.authority?.position
+          ? `${user.fullName} (${user.authority.position})`
+          : user.fullName
+        : 'Quản trị viên Hệ thống';
 
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Danh_sach_ban_tin_thoi_tiet_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${nonPendingArticles.length} bản tin thời tiết ra file CSV.`);
+      exportWeatherArticlesExcel({
+        articles: exportList,
+        activeTab,
+        searchTerm,
+        selectedCategory,
+        sortBy,
+        exporterName,
+        categoryLabels,
+        counts: exportCounts,
+      });
+
+      toast.success(`Đã xuất biểu mẫu Excel gồm ${exportList.length} bản tin thời tiết.`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Không xác định';
+      toast.error('Lỗi khi xuất biểu mẫu bản tin thời tiết: ' + errMsg);
+    } finally {
+      setExportingWeather(false);
+    }
   };
 
   return (
@@ -853,11 +860,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
           <button
             className="btn-secondary-weather"
-            onClick={handleExportWeatherCsv}
-            title="Xuất danh sách bản tin thời tiết hiện tại ra file CSV"
+            onClick={handleExportWeatherExcel}
+            disabled={exportingWeather || loading}
+            title="Xuất biểu mẫu Excel báo cáo danh sách bản tin thời tiết hiện tại (.xlsx)"
           >
-            <Download size={15} />
-            Xuất CSV
+            {exportingWeather ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
+            {exportingWeather ? 'Đang xuất...' : 'Xuất Excel'}
           </button>
           <button
             className="btn-secondary-weather"

@@ -1,23 +1,24 @@
 require('dotenv').config();
 const dns = require('dns');
-// Tự động phân giải DNS qua Google DNS & Cloudflare để khắc phục triệt để lỗi querySrv ECONNREFUSED của mạng Wifi gia đình
-try {
-  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-} catch (e) {
-  // Bỏ qua nếu môi trường không cho phép
+// Tự động phân giải DNS qua Google DNS & Cloudflare khi chạy cục bộ để tránh lỗi querySrv ECONNREFUSED
+if (!process.env.RENDER && !process.env.VERCEL) {
+  try {
+    dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+  } catch (e) {
+    // Bỏ qua nếu môi trường không cho phép
+  }
 }
 
 const http = require('http');
-const mongoose = require('mongoose');
 const app = require('./app');
+const { connectDatabase } = require('./config/database');
 const { initSocket } = require('./socket');
 
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sos_systems';
 
 const startServer = async () => {
   try {
-    await mongoose.connect(MONGODB_URI);
+    await connectDatabase();
     console.log(' Kết nối MongoDB thành công');
 
     // Tự động chuẩn hóa các mã SOS cũ dài hơn 9 ký tự về 8 ký tự (SOS-XXXX)
@@ -171,4 +172,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module && !process.env.VERCEL) {
+  startServer();
+}
+
+module.exports = app;
