@@ -13,6 +13,7 @@ const {
 const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
 const auditService = require('./audit.service');
+const rescueTeamService = require('./rescueTeam.service');
 
 /**
  * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
@@ -214,6 +215,10 @@ class SosAssignmentService {
     }
     if (team.status !== 'ACTIVE' || team.operationalStatus === 'INACTIVE') {
       throw new ApiError(400, 'Đội cứu hộ hiện không hoạt động và không thể nhận nhiệm vụ');
+    }
+    const sosCitizenId = sos.citizenId?._id ? String(sos.citizenId._id) : sos.citizenId ? String(sos.citizenId) : null;
+    if (sosCitizenId && team.leaderId && String(team.leaderId) === sosCitizenId) {
+      throw new ApiError(400, 'Đội trưởng của đội cứu hộ này đang gửi yêu cầu SOS nên đội không thể tự ứng cứu');
     }
     if (team.operationalStatus && team.operationalStatus !== 'READY') {
       throw new ApiError(400, 'Đội cứu hộ chưa ở trạng thái sẵn sàng xuất phát; cần cập nhật trạng thái trước khi phân công');
@@ -715,6 +720,14 @@ class SosAssignmentService {
           sosObj.assignmentId = assignment._id;
         }
         emitSosUpdated(sosObj);
+
+        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
+          try {
+            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+          } catch (restoreErr) {
+            console.warn('Restore leader team on assignment update error:', restoreErr?.message || restoreErr);
+          }
+        }
       }
     }
 
@@ -1195,6 +1208,14 @@ class SosAssignmentService {
           sosObj.assignmentId = assignment._id;
         }
         emitSosUpdated(sosObj);
+
+        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
+          try {
+            await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+          } catch (restoreErr) {
+            console.warn('Restore leader team on assignment update error:', restoreErr?.message || restoreErr);
+          }
+        }
       }
     }
 

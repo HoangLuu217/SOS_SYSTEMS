@@ -33,9 +33,15 @@ export const ReassignModal = ({
   currentVehicleId,
   onSubmit,
 }: Props) => {
-  const [selectedTeamId, setSelectedTeamId] = useState(currentTeamId || rescueTeams[0]?.id || '');
-
-  const availableTeams = rescueTeams;
+  const availableTeams = rescueTeams.filter(
+    (t) =>
+      t.status !== 'Off-duty' &&
+      (!t.teamStatus || t.teamStatus === 'ACTIVE') &&
+      t.operationalStatus !== 'INACTIVE'
+  );
+  const [selectedTeamId, setSelectedTeamId] = useState(
+    (availableTeams.some((t) => t.id === currentTeamId) ? currentTeamId : availableTeams[0]?.id) || ''
+  );
   const activeTeam = availableTeams.find((t) => t.id === selectedTeamId) || availableTeams[0];
 
   const availableRescuers = activeTeam?.rescuers || [];
@@ -132,7 +138,7 @@ export const ReassignModal = ({
                 value={selectedTeamId}
                 onChange={(e) => handleTeamChange(e.target.value)}
               >
-                {rescueTeams.map((t) => (
+                {availableTeams.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.availableRescuersCount} cán bộ sẵn sàng)
                   </option>

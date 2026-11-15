@@ -3,6 +3,7 @@ const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment, Vehicle
 const ApiError = require('../utils/apiError');
 const sosTriageService = require('./sosTriage.service');
 const geminiService = require('./gemini.service');
+const rescueTeamService = require('./rescueTeam.service');
 
 /**
  * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
@@ -239,6 +240,13 @@ const createSosRequest = async (citizenId, sosData) => {
       ? `Tạo ca cứu nạn phụ / báo hộ bạn bè (Tài khoản đang có ca khác)`
       : 'Tạo yêu cầu cứu nạn mới',
   });
+
+  // Nếu người gửi SOS là Đội trưởng của một đội cứu hộ -> tự động tạm ngưng đội đó để tránh phân công nhầm
+  try {
+    await rescueTeamService.deactivateLeaderTeamsOnSos(citizenId, newSos);
+  } catch (leaderTeamErr) {
+    console.warn('Auto-deactivate leader team on SOS create error:', leaderTeamErr?.message || leaderTeamErr);
+  }
 
   const populatedSos = await SosRequest.findById(newSos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
@@ -608,6 +616,14 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
     note
   });
 
+  if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus) && sos.citizenId) {
+    try {
+      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+    } catch (restoreErr) {
+      console.warn('Restore leader team on SOS status change error:', restoreErr?.message || restoreErr);
+    }
+  }
+
   return sos;
 };
 
@@ -795,6 +811,14 @@ const deleteSos = async (id, user) => {
   await SosStatusHistory.deleteMany({ sosId: id });
   await SosRequest.deleteOne({ _id: id });
 
+  if (sos.citizenId) {
+    try {
+      await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+    } catch (restoreErr) {
+      console.warn('Restore leader team on SOS delete error:', restoreErr?.message || restoreErr);
+    }
+  }
+
   return sos;
 };
 
@@ -825,8 +849,11 @@ const clearCancelledSos = async (user, sosIds = []) => {
     ];
   }
 
-  const cancelledList = await SosRequest.find(query).select('_id');
+  const cancelledList = await SosRequest.find(query).select('_id citizenId');
   const ids = cancelledList.map((s) => s._id);
+  const citizenIds = Array.from(
+    new Set(cancelledList.map((s) => (s.citizenId ? String(s.citizenId) : '')).filter(Boolean))
+  );
 
   if (ids.length > 0) {
     await SosAssignment.deleteMany({
@@ -834,6 +861,11 @@ const clearCancelledSos = async (user, sosIds = []) => {
     });
     await SosStatusHistory.deleteMany({ sosId: { $in: ids } });
     await SosRequest.deleteMany({ _id: { $in: ids } });
+    for (const cId of citizenIds) {
+      try {
+        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(cId);
+      } catch (_) {}
+    }
   }
 
   return { deletedCount: ids.length, deletedIds: ids };
@@ -1299,6 +1331,14 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
     }
 
     await sos.save();
+
+    if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(sos.status) && sos.citizenId) {
+      try {
+        await rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId);
+      } catch (restoreErr) {
+        console.warn('Restore leader team on shore handoff complete error:', restoreErr?.message || restoreErr);
+      }
+    }
 
     try {
       await SosStatusHistory.create({

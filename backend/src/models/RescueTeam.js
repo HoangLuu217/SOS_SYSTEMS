@@ -134,6 +134,10 @@ const rescueTeamSchema = new mongoose.Schema(
       },
       default: 'ACTIVE',
     },
+    autoDeactivatedByLeaderSos: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

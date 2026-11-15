@@ -325,9 +325,13 @@ class RescueTeamService {
     if (updateData.description !== undefined) team.description = updateData.description;
     if (updateData.phone !== undefined) team.phone = updateData.phone;
     if (updateData.headquartersAddress !== undefined) team.headquartersAddress = updateData.headquartersAddress;
-    if (updateData.status !== undefined) team.status = updateData.status;
+    if (updateData.status !== undefined) {
+      team.status = updateData.status;
+      team.autoDeactivatedByLeaderSos = false;
+    }
     if (updateData.operationalStatus !== undefined) {
       team.operationalStatus = updateData.operationalStatus;
+      team.autoDeactivatedByLeaderSos = false;
       if (updateData.operationalStatus === 'INACTIVE') {
         team.status = 'INACTIVE';
       } else {
@@ -803,6 +807,115 @@ class RescueTeamService {
       { path: 'leaderId', select: 'fullName phone email rescuer' },
       { path: 'members.rescuerId', select: 'fullName phone email rescuer' },
     ]);
+  }
+
+  /**
+   * Khi Đội trưởng của một đội gửi yêu cầu SOS, tự động chuyển đội đó sang trạng thái
+   * Không hoạt động (INACTIVE) để đội không hiện lên danh sách phân công và tránh điều nhầm.
+   * Thành viên thường (không phải leaderId) gửi SOS sẽ KHÔNG kích hoạt hàm này để đội vẫn có thể đi cứu đồng đội.
+   */
+  async deactivateLeaderTeamsOnSos(citizenId, sos = null) {
+    if (!citizenId) return [];
+    const uid = typeof citizenId === 'object' && citizenId._id ? citizenId._id : citizenId;
+
+    const leaderTeams = await RescueTeam.find({
+      leaderId: uid,
+      status: { $ne: 'SUSPENDED' },
+      $or: [{ status: 'ACTIVE' }, { operationalStatus: { $ne: 'INACTIVE' } }],
+    });
+
+    if (!leaderTeams || leaderTeams.length === 0) return [];
+
+    const updatedTeamIds = [];
+    let io = null;
+    try {
+      const { getIO } = require('../socket');
+      io = getIO();
+    } catch (_) {}
+
+    for (const team of leaderTeams) {
+      team.status = 'INACTIVE';
+      team.operationalStatus = 'INACTIVE';
+      team.autoDeactivatedByLeaderSos = true;
+      await team.save();
+      updatedTeamIds.push(team._id.toString());
+
+      if (io) {
+        io.emit('rescue_teams_updated', {
+          teamId: team._id.toString(),
+          action: 'LEADER_SOS_DEACTIVATED',
+          status: 'INACTIVE',
+          operationalStatus: 'INACTIVE',
+          sosId: sos?._id ? String(sos._id) : null,
+          sosCode: sos?.sosCode || null,
+        });
+      }
+    }
+
+    if (io && updatedTeamIds.length > 0) {
+      io.emit('sos:sync');
+    }
+
+    return updatedTeamIds;
+  }
+
+  /**
+   * Khi các yêu cầu SOS do Đội trưởng gửi đã đóng/hủy/xóa hết, tự động khôi phục
+   * trạng thái hoạt động (ACTIVE / READY) cho đội từng bị tạm dừng do SOS của đội trưởng.
+   */
+  async restoreLeaderTeamsIfNoActiveSos(citizenId) {
+    if (!citizenId) return [];
+    const uid = typeof citizenId === 'object' && citizenId._id ? citizenId._id : citizenId;
+
+    const autoPausedTeams = await RescueTeam.find({
+      leaderId: uid,
+      autoDeactivatedByLeaderSos: true,
+    });
+
+    if (!autoPausedTeams || autoPausedTeams.length === 0) return [];
+
+    const { SosRequest, SosAssignment } = require('../models');
+    const activeSosStatuses = ['PENDING', 'VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'];
+    const hasOpenLeaderSos = await SosRequest.exists({
+      citizenId: uid,
+      status: { $in: activeSosStatuses },
+    });
+
+    if (hasOpenLeaderSos) return [];
+
+    const restoredTeamIds = [];
+    let io = null;
+    try {
+      const { getIO } = require('../socket');
+      io = getIO();
+    } catch (_) {}
+
+    for (const team of autoPausedTeams) {
+      const hasOpenAssign = await SosAssignment.exists({
+        $or: [{ rescueTeamId: team._id }, { teamId: team._id }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      });
+      team.status = 'ACTIVE';
+      team.operationalStatus = hasOpenAssign ? 'ON_MISSION' : 'READY';
+      team.autoDeactivatedByLeaderSos = false;
+      await team.save();
+      restoredTeamIds.push(team._id.toString());
+
+      if (io) {
+        io.emit('rescue_teams_updated', {
+          teamId: team._id.toString(),
+          action: 'LEADER_SOS_RESTORED',
+          status: 'ACTIVE',
+          operationalStatus: team.operationalStatus,
+        });
+      }
+    }
+
+    if (io && restoredTeamIds.length > 0) {
+      io.emit('sos:sync');
+    }
+
+    return restoredTeamIds;
   }
 }
 

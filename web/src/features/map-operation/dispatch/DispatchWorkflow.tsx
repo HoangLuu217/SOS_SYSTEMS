@@ -207,9 +207,23 @@ export const DispatchWorkflow = ({
   // Available rescue teams filtered by officer jurisdiction (hoặc mở rộng sang đội chi viện lân cận nếu toàn bộ đội nội vùng đang bận)
   // AI được ưu tiên hiển thị trước; các đội còn lại để cán bộ tự kiểm tra.
   const availableTeams = useMemo(() => {
+    // Loại bỏ hoàn toàn các đội đang không hoạt động (INACTIVE / SUSPENDED / Off-duty)
+    // hoặc có đội trưởng đang là người gửi ca SOS hiện tại để tránh phân công nhầm đội.
+    // Thành viên thường gửi SOS vẫn giữ nguyên đội hoạt động để có thể cử đội đi cứu đồng đội.
+    const isTeamEligibleToAppear = (t: RescueTeam) => {
+      if (t.status === 'Off-duty') return false;
+      if (t.teamStatus && t.teamStatus !== 'ACTIVE') return false;
+      if (t.operationalStatus === 'INACTIVE') return false;
+      if (selectedSos?.citizenId && t.leaderId && String(t.leaderId) === String(selectedSos.citizenId)) {
+        return false;
+      }
+      return true;
+    };
+
+    const activeTeamsPool = rescueTeams.filter(isTeamEligibleToAppear);
     const inAreaTeams = isAdmin
-      ? [...rescueTeams]
-      : rescueTeams.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
+      ? [...activeTeamsPool]
+      : activeTeamsPool.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
 
     const inAreaReadyCount = inAreaTeams.filter(
       (t) =>
@@ -224,7 +238,7 @@ export const DispatchWorkflow = ({
     // Mở rộng danh sách đội chi viện khi AI đề xuất đội ngoài địa bàn.
     const backupCrossAreaTeams =
       !isAdmin && (inAreaReadyCount === 0 || advisorIds.size > 0)
-        ? rescueTeams
+        ? activeTeamsPool
           .filter((t) => {
             if (inAreaIds.has(t.id)) return false;
             const cand = candidateByTeamId.get(t.id);
@@ -281,7 +295,7 @@ export const DispatchWorkflow = ({
     }
 
     return list;
-  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, candidateByTeamId, smartRecs]);
+  }, [rescueTeams, isAdmin, activeOfficer, managedWard, areas, selectedSos?.id, selectedSos?.citizenId, candidateByTeamId, smartRecs]);
 
   // Đếm số lượng đội thực tế đang sẵn sàng (không bận nhiệm vụ)
   const readyTeamsCount = useMemo(() => {
