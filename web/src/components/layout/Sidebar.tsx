@@ -9,6 +9,7 @@ import {
   fetchChatConversations,
   updateUserProfile,
   updateUserAvatar,
+  changeUserPassword,
   sendPhoneOtp,
   verifyPhoneOtp,
 } from '@/api';
@@ -584,6 +585,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
 
+  // Trạng thái đổi mật khẩu trong hồ sơ
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
   // Trạng thái đổi ảnh đại diện (Cloudinary)
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -1135,7 +1145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                   {/* Bố cục hai cột độc lập */}
                   <div className="sos-profile-columns-grid">
-                    {/* Cột trái: Họ và tên cán bộ → Cơ quan/Đơn vị công tác → Hòm thư điện tử công vụ */}
+                    {/* Cột trái: Họ và tên cán bộ → Hòm thư điện tử công vụ */}
                     <div className="sos-profile-col sos-profile-col-left">
                       <div className="sos-profile-field sos-field-fullname">
                         <label>
@@ -1148,20 +1158,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           value={localProfile.fullName}
                           onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
                           placeholder="VD: Cán Bộ Điều Hành SOS"
-                        />
-                      </div>
-
-                      <div className="sos-profile-field sos-field-organization">
-                        <label>
-                          <i className="bi bi-building"></i>
-                          <span>Cơ quan / Đơn vị công tác:</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={localProfile.organizationName}
-                          onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
-                          placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
                         />
                       </div>
 
@@ -1180,21 +1176,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     </div>
 
-                    {/* Cột phải: Chức vụ/Vị trí → Số điện thoại trực ban → Khối xác thực OTP */}
+                    {/* Cột phải: Số điện thoại trực ban → Khối xác thực OTP */}
                     <div className="sos-profile-col sos-profile-col-right">
-                      <div className="sos-profile-field sos-field-position">
-                        <label>
-                          <i className="bi bi-shield"></i>
-                          <span>Chức vụ / Vị trí:</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={localProfile.position}
-                          onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
-                          placeholder="VD: Chuyên viên Điều phối Tác chiến"
-                        />
-                      </div>
 
                       <div className="sos-profile-field sos-field-phone">
                         <div className="sos-phone-label-row">
@@ -1379,6 +1362,184 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       />
                     </div>
                   )}
+
+                  {/* Khu vực Đổi mật khẩu tài khoản */}
+                  <div
+                    style={{
+                      marginTop: 14,
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      background: '#f8fafc',
+                      padding: '12px 14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13.5, color: '#0f172a' }}>
+                        <i className="bi bi-key" style={{ color: '#2563eb' }}></i>
+                        <span>Bảo mật &amp; Đổi mật khẩu</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPasswordSection((prev) => !prev);
+                          setPasswordError(null);
+                          setPasswordSuccess(null);
+                        }}
+                        style={{
+                          border: '1px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          borderRadius: 8,
+                          padding: '5px 12px',
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showPasswordSection ? 'Thu gọn' : 'Đổi mật khẩu'}
+                      </button>
+                    </div>
+
+                    {showPasswordSection && (
+                      <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                        <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                          <label>
+                            <span>Mật khẩu hiện tại:</span>
+                          </label>
+                          <input
+                            type="password"
+                            value={oldPassword}
+                            onChange={(e) => {
+                              setOldPassword(e.target.value);
+                              if (passwordError) setPasswordError(null);
+                            }}
+                            placeholder="Nhập mật khẩu hiện tại..."
+                            autoComplete="current-password"
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                            <label>
+                              <span>Mật khẩu mới:</span>
+                            </label>
+                            <input
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => {
+                                setNewPassword(e.target.value);
+                                if (passwordError) setPasswordError(null);
+                              }}
+                              placeholder="Ít nhất 8 ký tự, chữ hoa, số..."
+                              autoComplete="new-password"
+                            />
+                          </div>
+
+                          <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                            <label>
+                              <span>Xác nhận mật khẩu mới:</span>
+                            </label>
+                            <input
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                if (passwordError) setPasswordError(null);
+                              }}
+                              placeholder="Nhập lại mật khẩu mới..."
+                              autoComplete="new-password"
+                            />
+                          </div>
+                        </div>
+
+                        {passwordError && (
+                          <div className="sos-profile-form-error" style={{ marginTop: 2 }}>
+                            <i className="bi bi-exclamation-triangle"></i> {passwordError}
+                          </div>
+                        )}
+
+                        {passwordSuccess && (
+                          <div
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 8,
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              color: '#047857',
+                              fontSize: 13,
+                              fontWeight: 500,
+                            }}
+                          >
+                            <i className="bi bi-check-circle-fill" style={{ marginRight: 6 }}></i>
+                            {passwordSuccess}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            disabled={changingPassword}
+                            onClick={async () => {
+                              setPasswordError(null);
+                              setPasswordSuccess(null);
+
+                              if (!oldPassword.trim()) {
+                                setPasswordError('Vui lòng nhập mật khẩu hiện tại.');
+                                return;
+                              }
+                              if (!newPassword.trim()) {
+                                setPasswordError('Vui lòng nhập mật khẩu mới.');
+                                return;
+                              }
+                              if (newPassword !== confirmPassword) {
+                                setPasswordError('Xác nhận mật khẩu mới không khớp.');
+                                return;
+                              }
+
+                              setChangingPassword(true);
+                              try {
+                                const res = await changeUserPassword({
+                                  oldPassword,
+                                  newPassword,
+                                });
+                                if (res.success) {
+                                  setPasswordSuccess(res.message || 'Đổi mật khẩu thành công!');
+                                  setOldPassword('');
+                                  setNewPassword('');
+                                  setConfirmPassword('');
+                                } else {
+                                  setPasswordError(res.message || 'Không thể đổi mật khẩu.');
+                                }
+                              } catch (err: any) {
+                                setPasswordError(err?.message || 'Lỗi khi đổi mật khẩu.');
+                              } finally {
+                                setChangingPassword(false);
+                              }
+                            }}
+                            style={{
+                              border: 'none',
+                              background: changingPassword ? '#93c5fd' : '#0284c7',
+                              color: '#ffffff',
+                              borderRadius: 8,
+                              padding: '8px 16px',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: changingPassword ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {changingPassword ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {profileErrorMsg && (
                     <div className="sos-profile-form-error">
