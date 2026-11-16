@@ -24,6 +24,7 @@ import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, EmergencyContact } from '@/api';
 import { LogoSOS } from '@/components';
+import { validateRescuerAge } from '@/utils/cccdHelper';
 import { RescuerVerificationStatusModal } from './RescuerVerificationStatusModal';
 
 export interface CitizenProfileOverviewScreenProps {
@@ -70,6 +71,32 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
   const displayName = user?.fullName || 'Người dân';
   const displayPhone = user?.phone || 'Chưa cập nhật SĐT';
   const displayEmail = user?.email || 'Chưa có email';
+
+  // Kiểm tra độ tuổi trước khi mở màn hình đăng ký Cứu hộ viên
+  const handleTryNavigateToProfessional = () => {
+    const effectiveDob = rescuerData?.dateOfBirth || user?.dateOfBirth;
+    const ageCheck = validateRescuerAge(effectiveDob);
+    if (!ageCheck.isValid) {
+      if (ageCheck.code === 'MISSING') {
+        Alert.alert(
+          'Cần bổ sung ngày sinh',
+          ageCheck.message,
+          [
+            { text: 'Đóng', style: 'cancel' },
+            { text: 'Cập nhật ngay', onPress: () => onNavigateToEditProfile() },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Chưa đủ điều kiện độ tuổi',
+          ageCheck.message,
+          [{ text: 'Đã hiểu', style: 'default' }]
+        );
+      }
+      return;
+    }
+    onNavigateToProfessional?.();
+  };
 
   // Tải thông tin người liên hệ khẩn cấp (đồng bộ real-time khi quay lại màn hình)
   useEffect(() => {
@@ -431,7 +458,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
                 if (rescuerStatus === 'PENDING' || rescuerStatus === 'REJECTED') {
                   setStatusModalVisible(true);
                 } else {
-                  onNavigateToProfessional();
+                  handleTryNavigateToProfessional();
                 }
               }}
               activeOpacity={0.85}
@@ -659,7 +686,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
         onClose={() => setStatusModalVisible(false)}
         onUpdateProfile={() => {
           setStatusModalVisible(false);
-          onNavigateToProfessional?.();
+          handleTryNavigateToProfessional();
         }}
         rescuerData={rescuerData}
       />

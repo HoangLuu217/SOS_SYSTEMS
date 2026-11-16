@@ -46,11 +46,13 @@ export interface RescuerProfileData {
  */
 export interface UpdateRescuerProfileDto {
   idNumber?: string;
+  isCccdVerified?: boolean;
   skills?: string[];
   experience?: string;
   vehicleType?: RescuerVehicleType | string;
   fullName?: string;
   address?: string;
+  dateOfBirth?: string;
   areaId?: string;
   areaName?: string;
 }

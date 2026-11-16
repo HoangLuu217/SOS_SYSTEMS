@@ -2,6 +2,75 @@ const mongoose = require('mongoose');
 const { User, AdministrativeArea, Notification } = require('../models');
 const ApiError = require('../utils/apiError');
 
+const MIN_RESCUER_AGE = 18;
+const MAX_RESCUER_AGE = 60;
+
+function parseFlexibleDobBackend(dobInput) {
+  if (!dobInput) return null;
+  if (dobInput instanceof Date) {
+    return Number.isNaN(dobInput.getTime()) ? null : dobInput;
+  }
+  const trimmed = String(dobInput).trim();
+  if (!trimmed) return null;
+
+  if (/^\d{8}$/.test(trimmed)) {
+    const day = Number.parseInt(trimmed.slice(0, 2), 10);
+    const month = Number.parseInt(trimmed.slice(2, 4), 10);
+    const year = Number.parseInt(trimmed.slice(4, 8), 10);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (
+      dt.getUTCFullYear() === year &&
+      dt.getUTCMonth() === month - 1 &&
+      dt.getUTCDate() === day
+    ) {
+      return dt;
+    }
+    return null;
+  }
+
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const day = Number.parseInt(dmyMatch[1], 10);
+    const month = Number.parseInt(dmyMatch[2], 10);
+    const year = Number.parseInt(dmyMatch[3], 10);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (
+      dt.getUTCFullYear() === year &&
+      dt.getUTCMonth() === month - 1 &&
+      dt.getUTCDate() === day
+    ) {
+      return dt;
+    }
+    return null;
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function validateAndResolveRescuerDob(dobInput) {
+  const birth = parseFlexibleDobBackend(dobInput);
+  if (!birth) {
+    throw new ApiError(
+      400,
+      `Vui lòng cập nhật ngày tháng năm sinh trước khi đăng ký Cứu hộ viên (yêu cầu từ đủ ${MIN_RESCUER_AGE} đến ${MAX_RESCUER_AGE} tuổi).`
+    );
+  }
+  const now = new Date();
+  let age = now.getFullYear() - birth.getUTCFullYear();
+  const monthDiff = now.getMonth() - birth.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getUTCDate())) {
+    age -= 1;
+  }
+  if (age < MIN_RESCUER_AGE || age > MAX_RESCUER_AGE) {
+    throw new ApiError(
+      400,
+      `Bạn hiện ${age} tuổi. Người đăng ký Cứu hộ viên phải từ đủ ${MIN_RESCUER_AGE} đến ${MAX_RESCUER_AGE} tuổi.`
+    );
+  }
+  return birth;
+}
+
 class RescuerService {
   /**
    * Lấy thông tin chi tiết hồ sơ Cứu hộ viên của chính mình
@@ -63,6 +132,18 @@ class RescuerService {
       throw new ApiError(404, 'Không tìm thấy tài khoản');
     }
 
+    // Kiểm tra độ tuổi (từ đủ 18 đến 60 tuổi) khi nộp đơn đăng ký / cập nhật hồ sơ cứu hộ viên
+    const candidateDob = data.dateOfBirth !== undefined ? data.dateOfBirth : user.dateOfBirth;
+    const isUnverifiedOrApplying =
+      !user.roles.includes('RESCUER') ||
+      !user.rescuer?.verificationStatus ||
+      user.rescuer.verificationStatus !== 'VERIFIED' ||
+      data.dateOfBirth !== undefined;
+    if (isUnverifiedOrApplying) {
+      const validBirthDate = validateAndResolveRescuerDob(candidateDob);
+      user.dateOfBirth = validBirthDate;
+    }
+
     // Nếu người dùng đang là CITIZEN đăng ký làm RESCUER: tự động thêm role và set PENDING
     if (!user.roles.includes('RESCUER')) {
       user.roles.push('RESCUER');
@@ -120,7 +201,6 @@ class RescuerService {
     if (data.address !== undefined) user.address = data.address ? data.address.trim() : null;
     if (data.avatarUrl !== undefined) user.avatarUrl = data.avatarUrl;
     if (data.gender !== undefined) user.gender = data.gender;
-    if (data.dateOfBirth !== undefined) user.dateOfBirth = data.dateOfBirth;
 
     await user.save();
 
