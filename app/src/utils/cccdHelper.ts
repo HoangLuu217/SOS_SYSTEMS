@@ -75,8 +75,133 @@ export const parseCccdQr = (data: string): ParsedCccdData | null => {
   };
 };
 
+export const MIN_RESCUER_AGE = 18;
+export const MAX_RESCUER_AGE = 60;
+
 /**
- * Đối chiếu thông tin CCCD quét được với tài khoản người dùng
+ * Chuyển đổi linh hoạt chuỗi ngày sinh (DDMMYYYY, DD/MM/YYYY, YYYY-MM-DD, ISO) sang Date
+ */
+export const parseFlexibleDob = (dobInput?: string | Date | null): Date | null => {
+  if (!dobInput) return null;
+  if (dobInput instanceof Date) {
+    return Number.isNaN(dobInput.getTime()) ? null : dobInput;
+  }
+
+  const trimmed = String(dobInput).trim();
+  if (!trimmed) return null;
+
+  // Định dạng DDMMYYYY từ mã QR CCCD
+  if (/^\d{8}$/.test(trimmed)) {
+    const day = Number.parseInt(trimmed.slice(0, 2), 10);
+    const month = Number.parseInt(trimmed.slice(2, 4), 10);
+    const year = Number.parseInt(trimmed.slice(4, 8), 10);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (
+      dt.getUTCFullYear() === year &&
+      dt.getUTCMonth() === month - 1 &&
+      dt.getUTCDate() === day
+    ) {
+      return dt;
+    }
+    return null;
+  }
+
+  // Định dạng DD/MM/YYYY hoặc DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const day = Number.parseInt(dmyMatch[1], 10);
+    const month = Number.parseInt(dmyMatch[2], 10);
+    const year = Number.parseInt(dmyMatch[3], 10);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (
+      dt.getUTCFullYear() === year &&
+      dt.getUTCMonth() === month - 1 &&
+      dt.getUTCDate() === day
+    ) {
+      return dt;
+    }
+    return null;
+  }
+
+  // Định dạng ISO hoặc YYYY-MM-DD
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/**
+ * Tính tuổi tròn theo ngày tháng năm sinh
+ */
+export const calculateExactAge = (
+  dobInput?: string | Date | null,
+  referenceDate: Date = new Date()
+): number | null => {
+  const birth = parseFlexibleDob(dobInput);
+  if (!birth) return null;
+
+  let age = referenceDate.getFullYear() - birth.getUTCFullYear();
+  const monthDiff = referenceDate.getMonth() - birth.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && referenceDate.getDate() < birth.getUTCDate())) {
+    age -= 1;
+  }
+  return age;
+};
+
+export interface RescuerAgeValidationResult {
+  isValid: boolean;
+  age: number | null;
+  code: 'MISSING' | 'UNDERAGE' | 'OVERAGE' | 'OK';
+  message: string;
+  isoDate?: string;
+}
+
+/**
+ * Kiểm tra độ tuổi đăng ký Cứu hộ viên (từ đủ 18 đến 60 tuổi)
+ */
+export const validateRescuerAge = (
+  dobInput?: string | Date | null
+): RescuerAgeValidationResult => {
+  const birth = parseFlexibleDob(dobInput);
+  const age = birth ? calculateExactAge(birth) : null;
+  if (!birth || age === null) {
+    return {
+      isValid: false,
+      age: null,
+      code: 'MISSING',
+      message: `Vui lòng cập nhật ngày tháng năm sinh trong Hồ sơ cá nhân trước khi đăng ký Cứu hộ viên (yêu cầu từ đủ ${MIN_RESCUER_AGE} đến ${MAX_RESCUER_AGE} tuổi).`,
+    };
+  }
+
+  if (age < MIN_RESCUER_AGE) {
+    return {
+      isValid: false,
+      age,
+      code: 'UNDERAGE',
+      message: `Bạn hiện ${age} tuổi. Người đăng ký Cứu hộ viên phải từ đủ ${MIN_RESCUER_AGE} đến ${MAX_RESCUER_AGE} tuổi để đảm bảo an toàn tác chiến.`,
+      isoDate: birth.toISOString(),
+    };
+  }
+
+  if (age > MAX_RESCUER_AGE) {
+    return {
+      isValid: false,
+      age,
+      code: 'OVERAGE',
+      message: `Bạn hiện ${age} tuổi. Độ tuổi đăng ký Cứu hộ viên theo quy định là từ ${MIN_RESCUER_AGE} đến ${MAX_RESCUER_AGE} tuổi.`,
+      isoDate: birth.toISOString(),
+    };
+  }
+
+  return {
+    isValid: true,
+    age,
+    code: 'OK',
+    message: `Độ tuổi hợp lệ (${age} tuổi)`,
+    isoDate: birth.toISOString(),
+  };
+};
+
+/**
+ * Đối chiếu thông tin CCCD quét được với tài khoản người dùng (kèm kiểm tra độ tuổi 18–60)
  */
 export const verifyCccdWithUser = (
   cccd: ParsedCccdData,
@@ -84,6 +209,17 @@ export const verifyCccdWithUser = (
 ): { isValid: boolean; message: string } => {
   if (!cccd || !cccd.idNumber) {
     return { isValid: false, message: 'Dữ liệu mã thẻ CCCD không hợp lệ.' };
+  }
+
+  const cccdDob = cccd.dateOfBirthRaw || cccd.formattedDob;
+  if (cccdDob) {
+    const ageCheck = validateRescuerAge(cccdDob);
+    if (!ageCheck.isValid) {
+      return {
+        isValid: false,
+        message: ageCheck.message,
+      };
+    }
   }
 
   if (!user || !user.fullName) {
