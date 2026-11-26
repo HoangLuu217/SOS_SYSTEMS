@@ -193,19 +193,19 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     switch (type) {
       case 'STORM':
       case 'TYPHOON':
-        return { label: 'Bão / ATNĐ', icon: '🌀', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' };
+        return { label: 'Bão / ATNĐ', icon: '🌀', color: 'var(--dm-blue-text)', bg: 'var(--dm-blue-bg)', border: 'var(--dm-blue-border)' };
       case 'FLOOD':
-        return { label: 'Mưa lũ, Ngập úng', icon: '🌊', color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' };
+        return { label: 'Mưa lũ, Ngập úng', icon: '🌊', color: 'var(--dm-blue-text)', bg: 'var(--dm-blue-bg)', border: 'var(--dm-blue-border)' };
       case 'FLASH_FLOOD':
-        return { label: 'Lũ quét khẩn cấp', icon: '⚡', color: '#b45309', bg: '#fef3c7', border: '#fde68a' };
+        return { label: 'Lũ quét khẩn cấp', icon: '⚡', color: 'var(--dm-amber-text)', bg: 'var(--dm-amber-bg)', border: 'var(--dm-amber-border)' };
       case 'LANDSLIDE':
-        return { label: 'Sạt lở đất', icon: '⛰️', color: '#92400e', bg: '#fef3c7', border: '#fde68a' };
+        return { label: 'Sạt lở đất', icon: '⛰️', color: 'var(--dm-amber-text)', bg: 'var(--dm-amber-bg)', border: 'var(--dm-amber-border)' };
       case 'HEAVY_RAIN':
-        return { label: 'Mưa dông lốc sét', icon: '🌧️', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc' };
+        return { label: 'Mưa dông lốc sét', icon: '🌧️', color: 'var(--dm-blue-text)', bg: 'var(--dm-blue-bg)', border: 'var(--dm-blue-border)' };
       case 'FIRE':
-        return { label: 'Hỏa hoạn, Cháy nổ', icon: '🔥', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
+        return { label: 'Hỏa hoạn, Cháy nổ', icon: '🔥', color: 'var(--dm-red-text)', bg: 'var(--dm-red-bg)', border: 'var(--dm-red-border)' };
       default:
-        return { label: 'Thiên tai / Sự cố', icon: '⚠️', color: '#d97706', bg: '#fffbeb', border: '#fde68a' };
+        return { label: 'Thiên tai / Sự cố', icon: '⚠️', color: 'var(--dm-amber-text)', bg: 'var(--dm-amber-bg)', border: 'var(--dm-amber-border)' };
     }
   };
 
@@ -307,12 +307,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
   const renderSortIcon = (field: typeof sortField) => {
     if (sortField !== field) {
-      return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: '6px', opacity: 0.6 }} />;
+      return <ArrowUpDown size={12} style={{ color: 'var(--dm-text-muted)', marginLeft: '6px', opacity: 0.6 }} />;
     }
     return sortOrder === 'asc' ? (
-      <ArrowUp size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+      <ArrowUp size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
     ) : (
-      <ArrowDown size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+      <ArrowDown size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
     );
   };
 
@@ -685,9 +685,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         style={{
           padding: '7px 12px',
           borderRadius: 8,
-          border: '1px solid #bbf7d0',
-          background: '#f0fdf4',
-          color: '#15803d',
+          border: '1px solid var(--dm-green-border)',
+          background: 'var(--dm-green-bg)',
+          color: 'var(--dm-green-text)',
           fontWeight: 600,
           fontSize: 13,
           cursor: exportingAllChecks || filteredAndSortedChecks.length === 0 ? 'not-allowed' : 'pointer',
@@ -742,10 +742,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         <div className="sc-header-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldCheck size={18} color="#0284c7" />
-            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+            <span style={{ color: 'var(--dm-text-muted)', fontWeight: 500, fontSize: '13.5px' }}>
               Phạm vi quản trị:
             </span>
-            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+            <strong style={{ color: 'var(--dm-text-strong)', fontWeight: 700, fontSize: '14px' }}>
               {daNangProvince?.name || 'Thành phố Đà Nẵng'}
             </strong>
           </div>
@@ -781,7 +781,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+              <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
                 Phường/Xã (Đà Nẵng):
               </span>
               <SearchableSelect
@@ -815,23 +815,23 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
           {/* Quick Stats Strip */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12.5px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#64748b' }}>Tổng số đợt:</span>
-              <strong style={{ color: '#0284c7' }}>{kpis.total} đợt</strong>
+              <span style={{ color: 'var(--dm-text-muted)' }}>Tổng số đợt:</span>
+              <strong style={{ color: 'var(--dm-blue-text)' }}>{kpis.total} đợt</strong>
             </div>
-            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ width: 1, height: 14, background: 'var(--dm-border)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#64748b' }}>Đang mở:</span>
-              <strong style={{ color: '#16a34a' }}>{kpis.active} đợt</strong>
+              <span style={{ color: 'var(--dm-text-muted)' }}>Đang mở:</span>
+              <strong style={{ color: 'var(--dm-green-text)' }}>{kpis.active} đợt</strong>
             </div>
-            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ width: 1, height: 14, background: 'var(--dm-border)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#64748b' }}>Người an toàn:</span>
-              <strong style={{ color: '#16a34a' }}>{kpis.totalSafe.toLocaleString()}</strong>
+              <span style={{ color: 'var(--dm-text-muted)' }}>Người an toàn:</span>
+              <strong style={{ color: 'var(--dm-green-text)' }}>{kpis.totalSafe.toLocaleString()}</strong>
             </div>
-            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ width: 1, height: 14, background: 'var(--dm-border)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#64748b' }}>Cần cứu hộ:</span>
-              <strong style={{ color: '#dc2626' }}>{kpis.totalNeedHelp.toLocaleString()}</strong>
+              <span style={{ color: 'var(--dm-text-muted)' }}>Cần cứu hộ:</span>
+              <strong style={{ color: 'var(--dm-red-text)' }}>{kpis.totalNeedHelp.toLocaleString()}</strong>
             </div>
           </div>
         </div>
@@ -880,7 +880,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* Lọc loại thiên tai */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
               Thiên tai:
             </span>
             <select
@@ -905,7 +905,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
           {/* Sắp xếp đa tiêu chí */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
               Sắp xếp:
             </span>
             <select
@@ -950,7 +950,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   setCurrentPage(1);
                   setJumpPageInput('1');
                 }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dm-text-muted)' }}
               >
                 <X size={14} />
               </button>
@@ -1035,19 +1035,19 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
-                    <RefreshCw size={28} className="fa-spin" style={{ margin: '0 auto 10px auto', color: '#0284c7' }} />
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
+                    <RefreshCw size={28} className="fa-spin" style={{ margin: '0 auto 10px auto', color: 'var(--dm-blue-text)' }} />
                     <div style={{ fontSize: '13.5px', fontWeight: 600 }}>Đang tải danh sách đợt kiểm tra an toàn...</div>
                   </td>
                 </tr>
               ) : totalItems === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
                     <ShieldCheck size={36} color="#94a3b8" style={{ margin: '0 auto 10px auto' }} />
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Chưa có đợt kiểm tra an toàn nào phù hợp
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: 12 }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', marginBottom: 12 }}>
                       {isAuthority
                         ? 'Bấm nút "Tạo Đợt Kiểm Tra Mới" để phát thông báo xác nhận đến người dân trên địa bàn.'
                         : 'Bấm nút "Tạo Đợt Kiểm Tra Mới" để phát động kiểm tra tình hình người dân trong vùng thiên tai.'}
@@ -1079,7 +1079,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       title="Nhấn để xem chi tiết phản hồi người dân"
                     >
                       {/* 0. STT */}
-                      <td style={{ textAlign: 'center', width: '45px', color: '#64748b', fontWeight: 600 }}>
+                      <td style={{ textAlign: 'center', width: '45px', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                         {startIndex + idx + 1}
                       </td>
 
@@ -1107,7 +1107,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: 'var(--dm-blue-text)',
                                 fontSize: '13.5px',
                                 lineHeight: '1.4',
                               }}
@@ -1148,16 +1148,16 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                               borderRadius: '6px',
                               fontSize: '12px',
                               fontWeight: 600,
-                              background: '#f8fafc',
-                              color: '#1e293b',
-                              border: '1px solid #cbd5e1',
+                              background: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-body)',
+                              border: '1px solid var(--dm-border-strong)',
                               width: 'fit-content',
                             }}
                           >
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0284c7' }} />
                             {check.areaName || 'Toàn hệ thống'}
                           </span>
-                          <span style={{ fontSize: '11px', color: '#64748b', paddingLeft: '4px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)', paddingLeft: '4px' }}>
                             Phạm vi:{' '}
                             <strong>
                               {check.scope === 'WARD'
@@ -1174,16 +1174,16 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ fontSize: '12px' }}>
-                            <span style={{ color: '#0f172a', fontWeight: 600 }}>
-                              <strong style={{ color: '#16a34a' }}>{safeCount}</strong> an toàn •{' '}
-                              <strong style={{ color: needHelpCount > 0 ? '#dc2626' : '#64748b' }}>
+                            <span style={{ color: 'var(--dm-text-strong)', fontWeight: 600 }}>
+                              <strong style={{ color: 'var(--dm-green-text)' }}>{safeCount}</strong> an toàn •{' '}
+                              <strong style={{ color: needHelpCount > 0 ? 'var(--dm-red-text)' : 'var(--dm-text-muted)' }}>
                                 {needHelpCount}
                               </strong>{' '}
                               cần trợ giúp
                             </span>
                           </div>
 
-                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>
                             Đã phản hồi: <strong>{totalResp}</strong> người dân
                           </div>
                         </div>
@@ -1191,10 +1191,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
                       {/* 4. Thời gian phát động */}
                       <td>
-                        <div style={{ fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
+                        <div style={{ fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
                           {formatDateTime(check.createdAt)}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
                           {check.endTime ? `Kết thúc: ${formatDateTime(check.endTime)}` : 'Đang duy trì'}
                         </div>
                       </td>
@@ -1210,9 +1210,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                             borderRadius: '5px',
                             fontSize: '11.5px',
                             fontWeight: 600,
-                            background: check.status === 'ACTIVE' ? '#f0fdf4' : '#f8fafc',
-                            color: check.status === 'ACTIVE' ? '#15803d' : '#64748b',
-                            border: `1px solid ${check.status === 'ACTIVE' ? '#bbf7d0' : '#cbd5e1'}`,
+                            background: check.status === 'ACTIVE' ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                            color: check.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
+                            border: `1px solid ${check.status === 'ACTIVE' ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -1242,9 +1242,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               'Không có dữ liệu đợt kiểm tra'
             ) : (
               <>
-                Hiển thị <strong style={{ color: '#0f172a' }}>{startIndex + 1}</strong> –{' '}
-                <strong style={{ color: '#0f172a' }}>{Math.min(startIndex + PAGE_SIZE, totalItems)}</strong> trên
-                tổng số <strong style={{ color: '#0284c7' }}>{totalItems}</strong> đợt kiểm tra an toàn
+                Hiển thị <strong style={{ color: 'var(--dm-text-strong)' }}>{startIndex + 1}</strong> –{' '}
+                <strong style={{ color: 'var(--dm-text-strong)' }}>{Math.min(startIndex + PAGE_SIZE, totalItems)}</strong> trên
+                tổng số <strong style={{ color: 'var(--dm-blue-text)' }}>{totalItems}</strong> đợt kiểm tra an toàn
               </>
             )}
           </div>
@@ -1290,7 +1290,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   const hasGap = prev && p - prev > 1;
                   return (
                     <React.Fragment key={p}>
-                      {hasGap && <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>}
+                      {hasGap && <span style={{ padding: '0 4px', color: 'var(--dm-text-muted)' }}>...</span>}
                       <button
                         type="button"
                         className={`sos-pagination-btn ${p === safeCurrentPage ? 'active' : ''}`}
@@ -1333,7 +1333,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
               {/* Ô nhảy tới trang */}
               <div className="sos-pagination-jump">
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Nhảy tới:</span>
+                <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)' }}>Nhảy tới:</span>
                 <input
                   type="number"
                   min={1}
@@ -1373,7 +1373,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             <div className="sc-drawer-header">
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     {viewingCheck.title}
                   </h3>
                   <span
@@ -1385,9 +1385,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       borderRadius: '5px',
                       fontSize: '11.5px',
                       fontWeight: 600,
-                      background: viewingCheck.status === 'ACTIVE' ? '#f0fdf4' : '#f8fafc',
-                      color: viewingCheck.status === 'ACTIVE' ? '#15803d' : '#64748b',
-                      border: `1px solid ${viewingCheck.status === 'ACTIVE' ? '#bbf7d0' : '#cbd5e1'}`,
+                      background: viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                      color: viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
+                      border: `1px solid ${viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
                     }}
                   >
                     <span
@@ -1402,17 +1402,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   </span>
                 </div>
 
-                <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: '#475569', lineHeight: 1.4 }}>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: 'var(--dm-text-secondary)', lineHeight: 1.4 }}>
                   Địa bàn: <strong>{viewingCheck.areaName || 'Toàn hệ thống'}</strong> • Người phát động:{' '}
                   <strong>{viewingCheck.createdBy?.fullName || 'Hệ thống'}</strong> (
                   {viewingCheck.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'}) • Thời gian:{' '}
                   <strong>{formatDateTime(viewingCheck.createdAt)}</strong>
                 </p>
 
-                <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: 'var(--dm-text-muted)' }}>
                   Tổng phản hồi: <strong>{viewingCheck.stats?.totalResponses || 0}</strong> | An toàn:{' '}
-                  <strong style={{ color: '#16a34a' }}>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
-                  <strong style={{ color: '#dc2626' }}>{viewingCheck.stats?.needHelpCount || 0}</strong>
+                  <strong style={{ color: 'var(--dm-green-text)' }}>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
+                  <strong style={{ color: 'var(--dm-red-text)' }}>{viewingCheck.stats?.needHelpCount || 0}</strong>
                 </p>
               </div>
 
@@ -1425,9 +1425,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   style={{
                     padding: '6px 12px',
                     borderRadius: 8,
-                    border: '1px solid #bbf7d0',
-                    background: '#f0fdf4',
-                    color: '#15803d',
+                    border: '1px solid var(--dm-green-border)',
+                    background: 'var(--dm-green-bg)',
+                    color: 'var(--dm-green-text)',
                     fontWeight: 600,
                     fontSize: 12.5,
                     cursor: exportingSingleCheckId === viewingCheck._id ? 'not-allowed' : 'pointer',
@@ -1546,7 +1546,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         setResponsePage(1);
                         setResponseJumpInput('1');
                       }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dm-text-muted)' }}
                     >
                       <X size={14} />
                     </button>
@@ -1573,16 +1573,16 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     <tbody>
                       {loadingResponses ? (
                         <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                            <RefreshCw size={24} className="fa-spin" style={{ margin: '0 auto 8px auto', color: '#0284c7' }} />
+                          <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
+                            <RefreshCw size={24} className="fa-spin" style={{ margin: '0 auto 8px auto', color: 'var(--dm-blue-text)' }} />
                             <div>Đang tải phản hồi của người dân...</div>
                           </td>
                         </tr>
                       ) : totalResponseItems === 0 ? (
                         <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                          <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
                             <CheckCircle2 size={32} color="#16a34a" style={{ margin: '0 auto 8px auto' }} />
-                            <div style={{ fontWeight: 600, color: '#1e293b' }}>Chưa có phản hồi nào phù hợp</div>
+                            <div style={{ fontWeight: 600, color: 'var(--dm-text-body)' }}>Chưa có phản hồi nào phù hợp</div>
                             <div style={{ fontSize: '12px', marginTop: 4 }}>
                               Chưa có người dân nào xác nhận tình trạng theo bộ lọc hiện tại.
                             </div>
@@ -1590,26 +1590,19 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         </tr>
                       ) : (
                         paginatedResponses.map((item, idx) => (
-                          <tr
-                            key={item._id}
-                            style={
-                              item.status === 'NEED_HELP'
-                                ? { backgroundColor: '#fff1f2' }
-                                : undefined
-                            }
-                          >
-                            <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>
+                          <tr key={item._id}>
+                            <td style={{ textAlign: 'center', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                               {responseStartIndex + idx + 1}
                             </td>
 
                             <td>
-                              <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                              <div style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                                 {item.userFullName || item.userId?.fullName || 'Người dân'}
                               </div>
                             </td>
 
                             <td>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                                 {item.userPhone || item.userId?.phone || '—'}
                               </span>
                             </td>
@@ -1624,9 +1617,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                   borderRadius: '5px',
                                   fontSize: '11.5px',
                                   fontWeight: 600,
-                                  background: item.status === 'SAFE' ? '#f0fdf4' : '#fef2f2',
-                                  color: item.status === 'SAFE' ? '#15803d' : '#b91c1c',
-                                  border: `1px solid ${item.status === 'SAFE' ? '#bbf7d0' : '#fecaca'}`,
+                                  background: item.status === 'SAFE' ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+                                  color: item.status === 'SAFE' ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
+                                  border: `1px solid ${item.status === 'SAFE' ? 'var(--dm-green-border)' : 'var(--dm-red-border)'}`,
                                 }}
                               >
                                 <span
@@ -1645,12 +1638,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                   <span
                                     style={{
                                       fontSize: '10.5px',
-                                      backgroundColor: '#fee2e2',
-                                      color: '#dc2626',
+                                      backgroundColor: 'var(--dm-red-bg)',
+                                      color: 'var(--dm-red-text)',
                                       padding: '2px 6px',
                                       borderRadius: 4,
                                       fontWeight: 700,
-                                      border: '1px solid #fecaca',
+                                      border: '1px solid var(--dm-red-border)',
                                     }}
                                   >
                                     ĐÃ TẠO SOS
@@ -1664,7 +1657,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                             </td>
 
                             <td>
-                              <div style={{ fontSize: '12.5px', color: '#334155', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                              <div style={{ fontSize: '12.5px', color: 'var(--dm-text-secondary)', wordBreak: 'break-word', lineHeight: 1.4 }}>
                                 {item.message || (item.status === 'SAFE' ? 'Đã an toàn' : 'Cần lực lượng hỗ trợ')}
                               </div>
                             </td>
@@ -1680,7 +1673,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       gap: 4,
-                                      color: '#0284c7',
+                                      color: 'var(--dm-blue-text)',
                                       fontWeight: 600,
                                       textDecoration: 'none',
                                     }}
@@ -1694,17 +1687,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                     <ExternalLink size={11} />
                                   </a>
                                   {item.address && (
-                                    <div style={{ color: '#475569', fontSize: '11.5px', marginTop: 2, lineHeight: 1.35 }}>
+                                    <div style={{ color: 'var(--dm-text-secondary)', fontSize: '11.5px', marginTop: 2, lineHeight: 1.35 }}>
                                       {item.address}
                                     </div>
                                   )}
                                 </div>
                               ) : (
-                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa có GPS</span>
+                                <span style={{ color: 'var(--dm-text-muted)', fontSize: '12px' }}>Chưa có GPS</span>
                               )}
                             </td>
 
-                            <td style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                            <td style={{ fontSize: '12px', color: 'var(--dm-text-muted)', whiteSpace: 'nowrap' }}>
                               {formatDateTime(item.respondedAt)}
                             </td>
                           </tr>
@@ -1760,7 +1753,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                           const hasGap = prev && p - prev > 1;
                           return (
                             <React.Fragment key={p}>
-                              {hasGap && <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>}
+                              {hasGap && <span style={{ padding: '0 4px', color: 'var(--dm-text-muted)' }}>...</span>}
                               <button
                                 type="button"
                                 className={`sos-pagination-btn ${p === safeResponsePage ? 'active' : ''}`}
@@ -1847,7 +1840,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         className="sc-form-control"
                         disabled
                         value={`${authorityAreaName} (Địa bàn Phường/Xã phụ trách)`}
-                        style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}
+                        style={{ backgroundColor: 'var(--dm-surface-muted)', cursor: 'not-allowed' }}
                       />
                       <p className="sc-form-hint">
                         ℹ️ Cán bộ địa phương phát thông báo an toàn cho người dân thuộc Phường/Xã phụ trách.
@@ -1855,7 +1848,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     </div>
                   ) : (
                     <div>
-                      <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
                         Phường / Xã (Khu vực {daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
                       <SearchableSelect
@@ -1995,8 +1988,8 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     width: 36,
                     height: 36,
                     borderRadius: '50%',
-                    background: '#FEF2F2',
-                    color: '#DC2626',
+                    background: 'var(--dm-red-bg)',
+                    color: 'var(--dm-red-text)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2007,7 +2000,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: 16 }}>Xác nhận đóng đợt kiểm tra</h3>
-                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                     Hành động này sẽ kết thúc đợt tiếp nhận phản hồi
                   </div>
                 </div>
@@ -2022,9 +2015,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               </button>
             </div>
 
-            <div className="sc-modal-body" style={{ fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
+            <div className="sc-modal-body" style={{ fontSize: 14, color: 'var(--dm-text-secondary)', lineHeight: 1.6 }}>
               Bạn có chắc chắn muốn đóng đợt kiểm tra an toàn{' '}
-              <strong style={{ color: '#0F172A' }}>"{closingTarget.title}"</strong>?
+              <strong style={{ color: 'var(--dm-text-strong)' }}>"{closingTarget.title}"</strong>?
             </div>
 
             <div className="sc-modal-footer">

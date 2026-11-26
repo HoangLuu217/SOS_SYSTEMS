@@ -33,13 +33,13 @@ export const ProofImagePreview: React.FC<{
           justifyContent: 'center',
           padding: 10,
           textAlign: 'center',
-          color: '#64748b',
+          color: 'var(--dm-text-muted)',
           fontSize: 11.5,
           gap: 4,
-          background: '#f8fafc',
+          background: 'var(--dm-surface-subtle)',
         }}
       >
-        <span style={{ fontWeight: 700, color: '#475569' }}>{fallbackLabel || alt}</span>
+        <span style={{ fontWeight: 700, color: 'var(--dm-text-secondary)' }}>{fallbackLabel || alt}</span>
         <span>Không tải được ảnh (tệp cục bộ cũ hoặc chưa đồng bộ Cloudinary)</span>
       </div>
     );
@@ -116,25 +116,25 @@ export const getVehicleStatusMeta = (status?: string) => {
     case 'ASSIGNED':
       return {
         label: 'Đang làm nhiệm vụ',
-        bg: '#eff6ff',
-        color: '#1d4ed8',
-        border: '#bfdbfe',
+        bg: 'var(--dm-blue-bg)',
+        color: 'var(--dm-blue-text)',
+        border: 'var(--dm-blue-border)',
         dot: '#3b82f6',
       };
     case 'MAINTENANCE':
       return {
         label: 'Bảo dưỡng / Hỏng hóc',
-        bg: '#fee2e2',
-        color: '#b91c1c',
-        border: '#fecaca',
+        bg: 'var(--dm-red-bg)',
+        color: 'var(--dm-red-text)',
+        border: 'var(--dm-red-border)',
         dot: '#dc2626',
       };
     case 'INACTIVE':
       return {
         label: 'Tạm ngưng hoạt động',
-        bg: '#f1f5f9',
-        color: '#475569',
-        border: '#cbd5e1',
+        bg: 'var(--dm-surface-muted)',
+        color: 'var(--dm-text-secondary)',
+        border: 'var(--dm-border-strong)',
         dot: '#94a3b8',
       };
     case 'AVAILABLE':
@@ -142,9 +142,9 @@ export const getVehicleStatusMeta = (status?: string) => {
     default:
       return {
         label: 'Sẵn sàng xuất kích',
-        bg: '#ecfdf5',
-        color: '#047857',
-        border: '#a7f3d0',
+        bg: 'var(--dm-green-bg)',
+        color: 'var(--dm-green-text)',
+        border: 'var(--dm-green-border)',
         dot: '#10b981',
       };
   }

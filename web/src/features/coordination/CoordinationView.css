@@ -54,7 +54,7 @@
 
 .coordination-executive-container .executive-table tbody tr:hover td,
 .coordination-executive-container .executive-table tbody tr.executive-table-row:hover td {
-  background: #f8fafc !important;
+  background: var(--dm-surface-subtle) !important;
   cursor: default !important;
 }
 
@@ -71,24 +71,24 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 14.5px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   letter-spacing: -0.2px;
 }
 
 .code-mono-bold.critical {
-  color: #dc2626;
+  color: var(--dm-red-text);
 }
 
 .location-title-bold {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   font-size: 13.5px;
   line-height: 1.4;
 }
 
 .citizen-highlight-name {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   font-size: 14px;
   letter-spacing: -0.1px;
 }
@@ -99,9 +99,9 @@
   gap: 5px;
   padding: 2px 7px;
   border-radius: 6px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  color: #0284c7;
+  background: var(--dm-blue-bg);
+  border: 1px solid var(--dm-blue-border);
+  color: var(--dm-blue-text);
   font-weight: 700;
   font-size: 12px;
   font-family: monospace;
@@ -111,8 +111,8 @@
 }
 
 .citizen-phone-pill:hover {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
 }
 
 .casualty-highlight-pill {
@@ -121,9 +121,9 @@
   gap: 5px;
   padding: 2.5px 8px;
   border-radius: 6px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background: var(--dm-red-bg);
+  border: 1px solid var(--dm-red-border);
+  color: var(--dm-red-text);
   font-weight: 800;
   font-size: 12px;
   width: fit-content;
@@ -143,33 +143,33 @@
 }
 
 .coordination-status-pill.verified {
-  background: #fef3c7;
-  color: #b45309;
-  border-color: #fde68a;
+  background: var(--dm-amber-bg);
+  color: var(--dm-amber-text);
+  border-color: var(--dm-amber-border);
 }
 
 .coordination-status-pill.assigned {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #bae6fd;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
 }
 
 .coordination-status-pill.enroute {
-  background: #ede9fe;
+  background: var(--dm-purple-bg);
   color: #6d28d9;
-  border-color: #ddd6fe;
+  border-color: var(--dm-purple-border);
 }
 
 .coordination-status-pill.rescuing {
-  background: #fee2e2;
-  color: #dc2626;
-  border-color: #fecaca;
+  background: var(--dm-red-bg);
+  color: var(--dm-red-text);
+  border-color: var(--dm-red-border);
 }
 
 .coordination-status-pill.completed {
-  background: #dcfce7;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: var(--dm-green-bg);
+  color: var(--dm-green-text);
+  border-color: var(--dm-green-border);
 }
 
 .coordination-step-track {
@@ -198,7 +198,7 @@
 .coordination-step-line {
   width: 14px;
   height: 2px;
-  background: #e2e8f0;
+  background: var(--dm-surface-hover);
 }
 
 .coordination-step-line.completed {
@@ -243,13 +243,13 @@
 }
 
 .coordination-action-btn.outline {
-  background: #ffffff;
-  color: #475569;
-  border-color: #cbd5e1;
+  background: var(--dm-surface);
+  color: var(--dm-text-secondary);
+  border-color: var(--dm-border-strong);
 }
 
 .coordination-action-btn.outline:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: #0f172a;
+  background: var(--dm-surface-subtle);
+  border-color: var(--dm-border-strong);
+  color: var(--dm-text-strong);
 }

@@ -780,8 +780,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         return (
           <span
             style={{
-              background: '#fef3c7',
-              color: '#b45309',
+              background: 'var(--dm-amber-bg)',
+              color: 'var(--dm-amber-text)',
               padding: '3px 10px',
               borderRadius: 999,
               fontSize: 12,
@@ -795,8 +795,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         return (
           <span
             style={{
-              background: '#dcfce7',
-              color: '#15803d',
+              background: 'var(--dm-green-bg)',
+              color: 'var(--dm-green-text)',
               padding: '3px 10px',
               borderRadius: 999,
               fontSize: 12,
@@ -811,7 +811,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           <span
             style={{
               background: 'transparent',
-              color: '#16a34a',
+              color: 'var(--dm-green-text)',
               fontSize: 12,
               fontWeight: 700,
             }}
@@ -823,8 +823,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         return (
           <span
             style={{
-              background: '#f1f5f9',
-              color: '#64748b',
+              background: 'var(--dm-surface-muted)',
+              color: 'var(--dm-text-muted)',
               padding: '3px 10px',
               borderRadius: 999,
               fontSize: 12,
@@ -924,9 +924,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           style={{
             padding: '10px 14px',
             borderRadius: 8,
-            background: toastMsg.type === 'success' ? '#f0fdf4' : '#fef2f2',
-            border: `1px solid ${toastMsg.type === 'success' ? '#86efac' : '#fecaca'}`,
-            color: toastMsg.type === 'success' ? '#166534' : '#991b1b',
+            background: toastMsg.type === 'success' ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+            border: `1px solid ${toastMsg.type === 'success' ? 'var(--dm-green-border)' : 'var(--dm-red-border)'}`,
+            color: toastMsg.type === 'success' ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
             fontWeight: 600,
             fontSize: 13,
             display: 'flex',
@@ -948,8 +948,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       {/* Thanh công cụ 1 hàng duy nhất & Nút đồng bộ màu #2563eb */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--dm-surface)',
+          border: '1px solid var(--dm-border)',
           borderRadius: 10,
           padding: '10px 14px',
           display: 'flex',
@@ -972,8 +972,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: 13,
-              background: activeTab === 'REGISTRATIONS' ? '#2563eb' : '#f1f5f9',
-              color: activeTab === 'REGISTRATIONS' ? '#ffffff' : '#475569',
+              background: activeTab === 'REGISTRATIONS' ? '#2563eb' : 'var(--dm-surface-muted)',
+              color: activeTab === 'REGISTRATIONS' ? '#ffffff' : 'var(--dm-text-secondary)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -990,8 +990,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: 13,
-              background: activeTab === 'EVENTS' ? '#2563eb' : '#f1f5f9',
-              color: activeTab === 'EVENTS' ? '#ffffff' : '#475569',
+              background: activeTab === 'EVENTS' ? '#2563eb' : 'var(--dm-surface-muted)',
+              color: activeTab === 'EVENTS' ? '#ffffff' : 'var(--dm-text-secondary)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -1014,8 +1014,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: '#f8fafc',
-              border: showSuggestions ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+              background: 'var(--dm-surface-subtle)',
+              border: showSuggestions ? '1.5px solid #2563eb' : '1px solid var(--dm-border-strong)',
               borderRadius: 8,
               padding: '6px 10px',
               transition: 'border 0.15s ease',
@@ -1034,7 +1034,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 background: 'transparent',
                 width: '100%',
                 fontSize: 13,
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
               }}
             />
             {searchQuery && (
@@ -1047,7 +1047,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   cursor: 'pointer',
                   padding: 0,
                   display: 'flex',
-                  color: '#94a3b8',
+                  color: 'var(--dm-text-muted)',
                 }}
               >
                 <X size={14} />
@@ -1063,10 +1063,10 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 top: 'calc(100% + 6px)',
                 left: 0,
                 right: 0,
-                background: '#ffffff',
+                background: 'var(--dm-surface)',
                 borderRadius: 10,
                 boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--dm-border)',
                 padding: '12px 14px',
                 zIndex: 100,
                 maxHeight: 330,
@@ -1074,13 +1074,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Gợi ý lọc nhanh
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowSuggestions(false)}
-                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 11 }}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--dm-text-muted)', fontSize: 11 }}
                 >
                   Đóng
                 </button>
@@ -1088,7 +1088,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
               {/* Nhóm máu */}
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 5 }}>
                   🩸 Nhóm máu:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1103,9 +1103,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       style={{
                         padding: '3px 8px',
                         borderRadius: 6,
-                        border: '1px solid #fed7aa',
-                        background: searchQuery.toUpperCase() === bt ? '#ea580c' : '#fff7ed',
-                        color: searchQuery.toUpperCase() === bt ? '#ffffff' : '#c2410c',
+                        border: '1px solid var(--dm-orange-border)',
+                        background: searchQuery.toUpperCase() === bt ? '#ea580c' : 'var(--dm-orange-bg)',
+                        color: searchQuery.toUpperCase() === bt ? '#ffffff' : 'var(--dm-orange-text)',
                         fontSize: 11.5,
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -1120,7 +1120,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {/* Trạng thái (ở tab ĐK nhận thông báo) */}
               {activeTab === 'REGISTRATIONS' && (
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 5 }}>
                     📋 Trạng thái:
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -1139,9 +1139,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         style={{
                           padding: '3px 8px',
                           borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                          background: searchQuery === st.val ? '#2563eb' : '#f8fafc',
-                          color: searchQuery === st.val ? '#ffffff' : '#334155',
+                          border: '1px solid var(--dm-border-strong)',
+                          background: searchQuery === st.val ? '#2563eb' : 'var(--dm-surface-subtle)',
+                          color: searchQuery === st.val ? '#ffffff' : 'var(--dm-text-secondary)',
                           fontSize: 11.5,
                           fontWeight: 500,
                           cursor: 'pointer',
@@ -1157,7 +1157,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {/* Khu vực phổ biến (Đà Nẵng) */}
               {daNangWards.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 5 }}>
                     📍 Phường / Xã (Đà Nẵng):
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 90, overflowY: 'auto' }}>
@@ -1172,9 +1172,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         style={{
                           padding: '3px 8px',
                           borderRadius: 6,
-                          border: '1px solid #e2e8f0',
-                          background: searchQuery === w.name ? '#2563eb' : '#f1f5f9',
-                          color: searchQuery === w.name ? '#ffffff' : '#475569',
+                          border: '1px solid var(--dm-border)',
+                          background: searchQuery === w.name ? '#2563eb' : 'var(--dm-surface-muted)',
+                          color: searchQuery === w.name ? '#ffffff' : 'var(--dm-text-secondary)',
                           fontSize: 11.5,
                           cursor: 'pointer',
                         }}
@@ -1198,9 +1198,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             style={{
               padding: '7px 12px',
               borderRadius: 8,
-              border: '1px solid #bbf7d0',
-              background: '#f0fdf4',
-              color: '#15803d',
+              border: '1px solid var(--dm-green-border)',
+              background: 'var(--dm-green-bg)',
+              color: 'var(--dm-green-text)',
               fontWeight: 600,
               fontSize: 13,
               cursor: exportingExcel ? 'not-allowed' : 'pointer',
@@ -1223,9 +1223,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             style={{
               padding: '7px 12px',
               borderRadius: 8,
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#334155',
+              border: '1px solid var(--dm-border-strong)',
+              background: 'var(--dm-surface)',
+              color: 'var(--dm-text-secondary)',
               fontWeight: 600,
               fontSize: 13,
               cursor: 'pointer',
@@ -1267,11 +1267,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       {loading ? (
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--dm-surface)',
             borderRadius: 10,
             padding: 40,
             textAlign: 'center',
-            color: '#64748b',
+            color: 'var(--dm-text-muted)',
           }}
         >
           Đang tải...
@@ -1292,7 +1292,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <tbody>
               {filteredRegistrations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
                     Chưa có đăng ký hiến máu nào.
                   </td>
                 </tr>
@@ -1321,7 +1321,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                 height: 32,
                                 borderRadius: '50%',
                                 objectFit: 'cover',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid var(--dm-border)',
                               }}
                             />
                           ) : (
@@ -1330,8 +1330,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                 width: 32,
                                 height: 32,
                                 borderRadius: '50%',
-                                background: '#dbeafe',
-                                color: '#1d4ed8',
+                                background: 'var(--dm-blue-bg)',
+                                color: 'var(--dm-blue-text)',
                                 fontWeight: 700,
                                 fontSize: 13,
                                 display: 'flex',
@@ -1345,7 +1345,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           <span
                             style={{
                               fontWeight: 700,
-                              color: '#2563eb',
+                              color: 'var(--dm-blue-text)',
                             }}
                           >
                             {reg.fullName}
@@ -1353,13 +1353,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         </div>
                       </td>
 
-                      <td style={{ color: '#334155', fontWeight: 500 }}>{reg.phone}</td>
+                      <td style={{ color: 'var(--dm-text-secondary)', fontWeight: 500 }}>{reg.phone}</td>
 
                       <td style={{ textAlign: 'center' }}>
                         <span
                           style={{
-                            background: '#fee2e2',
-                            color: '#dc2626',
+                            background: 'var(--dm-red-bg)',
+                            color: 'var(--dm-red-text)',
                             fontWeight: 700,
                             padding: '2px 9px',
                             borderRadius: 6,
@@ -1370,11 +1370,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         </span>
                       </td>
 
-                      <td style={{ color: '#334155' }}>
+                      <td style={{ color: 'var(--dm-text-secondary)' }}>
                         {reg.provinceName || reg.areaName || '—'}
                       </td>
 
-                      <td style={{ fontSize: 12.5, color: '#64748b' }}>
+                      <td style={{ fontSize: 12.5, color: 'var(--dm-text-muted)' }}>
                         {formatDateTime(reg.respondedAt || reg.createdAt)}
                       </td>
 
@@ -1404,7 +1404,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <tbody>
               {filteredEvents.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: 36, textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={5} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
                     Chưa có đợt hiến máu nào.
                   </td>
                 </tr>
@@ -1417,23 +1417,23 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{ cursor: 'pointer' }}
                     title="Nhấn để xem chi tiết đợt hiến máu"
                   >
-                    <td style={{ fontWeight: 700, color: '#2563eb' }}>
+                    <td style={{ fontWeight: 700, color: 'var(--dm-blue-text)' }}>
                       {ev.title}
                     </td>
-                    <td style={{ color: '#334155' }}>
+                    <td style={{ color: 'var(--dm-text-secondary)' }}>
                       {ev.locationName} ({ev.areaName || 'Toàn hệ thống'})
                     </td>
-                    <td style={{ color: '#475569', fontSize: 12.5 }}>
+                    <td style={{ color: 'var(--dm-text-secondary)', fontSize: 12.5 }}>
                       {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
                     </td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#16a34a' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--dm-green-text)' }}>
                       {ev.stats?.confirmedCount || 0} / {ev.targetDonors}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span
                         style={{
-                          background: ev.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9',
-                          color: ev.status === 'ACTIVE' ? '#15803d' : '#64748b',
+                          background: ev.status === 'ACTIVE' ? 'var(--dm-green-bg)' : 'var(--dm-surface-muted)',
+                          color: ev.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
                           padding: '3px 9px',
                           borderRadius: 999,
                           fontSize: 12,
@@ -1472,7 +1472,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               bottom: 0,
               width: 440,
               maxWidth: '94vw',
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               zIndex: selectedEventDetail ? 10020 : 9999,
               boxShadow: '-8px 0 35px rgba(15, 23, 42, 0.25)',
               display: 'flex',
@@ -1484,22 +1484,22 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div
               style={{
                 padding: '16px 20px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                background: selectedEventDetail ? '#f8fafc' : '#ffffff',
+                background: selectedEventDetail ? 'var(--dm-surface-subtle)' : 'var(--dm-surface)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <UserIcon size={18} color="#2563eb" />
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     {selectedEventDetail ? 'Hồ sơ người tham gia đợt hiến' : 'Chi tiết đăng ký hiến máu'}
                   </h3>
                   {selectedEventDetail && (
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                      Thuộc đợt: <strong style={{ color: '#2563eb' }}>{selectedEventDetail.title}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
+                      Thuộc đợt: <strong style={{ color: 'var(--dm-blue-text)' }}>{selectedEventDetail.title}</strong>
                     </div>
                   )}
                 </div>
@@ -1509,7 +1509,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 onClick={() => setSelectedRegistration(null)}
                 title={selectedEventDetail ? 'Đóng hồ sơ (giữ nguyên đợt hiến)' : 'Đóng'}
                 style={{
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   border: 'none',
                   borderRadius: 8,
                   width: 32,
@@ -1533,9 +1533,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   alignItems: 'center',
                   gap: 14,
                   padding: 14,
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                   borderRadius: 12,
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--dm-border)',
                 }}
               >
                 {selectedRegistration.userId?.avatarUrl ? (
@@ -1547,7 +1547,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       height: 58,
                       borderRadius: '50%',
                       objectFit: 'cover',
-                      border: '2px solid #bfdbfe',
+                      border: '2px solid var(--dm-blue-border)',
                     }}
                   />
                 ) : (
@@ -1556,8 +1556,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       width: 58,
                       height: 58,
                       borderRadius: '50%',
-                      background: '#dbeafe',
-                      color: '#1d4ed8',
+                      background: 'var(--dm-blue-bg)',
+                      color: 'var(--dm-blue-text)',
                       fontWeight: 800,
                       fontSize: 22,
                       display: 'flex',
@@ -1569,20 +1569,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </div>
                 )}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     {selectedRegistration.fullName}
                   </div>
-                  <div style={{ fontSize: 12.5, color: '#475569', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--dm-text-secondary)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Phone size={13} color="#64748b" />
                     <a
                       href={`tel:${selectedRegistration.phone}`}
-                      style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                      style={{ color: 'var(--dm-blue-text)', textDecoration: 'none', fontWeight: 600 }}
                     >
                       {selectedRegistration.phone}
                     </a>
                   </div>
                   {selectedRegistration.userId?.email && (
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
                       <Mail size={12} color="#64748b" />
                       <span>{selectedRegistration.userId.email}</span>
                     </div>
@@ -1593,7 +1593,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {/* Thông tin hiến máu */}
               <div
                 style={{
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: 12,
                   padding: 14,
                   display: 'flex',
@@ -1601,16 +1601,16 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   gap: 11,
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Activity size={15} color="#dc2626" />
                   <span>Thông tin hiến máu</span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
-                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Nhóm máu</div>
+                  <div style={{ background: 'var(--dm-surface-subtle)', padding: 10, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>Nhóm máu</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 3 }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dm-red-text)' }}>
                         {selectedRegistration.bloodType === 'UNKNOWN'
                           ? 'Chưa rõ'
                           : selectedRegistration.bloodType}
@@ -1630,11 +1630,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         style={{
                           padding: '3px 6px',
                           borderRadius: 6,
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: 12,
                           fontWeight: 600,
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           cursor: 'pointer',
                         }}
                         title="Cập nhật nhóm máu thực tế"
@@ -1649,31 +1649,31 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     </div>
                   </div>
 
-                  <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
-                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Cân nặng</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                  <div style={{ background: 'var(--dm-surface-subtle)', padding: 10, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>Cân nặng</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dm-text-strong)', marginTop: 2 }}>
                       {selectedRegistration.weightKg ? `${selectedRegistration.weightKg} kg` : '—'}
                     </div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingTop: 4 }}>
-                  <span style={{ color: '#64748b' }}>Trạng thái trên App:</span>
+                  <span style={{ color: 'var(--dm-text-muted)' }}>Trạng thái trên App:</span>
                   {renderStatusBadge(selectedRegistration.status)}
                 </div>
 
                 {selectedRegistration.preferredTimeSlot && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: '#64748b' }}>Khung giờ đăng ký:</span>
-                    <strong style={{ color: '#1d4ed8' }}>
+                    <span style={{ color: 'var(--dm-text-muted)' }}>Khung giờ đăng ký:</span>
+                    <strong style={{ color: 'var(--dm-blue-text)' }}>
                       {selectedRegistration.preferredTimeSlot}
                     </strong>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: '#64748b' }}>Loại đăng ký:</span>
-                  <strong style={{ color: '#0f172a' }}>
+                  <span style={{ color: 'var(--dm-text-muted)' }}>Loại đăng ký:</span>
+                  <strong style={{ color: 'var(--dm-text-strong)' }}>
                     {selectedRegistration.registrationType === 'PRE_REGISTRATION'
                       ? 'ĐK nhận thông báo đợt hiến'
                       : 'Xác nhận theo đợt'}
@@ -1681,16 +1681,16 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: '#64748b' }}>Tỉnh / Khu vực:</span>
-                  <strong style={{ color: '#0f172a' }}>
+                  <span style={{ color: 'var(--dm-text-muted)' }}>Tỉnh / Khu vực:</span>
+                  <strong style={{ color: 'var(--dm-text-strong)' }}>
                     {selectedRegistration.provinceName || selectedRegistration.areaName || '—'}
                   </strong>
                 </div>
 
                 {selectedRegistration.address && (
                   <div style={{ fontSize: 13 }}>
-                    <span style={{ color: '#64748b' }}>Địa chỉ: </span>
-                    <span style={{ color: '#0f172a', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--dm-text-muted)' }}>Địa chỉ: </span>
+                    <span style={{ color: 'var(--dm-text-strong)', fontWeight: 500 }}>
                       {selectedRegistration.address}
                     </span>
                   </div>
@@ -1698,14 +1698,14 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
                 {selectedRegistration.note && (
                   <div style={{ fontSize: 13 }}>
-                    <span style={{ color: '#64748b' }}>Ghi chú: </span>
-                    <span style={{ color: '#0284c7', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--dm-text-muted)' }}>Ghi chú: </span>
+                    <span style={{ color: 'var(--dm-blue-text)', fontWeight: 500 }}>
                       {selectedRegistration.note}
                     </span>
                   </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#64748b' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--dm-text-muted)' }}>
                   <span>Thời gian:</span>
                   <span>{formatDateTime(selectedRegistration.respondedAt || selectedRegistration.createdAt)}</span>
                 </div>
@@ -1715,20 +1715,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {selectedRegistration.eventId && (
                 <div
                   style={{
-                    border: '1px solid #bfdbfe',
-                    background: '#eff6ff',
+                    border: '1px solid var(--dm-blue-border)',
+                    background: 'var(--dm-blue-bg)',
                     borderRadius: 12,
                     padding: 13,
                     fontSize: 13,
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--dm-blue-text)', marginBottom: 4 }}>
                     Đợt hiến máu đã phản hồi:
                   </div>
-                  <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                  <div style={{ fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                     {selectedRegistration.eventId.title}
                   </div>
-                  <div style={{ color: '#475569', fontSize: 12.5, marginTop: 3 }}>
+                  <div style={{ color: 'var(--dm-text-secondary)', fontSize: 12.5, marginTop: 3 }}>
                     📍 {selectedRegistration.eventId.locationName} •{' '}
                     {formatDate(selectedRegistration.eventId.eventDate)} (
                     {selectedRegistration.eventId.startTime} -{' '}
@@ -1741,8 +1741,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {selectedRegistration.registrationType === 'EVENT_REGISTRATION' && (
                 <div
                   style={{
-                    border: '1px solid #e2e8f0',
-                    background: '#f8fafc',
+                    border: '1px solid var(--dm-border)',
+                    background: 'var(--dm-surface-subtle)',
                     borderRadius: 12,
                     padding: 12,
                     fontSize: 12.5,
@@ -1751,30 +1751,30 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     gap: 7,
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--dm-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Bell size={13} color="#2563eb" />
                     <span>Trạng thái thông báo nhắc nhở:</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b' }}>Nhắc trước 1 ngày:</span>
+                    <span style={{ color: 'var(--dm-text-muted)' }}>Nhắc trước 1 ngày:</span>
                     {selectedRegistration.reminded1DayBefore ? (
-                      <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ color: 'var(--dm-green-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <CheckCircle2 size={12} color="#16a34a" />
                         <span>Đã gửi {selectedRegistration.reminded1DayAt ? `(${formatDateTime(selectedRegistration.reminded1DayAt)})` : ''}</span>
                       </span>
                     ) : (
-                      <span style={{ color: '#94a3b8' }}>Chưa gửi (tự động trước 24h)</span>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Chưa gửi (tự động trước 24h)</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b' }}>Nhắc sắp đến giờ:</span>
+                    <span style={{ color: 'var(--dm-text-muted)' }}>Nhắc sắp đến giờ:</span>
                     {selectedRegistration.remindedUpcoming ? (
-                      <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ color: 'var(--dm-green-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <CheckCircle2 size={12} color="#16a34a" />
                         <span>Đã gửi {selectedRegistration.remindedUpcomingAt ? `(${formatDateTime(selectedRegistration.remindedUpcomingAt)})` : ''}</span>
                       </span>
                     ) : (
-                      <span style={{ color: '#94a3b8' }}>Chưa gửi (tự động trước 2h)</span>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Chưa gửi (tự động trước 2h)</span>
                     )}
                   </div>
                 </div>
@@ -1785,8 +1785,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div
               style={{
                 padding: '14px 20px',
-                borderTop: '1px solid #e2e8f0',
-                background: '#f8fafc',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1799,9 +1799,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 style={{
                   padding: '8px 14px',
                   borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
                   fontWeight: 600,
                   fontSize: 13,
                   cursor: 'pointer',
@@ -1839,9 +1839,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '8px 12px',
                       borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#64748b',
+                      border: '1px solid var(--dm-border-strong)',
+                      background: 'var(--dm-surface)',
+                      color: 'var(--dm-text-muted)',
                       fontWeight: 600,
                       fontSize: 12,
                       cursor: 'pointer',
@@ -1876,7 +1876,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               bottom: 0,
               width: 820,
               maxWidth: '96vw',
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               zIndex: 9999,
               boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.15)',
               display: 'flex',
@@ -1886,17 +1886,17 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div
               style={{
                 padding: '16px 20px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                   {selectedEventDetail.title}
                 </h3>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                   {selectedEventDetail.areaName || 'Toàn hệ thống'}
                 </div>
               </div>
@@ -1904,7 +1904,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 type="button"
                 onClick={() => setSelectedEventDetail(null)}
                 style={{
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   border: 'none',
                   borderRadius: 8,
                   width: 30,
@@ -1922,8 +1922,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: 10,
                   padding: 13,
                   display: 'flex',
@@ -1936,7 +1936,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   <MapPin size={15} color="#2563eb" style={{ marginTop: 2 }} />
                   <div>
                     <div style={{ fontWeight: 700 }}>{selectedEventDetail.locationName}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>{selectedEventDetail.address}</div>
+                    <div style={{ color: 'var(--dm-text-muted)', fontSize: 12 }}>{selectedEventDetail.address}</div>
                     {Boolean(selectedEventDetail.googleMapsUrl || selectedEventDetail.address) && (
                       <a
                         href={
@@ -1952,7 +1952,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           alignItems: 'center',
                           gap: 4,
                           fontSize: 12,
-                          color: '#2563eb',
+                          color: 'var(--dm-blue-text)',
                           fontWeight: 600,
                           textDecoration: 'none',
                           marginTop: 4,
@@ -1993,7 +1993,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                   Người dân phản hồi từ App ({eventResponses.length})
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -2005,9 +2005,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '5px 10px',
                       borderRadius: 6,
-                      border: '1px solid #bfdbfe',
-                      background: '#eff6ff',
-                      color: '#1d4ed8',
+                      border: '1px solid var(--dm-blue-border)',
+                      background: 'var(--dm-blue-bg)',
+                      color: 'var(--dm-blue-text)',
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: sendingReminder ? 'not-allowed' : 'pointer',
@@ -2027,9 +2027,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '5px 10px',
                       borderRadius: 6,
-                      border: '1px solid #bbf7d0',
-                      background: '#f0fdf4',
-                      color: '#15803d',
+                      border: '1px solid var(--dm-green-border)',
+                      background: 'var(--dm-green-bg)',
+                      color: 'var(--dm-green-text)',
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -2047,9 +2047,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '5px 12px',
                       borderRadius: 6,
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#334155',
+                      border: '1px solid var(--dm-border-strong)',
+                      background: 'var(--dm-surface)',
+                      color: 'var(--dm-text-secondary)',
                       fontSize: 12,
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -2061,11 +2061,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </div>
 
               {loadingDetail ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--dm-text-muted)', fontSize: 13 }}>
                   Đang tải...
                 </div>
               ) : eventResponses.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--dm-text-muted)', fontSize: 13 }}>
                   Chưa có người dân xác nhận trên App.
                 </div>
               ) : (
@@ -2073,11 +2073,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   style={{
                     flex: 1,
                     minHeight: 380,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 10,
                     overflowX: 'auto',
                     overflowY: 'auto',
-                    background: '#ffffff',
+                    background: 'var(--dm-surface)',
                   }}
                 >
                   <datalist id="blood-volume-presets">
@@ -2096,9 +2096,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     <thead>
                       <tr
                         style={{
-                          background: '#f8fafc',
-                          borderBottom: '1px solid #e2e8f0',
-                          color: '#475569',
+                          background: 'var(--dm-surface-subtle)',
+                          borderBottom: '1px solid var(--dm-border)',
+                          color: 'var(--dm-text-secondary)',
                           textAlign: 'left',
                         }}
                       >
@@ -2121,8 +2121,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           <tr
                             key={r._id}
                             style={{
-                              borderBottom: '1px solid #f1f5f9',
-                              background: '#ffffff',
+                              borderBottom: '1px solid var(--dm-border)',
+                              background: 'var(--dm-surface)',
                             }}
                           >
                             {/* Người tham gia */}
@@ -2137,7 +2137,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                       height: 30,
                                       borderRadius: '50%',
                                       objectFit: 'cover',
-                                      border: '1px solid #bfdbfe',
+                                      border: '1px solid var(--dm-blue-border)',
                                       flexShrink: 0,
                                     }}
                                   />
@@ -2147,8 +2147,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                       width: 30,
                                       height: 30,
                                       borderRadius: '50%',
-                                      background: isCompleted ? '#dcfce7' : '#dbeafe',
-                                      color: isCompleted ? '#15803d' : '#1d4ed8',
+                                      background: isCompleted ? 'var(--dm-green-bg)' : 'var(--dm-blue-bg)',
+                                      color: isCompleted ? 'var(--dm-green-text)' : 'var(--dm-blue-text)',
                                       fontWeight: 700,
                                       fontSize: 11.5,
                                       display: 'flex',
@@ -2165,7 +2165,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                     onClick={() => setSelectedRegistration(r)}
                                     style={{
                                       fontWeight: 700,
-                                      color: '#2563eb',
+                                      color: 'var(--dm-blue-text)',
                                       cursor: 'pointer',
                                       textDecoration: 'underline',
                                       textUnderlineOffset: 2,
@@ -2174,7 +2174,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                   >
                                     {r.fullName}
                                   </div>
-                                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
+                                  <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 1 }}>
                                     {r.phone}
                                     {r.weightKg ? ` • ${r.weightKg}kg` : ''}
                                     {r.preferredTimeSlot ? ` • ${r.preferredTimeSlot}` : ''}
@@ -2188,8 +2188,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                               {isCompleted ? (
                                 <span
                                   style={{
-                                    background: '#fee2e2',
-                                    color: '#dc2626',
+                                    background: 'var(--dm-red-bg)',
+                                    color: 'var(--dm-red-text)',
                                     fontWeight: 700,
                                     padding: '3px 8px',
                                     borderRadius: 999,
@@ -2219,12 +2219,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                     width: '100%',
                                     padding: '5px 6px',
                                     borderRadius: 6,
-                                    border:
-                                      draft.bloodType === 'UNKNOWN'
-                                        ? '1px solid #fca5a5'
-                                        : '1px solid #cbd5e1',
-                                    background: draft.bloodType === 'UNKNOWN' ? '#fef2f2' : '#ffffff',
-                                    color: draft.bloodType === 'UNKNOWN' ? '#dc2626' : '#0f172a',
+                                    border: draft.bloodType === 'UNKNOWN'
+                                        ? '1px solid var(--dm-red-border)'
+                                        : '1px solid var(--dm-border-strong)',
+                                    background: draft.bloodType === 'UNKNOWN' ? 'var(--dm-red-bg)' : 'var(--dm-surface)',
+                                    color: draft.bloodType === 'UNKNOWN' ? 'var(--dm-red-text)' : 'var(--dm-text-strong)',
                                     fontWeight: 600,
                                     fontSize: 12,
                                   }}
@@ -2245,7 +2244,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                 <span
                                   style={{
                                     fontWeight: 700,
-                                    color: '#15803d',
+                                    color: 'var(--dm-green-text)',
                                     fontSize: 12.5,
                                   }}
                                 >
@@ -2275,13 +2274,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                       width: 72,
                                       padding: '5px 6px',
                                       borderRadius: 6,
-                                      border: '1px solid #cbd5e1',
+                                      border: '1px solid var(--dm-border-strong)',
                                       fontSize: 12,
-                                      color: '#0f172a',
-                                      background: '#ffffff',
+                                      color: 'var(--dm-text-strong)',
+                                      background: 'var(--dm-surface)',
                                     }}
                                   />
-                                  <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>
+                                  <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                                     ml
                                   </span>
                                 </div>
@@ -2292,7 +2291,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                             <td style={{ padding: '10px 8px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
                                 {renderStatusBadge(r.status)}
-                                <span style={{ fontSize: 10.5, color: '#64748b' }}>
+                                <span style={{ fontSize: 10.5, color: 'var(--dm-text-muted)' }}>
                                   {formatDateTime(r.respondedAt || r.createdAt)}
                                 </span>
                               </div>
@@ -2308,9 +2307,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                   style={{
                                     padding: '5px 6px',
                                     borderRadius: 6,
-                                    border: '1px solid #e2e8f0',
-                                    background: '#ffffff',
-                                    color: '#475569',
+                                    border: '1px solid var(--dm-border)',
+                                    background: 'var(--dm-surface)',
+                                    color: 'var(--dm-text-secondary)',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -2349,9 +2348,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                     style={{
                                       padding: '5px 9px',
                                       borderRadius: 6,
-                                      border: '1px solid #bbf7d0',
-                                      background: '#f0fdf4',
-                                      color: '#15803d',
+                                      border: '1px solid var(--dm-green-border)',
+                                      background: 'var(--dm-green-bg)',
+                                      color: 'var(--dm-green-text)',
                                       fontSize: 11.5,
                                       fontWeight: 600,
                                       cursor: isRowBusy ? 'not-allowed' : 'pointer',
@@ -2370,9 +2369,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                     style={{
                                       padding: '5px 9px',
                                       borderRadius: 6,
-                                      border: '1px solid #cbd5e1',
-                                      background: '#ffffff',
-                                      color: '#64748b',
+                                      border: '1px solid var(--dm-border-strong)',
+                                      background: 'var(--dm-surface)',
+                                      color: 'var(--dm-text-muted)',
                                       fontSize: 11.5,
                                       fontWeight: 500,
                                       cursor: isRowBusy ? 'not-allowed' : 'pointer',
@@ -2412,7 +2411,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 14,
               width: '100%',
               maxWidth: 1040,
@@ -2424,7 +2423,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div
               style={{
                 padding: '14px 20px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -2432,7 +2431,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Droplet size={18} color="#dc2626" />
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                   Tạo đợt hiến máu & Gửi thông báo App
                 </h3>
               </div>
@@ -2440,7 +2439,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
                 style={{
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   border: 'none',
                   borderRadius: 8,
                   width: 30,
@@ -2467,7 +2466,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {/* CỘT TRÁI: FORM NHẬP THÔNG TIN */}
               <form onSubmit={handleCreateEvent} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                     Tên đợt hiến máu *
                   </label>
                   <input
@@ -2479,14 +2478,14 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       width: '100%',
                       padding: '8px 11px',
                       borderRadius: 8,
-                      border: '1px solid #cbd5e1',
+                      border: '1px solid var(--dm-border-strong)',
                       fontSize: 13,
                     }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                     Khu vực *
                   </label>
                   {!isAdmin && authorityAreaId ? (
@@ -2502,16 +2501,16 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
-                        background: '#f1f5f9',
-                        color: '#475569',
+                        background: 'var(--dm-surface-muted)',
+                        color: 'var(--dm-text-secondary)',
                         cursor: 'not-allowed',
                       }}
                     />
                   ) : (
                     <div>
-                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 4 }}>
                         Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
                       <SearchableSelect
@@ -2528,9 +2527,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           width: '100%',
                           padding: '8px 11px',
                           borderRadius: 8,
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: 13,
-                          background: '#ffffff',
+                          background: 'var(--dm-surface)',
                         }}
                         options={[
                           {
@@ -2546,7 +2545,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           })),
                         ]}
                       />
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                      <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 4 }}>
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </div>
                     </div>
@@ -2555,7 +2554,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Địa điểm tổ chức *
                     </label>
                     <input
@@ -2568,13 +2567,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Địa chỉ *
                     </label>
                     <input
@@ -2587,7 +2586,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
@@ -2596,7 +2595,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
                 {/* Khung tạo địa chỉ map là bắt buộc */}
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                     Địa chỉ Google Maps / Link dẫn đường <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -2610,9 +2609,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         flex: 1,
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                       }}
                     />
                     {Boolean(formMapUrl.trim()) && (
@@ -2627,9 +2626,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         style={{
                           padding: '8px 12px',
                           borderRadius: 8,
-                          border: '1px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#2563eb',
+                          border: '1px solid var(--dm-border-strong)',
+                          background: 'var(--dm-surface-subtle)',
+                          color: 'var(--dm-blue-text)',
                           fontSize: 12.5,
                           fontWeight: 600,
                           textDecoration: 'none',
@@ -2648,7 +2647,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 90px', gap: 10 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Ngày tổ chức *
                     </label>
                     <input
@@ -2661,13 +2660,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Bắt đầu *
                     </label>
                     <input
@@ -2679,13 +2678,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Kết thúc *
                     </label>
                     <input
@@ -2697,13 +2696,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Chỉ tiêu
                     </label>
                     <input
@@ -2715,7 +2714,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
@@ -2724,7 +2723,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 10 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Cơ quan / Đơn vị tổ chức *
                     </label>
                     <input
@@ -2737,13 +2736,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       SĐT liên hệ
                     </label>
                     <input
@@ -2755,7 +2754,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         width: '100%',
                         padding: '8px 11px',
                         borderRadius: 8,
-                        border: '1px solid #cbd5e1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
                       }}
                     />
@@ -2763,7 +2762,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 5 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dm-text-body)', marginBottom: 5 }}>
                     Nhóm máu cần:
                   </label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2777,9 +2776,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           style={{
                             padding: '5px 10px',
                             borderRadius: 6,
-                            border: `1px solid ${active ? '#2563eb' : '#cbd5e1'}`,
-                            background: active ? '#2563eb' : '#f8fafc',
-                            color: active ? '#ffffff' : '#334155',
+                            border: `1px solid ${active ? '#2563eb' : 'var(--dm-border-strong)'}`,
+                            background: active ? '#2563eb' : 'var(--dm-surface-subtle)',
+                            color: active ? '#ffffff' : 'var(--dm-text-secondary)',
                             fontWeight: 600,
                             fontSize: 12,
                             cursor: 'pointer',
@@ -2799,9 +2798,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '8px 14px',
                       borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#334155',
+                      border: '1px solid var(--dm-border-strong)',
+                      background: 'var(--dm-surface)',
+                      color: 'var(--dm-text-secondary)',
                       fontWeight: 600,
                       fontSize: 13,
                       cursor: 'pointer',
@@ -2832,7 +2831,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {/* CỘT PHẢI: BẢN ĐỒ MAP SEARCH & TỌA ĐỘ DẪN ĐƯỜNG */}
               <div
                 style={{
-                  borderLeft: '1px solid #e2e8f0',
+                  borderLeft: '1px solid var(--dm-border)',
                   paddingLeft: 20,
                   height: '100%',
                 }}
@@ -2870,7 +2869,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 14,
               width: '100%',
               maxWidth: 420,
@@ -2882,7 +2881,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Droplet size={18} color="#dc2626" />
-                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                   Cập nhật nhóm máu người hiến
                 </h3>
               </div>
@@ -2891,7 +2890,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 onClick={() => setBloodPromptReg(null)}
                 disabled={submittingBloodPrompt}
                 style={{
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   border: 'none',
                   borderRadius: 8,
                   width: 28,
@@ -2906,11 +2905,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.5, marginBottom: 12 }}>
-              Người tham gia <strong style={{ color: '#0f172a' }}>{bloodPromptReg.fullName}</strong> ({bloodPromptReg.phone}) cần xác nhận <strong>nhóm máu</strong> và <strong>số lượng máu đã hiến (ml)</strong> để hoàn tất <strong>Đã hiến máu</strong>:
+            <div style={{ fontSize: 13, color: 'var(--dm-text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+              Người tham gia <strong style={{ color: 'var(--dm-text-strong)' }}>{bloodPromptReg.fullName}</strong> ({bloodPromptReg.phone}) cần xác nhận <strong>nhóm máu</strong> và <strong>số lượng máu đã hiến (ml)</strong> để hoàn tất <strong>Đã hiến máu</strong>:
             </div>
 
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
               Nhóm máu thực tế *
             </div>
             <div
@@ -2931,9 +2930,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{
                       padding: '9px 0',
                       borderRadius: 8,
-                      border: active ? '2px solid #dc2626' : '1px solid #cbd5e1',
-                      background: active ? '#fef2f2' : '#f8fafc',
-                      color: active ? '#dc2626' : '#1e293b',
+                      border: active ? '2px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                      background: active ? 'var(--dm-red-bg)' : 'var(--dm-surface-subtle)',
+                      color: active ? 'var(--dm-red-text)' : 'var(--dm-text-body)',
                       fontWeight: 700,
                       fontSize: 13.5,
                       cursor: 'pointer',
@@ -2946,7 +2945,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
                 Số lượng máu đã hiến (ml) *
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2960,9 +2959,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       style={{
                         padding: '6px 10px',
                         borderRadius: 6,
-                        border: active ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
-                        background: active ? '#f0fdf4' : '#ffffff',
-                        color: active ? '#15803d' : '#334155',
+                        border: active ? '1.5px solid #16a34a' : '1px solid var(--dm-border-strong)',
+                        background: active ? 'var(--dm-green-bg)' : 'var(--dm-surface)',
+                        color: active ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
                         fontWeight: 600,
                         fontSize: 12.5,
                         cursor: 'pointer',
@@ -2984,9 +2983,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     flex: 1,
                     padding: '6px 10px',
                     borderRadius: 6,
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--dm-border-strong)',
                     fontSize: 13,
-                    color: '#0f172a',
+                    color: 'var(--dm-text-strong)',
                   }}
                 />
               </div>
@@ -3000,9 +2999,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 style={{
                   padding: '8px 14px',
                   borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
                   fontWeight: 600,
                   fontSize: 13,
                   cursor: 'pointer',

@@ -61,10 +61,10 @@ const HAZARD_SELECT_STYLE: React.CSSProperties = {
   width: '100%',
   padding: '8px 10px',
   borderRadius: '6px',
-  border: '1px solid #cbd5e1',
+  border: '1px solid var(--dm-border-strong)',
   fontSize: '12.5px',
-  color: '#0f172a',
-  background: '#ffffff',
+  color: 'var(--dm-text-strong)',
+  background: 'var(--dm-surface)',
   boxSizing: 'border-box',
 };
 
@@ -82,8 +82,8 @@ const renderSeveritySelector = (
   onSelect: (next: HazardSeverityLevel) => void
 ) => (
   <div>
-    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-      Mức độ nguy cấp <span style={{ color: '#dc2626' }}>*</span>
+    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+      Mức độ nguy cấp <span style={{ color: 'var(--dm-red-text)' }}>*</span>
     </label>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
       {HAZARD_SEVERITY_OPTIONS.map((s) => {
@@ -98,9 +98,9 @@ const renderSeveritySelector = (
               justifyContent: 'center',
               padding: '7px 4px',
               fontSize: '11.5px',
-              background: isSel ? '#0284c7' : '#ffffff',
-              color: isSel ? '#ffffff' : '#334155',
-              borderColor: isSel ? '#0284c7' : '#cbd5e1',
+              background: isSel ? '#0284c7' : 'var(--dm-surface)',
+              color: isSel ? '#ffffff' : 'var(--dm-text-secondary)',
+              borderColor: isSel ? '#0284c7' : 'var(--dm-border-strong)',
               fontWeight: isSel ? 700 : 500,
             }}
           >
@@ -730,12 +730,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     const renderSortIcon = (field: 'createdAt' | 'severity' | 'title' | 'district' | 'address' | 'status') => {
       if (hazardSortField !== field) {
-        return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: '6px', opacity: 0.6 }} />;
+        return <ArrowUpDown size={12} style={{ color: 'var(--dm-text-muted)', marginLeft: '6px', opacity: 0.6 }} />;
       }
       return hazardSortOrder === 'asc' ? (
-        <ArrowUp size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+        <ArrowUp size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
       ) : (
-        <ArrowDown size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+        <ArrowDown size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
       );
     };
 
@@ -761,13 +761,13 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     const getSeverityBadge = (severity: string) => {
       switch (severity) {
         case 'CRITICAL':
-          return { label: 'Cực kỳ nguy cấp', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' };
+          return { label: 'Cực kỳ nguy cấp', bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)' };
         case 'HIGH':
-          return { label: 'Mức độ cao', bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' };
+          return { label: 'Mức độ cao', bg: 'var(--dm-orange-bg)', color: 'var(--dm-orange-text)', border: 'var(--dm-orange-border)' };
         case 'MEDIUM':
-          return { label: 'Trung bình', bg: '#fefce8', color: '#854d0e', border: '#fef08a' };
+          return { label: 'Trung bình', bg: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: 'var(--dm-amber-border)' };
         default:
-          return { label: 'Mức thấp', bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
+          return { label: 'Mức thấp', bg: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: 'var(--dm-border)' };
       }
     };
 
@@ -1506,9 +1506,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           style={{
             padding: '7px 12px',
             borderRadius: 8,
-            border: '1px solid #bbf7d0',
-            background: '#f0fdf4',
-            color: '#15803d',
+            border: '1px solid var(--dm-green-border)',
+            background: 'var(--dm-green-bg)',
+            color: 'var(--dm-green-text)',
             fontSize: '13px',
             display: 'inline-flex',
             alignItems: 'center',
@@ -1567,8 +1567,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '14px 20px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border-strong)',
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
               flexWrap: 'wrap',
@@ -1577,10 +1577,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <MapPin size={16} color="#0284c7" />
-              <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+              <span style={{ color: 'var(--dm-text-muted)', fontWeight: 500, fontSize: '13.5px' }}>
                 Phạm vi quản trị:
               </span>
-              <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+              <strong style={{ color: 'var(--dm-text-strong)', fontWeight: 700, fontSize: '14px' }}>
                 {daNangProvince?.name || 'Thành phố Đà Nẵng'}
               </strong>
             </div>
@@ -1606,7 +1606,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
-              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+              <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
                 Lọc theo Phường / Xã (Đà Nẵng):
               </span>
               <SearchableSelect
@@ -1621,9 +1621,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   padding: '6px 12px',
                   fontSize: '13px',
                   borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
+                  border: '1px solid var(--dm-border-strong)',
+                  backgroundColor: 'var(--dm-surface)',
+                  color: 'var(--dm-text-strong)',
                   fontWeight: 500,
                   minWidth: '240px',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
@@ -1654,9 +1654,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   style={{
                     padding: '5px 10px',
                     fontSize: '12px',
-                    color: '#0284c7',
-                    backgroundColor: '#f0f9ff',
-                    border: '1px solid #bae6fd',
+                    color: 'var(--dm-blue-text)',
+                    backgroundColor: 'var(--dm-blue-bg)',
+                    border: '1px solid var(--dm-blue-border)',
                     borderRadius: '5px',
                     cursor: 'pointer',
                     fontWeight: 600,
@@ -1733,7 +1733,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     setHazardSearchText('');
                     setHazardPage(1);
                   }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dm-text-muted)' }}
                 >
                   <X size={14} />
                 </button>
@@ -1758,8 +1758,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             <div
               style={{
                 padding: '10px 16px',
-                backgroundColor: '#fef2f2',
-                borderBottom: '1px solid #fecaca',
+                backgroundColor: 'var(--dm-red-bg)',
+                borderBottom: '1px solid var(--dm-red-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1768,7 +1768,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: 600, color: '#991b1b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--dm-red-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <AlertTriangle size={16} color="#dc2626" />
                   <span>Đã chọn <strong>{selectedHazardIds.length}</strong> điểm nguy hiểm</span>
                 </span>
@@ -1778,7 +1778,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     fontSize: '12px',
                     cursor: 'pointer',
                     textDecoration: 'underline',
@@ -1931,7 +1931,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <tbody>
                 {totalHazardItems === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                       <AlertTriangle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm nguy hiểm nào trong danh mục này.</div>
                       <button
@@ -1941,9 +1941,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           marginTop: '12px',
                           padding: '6px 14px',
                           fontSize: '12px',
-                          color: '#0284c7',
-                          background: '#f0f9ff',
-                          border: '1px solid #bae6fd',
+                          color: 'var(--dm-blue-text)',
+                          background: 'var(--dm-blue-bg)',
+                          border: '1px solid var(--dm-blue-border)',
                           borderRadius: '6px',
                           cursor: 'pointer',
                           fontWeight: 600,
@@ -2002,8 +2002,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                                 width: 38,
                                 height: 38,
                                 borderRadius: '8px',
-                                backgroundColor: '#f1f5f9',
-                                border: '1px solid #cbd5e1',
+                                backgroundColor: 'var(--dm-surface-muted)',
+                                border: '1px solid var(--dm-border-strong)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -2017,7 +2017,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               <div
                                 style={{
                                   fontWeight: 700,
-                                  color: '#2563eb',
+                                  color: 'var(--dm-blue-text)',
                                   fontSize: '14px',
                                   lineHeight: '1.4',
                                 }}
@@ -2033,9 +2033,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                                   borderRadius: '5px',
                                   fontSize: '11.5px',
                                   fontWeight: 600,
-                                  backgroundColor: '#f8fafc',
-                                  color: '#475569',
-                                  border: '1px solid #e2e8f0',
+                                  backgroundColor: 'var(--dm-surface-subtle)',
+                                  color: 'var(--dm-text-secondary)',
+                                  border: '1px solid var(--dm-border)',
                                   marginTop: '3px',
                                 }}
                               >
@@ -2057,9 +2057,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               borderRadius: '6px',
                               fontSize: '12px',
                               fontWeight: isLocal ? 700 : 500,
-                              background: isLocal ? '#f0fdf4' : '#f8fafc',
-                              color: isLocal ? '#15803d' : '#475569',
-                              border: `1px solid ${isLocal ? '#bbf7d0' : '#cbd5e1'}`,
+                              background: isLocal ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                              color: isLocal ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
+                              border: `1px solid ${isLocal ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
                               whiteSpace: 'nowrap',
                             }}
                             title={`Địa bàn quản lý: ${districtName}`}
@@ -2090,17 +2090,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                         {/* 4. Địa chỉ hiện trường */}
                         <td>
-                          <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 500, lineHeight: '1.45' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--dm-text-body)', fontWeight: 500, lineHeight: '1.45' }}>
                             {r.address}
                           </div>
                         </td>
 
                         {/* 5. Thời gian & Người báo */}
                         <td>
-                          <div style={{ fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
+                          <div style={{ fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
                             {formatHazardTime(r.createdAt)}
                           </div>
-                          <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
+                          <div style={{ fontSize: '11.5px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
                             {reporterName}
                           </div>
                         </td>
@@ -2108,17 +2108,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         {/* 6. Trạng thái */}
                         <td style={{ textAlign: 'center' }}>
                           {r.status === 'PENDING' && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: '#fffbeb', color: '#b45309', border: '1px solid #fef3c7', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: '1px solid var(--dm-amber-border)', whiteSpace: 'nowrap' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d97706' }} /> Chờ duyệt
                             </span>
                           )}
                           {r.status === 'APPROVED' && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #dcfce7', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: '1px solid #dcfce7', whiteSpace: 'nowrap' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} /> Đã duyệt
                             </span>
                           )}
                           {r.status === 'REJECTED' && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '5px', fontSize: '11.5px', fontWeight: 600, background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)', whiteSpace: 'nowrap' }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626' }} /> Từ chối
                             </span>
                           )}
@@ -2138,7 +2138,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 'Không có dữ liệu'
               ) : (
                 <>
-                  Hiển thị <strong style={{ color: '#0f172a' }}>{hazardStartIndex + 1}</strong> – <strong style={{ color: '#0f172a' }}>{Math.min(hazardStartIndex + HAZARD_PAGE_SIZE, totalHazardItems)}</strong> trên tổng số <strong style={{ color: '#0284c7' }}>{totalHazardItems}</strong> điểm nguy hiểm
+                  Hiển thị <strong style={{ color: 'var(--dm-text-strong)' }}>{hazardStartIndex + 1}</strong> – <strong style={{ color: 'var(--dm-text-strong)' }}>{Math.min(hazardStartIndex + HAZARD_PAGE_SIZE, totalHazardItems)}</strong> trên tổng số <strong style={{ color: 'var(--dm-blue-text)' }}>{totalHazardItems}</strong> điểm nguy hiểm
                 </>
               )}
             </div>
@@ -2183,7 +2183,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   return pages.map((p, idx) => {
                     if (p === '...') {
                       return (
-                        <span key={`dots-${idx}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: '13px' }}>
+                        <span key={`dots-${idx}`} style={{ padding: '0 4px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                           ...
                         </span>
                       );
@@ -2222,7 +2222,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                 {/* Ô NHẬP SỐ TRANG TRỰC TIẾP */}
                 <div className="sos-pagination-jump">
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Đến trang:</span>
+                  <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>Đến trang:</span>
                   <input
                     type="number"
                     min={1}
@@ -2284,7 +2284,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           >
             <div
               style={{
-                background: '#ffffff',
+                background: 'var(--dm-surface)',
                 borderRadius: 0,
                 width: '680px',
                 maxWidth: '94vw',
@@ -2293,7 +2293,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
-                borderLeft: '1px solid #cbd5e1',
+                borderLeft: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -2302,11 +2302,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2315,8 +2315,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       width: 32,
                       height: 32,
                       borderRadius: '6px',
-                      backgroundColor: '#f1f5f9',
-                      border: '1px solid #e2e8f0',
+                      backgroundColor: 'var(--dm-surface-muted)',
+                      border: '1px solid var(--dm-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2325,10 +2325,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     <HazardTypeIcon type={detailHazard.hazardType} size={18} color="#334155" />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                       {detailHazard.title}
                     </h3>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: '1px' }}>
                       Mã: {detailHazard._id} • Báo lúc: {formatHazardTime(detailHazard.createdAt)}
                     </div>
                   </div>
@@ -2340,7 +2340,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     cursor: 'pointer',
                     padding: '4px',
                   }}
@@ -2362,8 +2362,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               >
                 {/* Cột 1: Thông tin mô tả & Người báo */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  <div style={{ background: 'var(--dm-surface-subtle)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
                       Phân loại &amp; Mức độ
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2374,11 +2374,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           gap: '6px',
                           padding: '4px 10px',
                           borderRadius: '6px',
-                          background: '#ffffff',
-                          color: '#0f172a',
+                          background: 'var(--dm-surface)',
+                          color: 'var(--dm-text-strong)',
                           fontWeight: 600,
                           fontSize: '12.5px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                         }}
                       >
                         <HazardTypeIcon type={detailHazard.hazardType} size={15} color="#334155" />
@@ -2408,11 +2408,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           gap: '5px',
                           padding: '4px 10px',
                           borderRadius: '6px',
-                          background: '#f8fafc',
-                          color: '#0f172a',
+                          background: 'var(--dm-surface-subtle)',
+                          color: 'var(--dm-text-strong)',
                           fontWeight: 600,
                           fontSize: '12px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                         }}
                       >
                         <MapPin size={13} color="#2563eb" />
@@ -2420,29 +2420,29 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       </span>
 
                       {detailHazard.status === 'APPROVED' && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #dcfce7' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: '1px solid #dcfce7' }}>
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} /> Đã duyệt
                         </span>
                       )}
                       {detailHazard.status === 'PENDING' && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fffbeb', color: '#b45309', border: '1px solid #fef3c7' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: '1px solid var(--dm-amber-border)' }}>
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d97706' }} /> Chờ duyệt
                         </span>
                       )}
                       {detailHazard.status === 'REJECTED' && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}>
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626' }} /> Từ chối
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
                       Người đóng góp thông tin
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600, color: '#0f172a', fontSize: '13.5px' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--dm-text-strong)', fontSize: '13.5px' }}>
                         {typeof detailHazard.reportedBy === 'object' ? (detailHazard.reportedBy?.fullName || 'Người dân') : 'Người dân'}
                       </span>
                       <span
@@ -2453,46 +2453,46 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: 500,
-                          background: detailHazard.reporterRole === 'RESCUER' ? '#e0f2fe' : '#f1f5f9',
-                          color: detailHazard.reporterRole === 'RESCUER' ? '#0369a1' : '#475569',
-                          border: '1px solid #e2e8f0',
+                          background: detailHazard.reporterRole === 'RESCUER' ? 'var(--dm-blue-bg)' : 'var(--dm-surface-muted)',
+                          color: detailHazard.reporterRole === 'RESCUER' ? 'var(--dm-blue-text)' : 'var(--dm-text-secondary)',
+                          border: '1px solid var(--dm-border)',
                         }}
                       >
                         {detailHazard.reporterRole === 'RESCUER' ? 'Cứu hộ viên' : 'Người dân'}
                       </span>
                     </div>
                     {typeof detailHazard.reportedBy === 'object' && detailHazard.reportedBy?.phone ? (
-                      <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--dm-text-secondary)', marginTop: '4px' }}>
                         Điện thoại liên hệ: <strong>{detailHazard.reportedBy.phone}</strong>
                       </div>
                     ) : null}
                   </div>
 
-                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
                       Địa chỉ hiện trường
                     </div>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', lineHeight: '1.4' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dm-text-strong)', lineHeight: '1.4' }}>
                       {detailHazard.address}
                     </div>
 
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginTop: '12px', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginTop: '12px', marginBottom: '4px' }}>
                       Mô tả chi tiết
                     </div>
-                    <div style={{ fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--dm-text-secondary)', lineHeight: '1.5' }}>
                       {detailHazard.description || 'Không có mô tả chi tiết'}
                     </div>
 
                     {detailHazard.reviewNote && (
-                      <div style={{ marginTop: '12px', padding: '8px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12.5px', color: '#475569' }}>
+                      <div style={{ marginTop: '12px', padding: '8px 10px', background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border)', borderRadius: '6px', fontSize: '12.5px', color: 'var(--dm-text-secondary)' }}>
                         <strong>Ghi chú chính quyền:</strong> {detailHazard.reviewNote}
                       </div>
                     )}
                   </div>
 
                   {detailHazard.images && detailHazard.images.length > 0 && (
-                    <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                    <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
                         Ảnh hiện trường ({detailHazard.images.length})
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px' }}>
@@ -2511,7 +2511,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               borderRadius: '8px',
                               overflow: 'hidden',
                               cursor: 'pointer',
-                              border: '1px solid #cbd5e1',
+                              border: '1px solid var(--dm-border-strong)',
                             }}
                             title="Bấm để xem ảnh phóng to"
                           >
@@ -2525,13 +2525,13 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                 {/* Cột 2: Bản đồ nhỏ hiển thị vị trí */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ background: 'var(--dm-surface)', padding: '16px', borderRadius: '12px', border: '1px solid var(--dm-border)', display: 'flex', flexDirection: 'column', height: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dm-text-strong)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <MapPin size={16} color="#dc2626" />
                         <span>Vị trí trên Bản đồ</span>
                       </div>
-                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                      <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                         GPS: [{detailHazard.location.coordinates[1].toFixed(5)}, {detailHazard.location.coordinates[0].toFixed(5)}]
                       </span>
                     </div>
@@ -2588,8 +2588,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   <div
                     style={{
                       padding: '16px 24px',
-                      borderTop: '1px solid #e2e8f0',
-                      background: '#f8fafc',
+                      borderTop: '1px solid var(--dm-border)',
+                      background: 'var(--dm-surface-subtle)',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -2608,9 +2608,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           gap: '6px',
                           padding: '8px 16px',
                           borderRadius: '8px',
-                          background: '#fee2e2',
-                          color: '#b91c1c',
-                          border: '1px solid #fca5a5',
+                          background: 'var(--dm-red-bg)',
+                          color: 'var(--dm-red-text)',
+                          border: '1px solid var(--dm-red-border)',
                           fontSize: '13px',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -2627,14 +2627,14 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           gap: '8px',
                           padding: '8px 14px',
                           borderRadius: '8px',
-                          background: '#fef3c7',
-                          color: '#92400e',
-                          border: '1px solid #fde68a',
+                          background: 'var(--dm-amber-bg)',
+                          color: 'var(--dm-amber-text)',
+                          border: '1px solid var(--dm-amber-border)',
                           fontSize: '12.5px',
                           fontWeight: 600,
                         }}
                       >
-                        <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: '#b45309' }}></i>
+                        <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: 'var(--dm-amber-text)' }}></i>
                         <span>
                           Điểm nguy hiểm này ngoài khu vực quản lý ({accountAreaDisplayName}) — Bạn chỉ có quyền xem thông tin.
                         </span>
@@ -2654,9 +2654,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               gap: '6px',
                               padding: '8px 16px',
                               borderRadius: '8px',
-                              background: '#ffedd5',
-                              color: '#c2410c',
-                              border: '1px solid #fed7aa',
+                              background: 'var(--dm-orange-bg)',
+                              color: 'var(--dm-orange-text)',
+                              border: '1px solid var(--dm-orange-border)',
                               fontSize: '13px',
                               fontWeight: 600,
                               cursor: 'pointer',
@@ -2706,9 +2706,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                             gap: '6px',
                             padding: '8px 16px',
                             borderRadius: '8px',
-                            background: '#f0f9ff',
-                            color: '#0284c7',
-                            border: '1px solid #bae6fd',
+                            background: 'var(--dm-blue-bg)',
+                            color: 'var(--dm-blue-text)',
+                            border: '1px solid var(--dm-blue-border)',
                             fontSize: '13px',
                             fontWeight: 700,
                             cursor: 'pointer',
@@ -2751,9 +2751,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         style={{
                           padding: '8px 18px',
                           borderRadius: '8px',
-                          background: '#ffffff',
-                          color: '#475569',
-                          border: '1px solid #cbd5e1',
+                          background: 'var(--dm-surface)',
+                          color: 'var(--dm-text-secondary)',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '13px',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -2786,7 +2786,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--dm-surface)',
                 borderRadius: '12px',
                 width: '100%',
                 maxWidth: '920px',
@@ -2794,7 +2794,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -2803,20 +2803,20 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     {reviewingHazard.status === 'APPROVED'
                       ? 'Chỉnh Sửa & Chuẩn Hóa Điểm Nguy Hiểm'
                       : 'Thẩm Định & Chuẩn Hóa Thông Tin Điểm Nguy Hiểm'}
                   </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                     Kiểm tra và chuẩn hóa các trường thông tin chuẩn xác trước khi công bố lên bản đồ tác chiến.
                   </p>
                 </div>
@@ -2828,7 +2828,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     padding: '4px',
                   }}
                   title="Đóng"
@@ -2850,32 +2850,32 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 {/* Đối chiếu thông tin người dân gửi ban đầu */}
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: '8px',
                     padding: '12px 14px',
                     fontSize: '12.5px',
                   }}
                 >
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>
                     Thông tin người dân gửi ban đầu:
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
                     <div>
-                      <span style={{ color: '#64748b' }}>Người gửi: </span>
-                      <strong style={{ color: '#0f172a' }}>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Người gửi: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>
                         {typeof reviewingHazard.reportedBy === 'object'
                           ? (reviewingHazard.reportedBy?.fullName || 'Người dân')
                           : 'Người dân'}
                       </strong>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b' }}>Thời gian: </span>
-                      <strong style={{ color: '#0f172a' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Thời gian: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b' }}>Tiêu đề gốc: </span>
-                      <strong style={{ color: '#0f172a' }}>"{reviewingHazard.title}"</strong>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Tiêu đề gốc: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>"{reviewingHazard.title}"</strong>
                     </div>
                   </div>
                 </div>
@@ -2884,19 +2884,19 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 {editErrors.general && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      color: '#b91c1c',
+                      color: 'var(--dm-red-text)',
                       fontSize: '12.5px',
                       fontWeight: 500,
                     }}
                   >
-                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
                     <span>{editErrors.general}</span>
                   </div>
                 )}
@@ -2913,8 +2913,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* 1. Tiêu đề chuẩn hóa */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Tiêu đề điểm nguy hiểm chuẩn hóa <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tiêu đề điểm nguy hiểm chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -2930,16 +2930,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: editErrors.title ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: editErrors.title ? '#fff5f5' : '#ffffff',
+                          border: editErrors.title ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.title ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {editErrors.title && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{editErrors.title}</span>
                         </div>
@@ -2948,8 +2948,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 2. LOẠI NGUY HIỂM THIÊN TAI */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-                        Loại nguy hiểm thiên tai <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Loại nguy hiểm thiên tai <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <select
                         value={editHazardType}
@@ -2985,16 +2985,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               width: '100%',
                               padding: '8px 12px',
                               borderRadius: '6px',
-                              border: editErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: editErrors.customHazardType ? '#fff5f5' : '#ffffff',
+                              border: editErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                              background: editErrors.customHazardType ? '#fff5f5' : 'var(--dm-surface)',
                               fontSize: '13px',
-                              color: '#0f172a',
+                              color: 'var(--dm-text-strong)',
                               boxSizing: 'border-box',
                               outline: 'none',
                             }}
                           />
                           {editErrors.customHazardType && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                               <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                               <span>{editErrors.customHazardType}</span>
                             </div>
@@ -3008,8 +3008,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 4. Địa chỉ hiện trường */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Địa chỉ hiện trường chuẩn xác <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ hiện trường chuẩn xác <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3025,16 +3025,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: editErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: editErrors.address ? '#fff5f5' : '#ffffff',
+                          border: editErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.address ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {editErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{editErrors.address}</span>
                         </div>
@@ -3043,8 +3043,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 5. Mô tả */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <textarea
                         rows={2}
@@ -3060,17 +3060,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: editErrors.description ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: editErrors.description ? '#fff5f5' : '#ffffff',
+                          border: editErrors.description ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.description ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           resize: 'vertical',
                           outline: 'none',
                         }}
                       />
                       {editErrors.description && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{editErrors.description}</span>
                         </div>
@@ -3119,7 +3119,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* Ghi chú chính quyền */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                         Ghi chú thẩm định &amp; Phương án xử lý của chính quyền
                       </label>
                       <textarea
@@ -3131,10 +3131,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                           resize: 'vertical',
                         }}
@@ -3148,8 +3148,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -3212,7 +3212,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--dm-surface)',
                 borderRadius: '12px',
                 width: '100%',
                 maxWidth: '960px',
@@ -3220,7 +3220,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -3229,11 +3229,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -3242,8 +3242,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       width: '36px',
                       height: '36px',
                       borderRadius: '8px',
-                      backgroundColor: '#e0f2fe',
-                      color: '#0284c7',
+                      backgroundColor: 'var(--dm-blue-bg)',
+                      color: 'var(--dm-blue-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -3252,10 +3252,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     <PlusCircle size={20} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                       Khởi Tạo Điểm Nguy Hiểm Mới
                     </h3>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                       {isAdmin
                         ? 'Quản trị viên thiết lập điểm cảnh báo nguy hiểm và chọn khu vực hành chính trên toàn hệ thống.'
                         : `Cán bộ địa phương ${localTabLabel} thiết lập điểm cảnh báo và công bố trực tiếp lên hệ thống.`}
@@ -3270,7 +3270,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     padding: '4px',
                   }}
                   title="Đóng"
@@ -3293,19 +3293,19 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 {createErrors.general && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      color: '#b91c1c',
+                      color: 'var(--dm-red-text)',
                       fontSize: '12.5px',
                       fontWeight: 500,
                     }}
                   >
-                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
                     <span>{createErrors.general}</span>
                   </div>
                 )}
@@ -3321,8 +3321,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* 1. Tiêu đề điểm nguy hiểm */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Tiêu đề điểm nguy hiểm <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tiêu đề điểm nguy hiểm <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3338,16 +3338,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: createErrors.title ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createErrors.title ? '#fff5f5' : '#ffffff',
+                          border: createErrors.title ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: createErrors.title ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {createErrors.title && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{createErrors.title}</span>
                         </div>
@@ -3356,8 +3356,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 2. Loại nguy hiểm thiên tai */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-                        Loại hiểm họa thiên tai <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Loại hiểm họa thiên tai <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <select
                         value={createHazardType}
@@ -3393,16 +3393,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               width: '100%',
                               padding: '8px 12px',
                               borderRadius: '6px',
-                              border: createErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createErrors.customHazardType ? '#fff5f5' : '#ffffff',
+                              border: createErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                              background: createErrors.customHazardType ? '#fff5f5' : 'var(--dm-surface)',
                               fontSize: '13px',
-                              color: '#0f172a',
+                              color: 'var(--dm-text-strong)',
                               boxSizing: 'border-box',
                               outline: 'none',
                             }}
                           />
                           {createErrors.customHazardType && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                               <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                               <span>{createErrors.customHazardType}</span>
                             </div>
@@ -3416,12 +3416,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 4. Khu vực quản lý hành chính */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                         Khu vực quản lý
                       </label>
                       {isAdmin ? (
                         <div>
-                          <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '3px' }}>
                             Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                           </div>
                           <SearchableSelect
@@ -3457,8 +3457,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                             width: '100%',
                             padding: '8px 12px',
                             borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
+                            border: '1px solid var(--dm-border-strong)',
+                            background: 'var(--dm-surface-subtle)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
@@ -3467,7 +3467,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           }}
                         >
                           <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                             {accountAreaDisplayName}
                           </span>
                         </div>
@@ -3476,8 +3476,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 5. Địa chỉ hiện trường */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Địa chỉ hiện trường cụ thể <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ hiện trường cụ thể <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3493,16 +3493,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: createErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createErrors.address ? '#fff5f5' : '#ffffff',
+                          border: createErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: createErrors.address ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {createErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{createErrors.address}</span>
                         </div>
@@ -3511,8 +3511,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* 5. Mô tả chi tiết & Cảnh báo an toàn */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <textarea
                         rows={3}
@@ -3528,17 +3528,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: createErrors.description ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createErrors.description ? '#fff5f5' : '#ffffff',
+                          border: createErrors.description ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: createErrors.description ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           resize: 'vertical',
                           outline: 'none',
                         }}
                       />
                       {createErrors.description && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{createErrors.description}</span>
                         </div>
@@ -3585,7 +3585,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* Trạng thái công bố */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
                         Trạng thái phê duyệt &amp; Công bố
                       </label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -3598,9 +3598,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                             justifyContent: 'center',
                             fontSize: '12px',
                             fontWeight: createStatus === 'APPROVED' ? 700 : 500,
-                            background: createStatus === 'APPROVED' ? '#dcfce7' : '#ffffff',
-                            color: createStatus === 'APPROVED' ? '#15803d' : '#475569',
-                            borderColor: createStatus === 'APPROVED' ? '#22c55e' : '#cbd5e1',
+                            background: createStatus === 'APPROVED' ? 'var(--dm-green-bg)' : 'var(--dm-surface)',
+                            color: createStatus === 'APPROVED' ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
+                            borderColor: createStatus === 'APPROVED' ? '#22c55e' : 'var(--dm-border-strong)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '5px',
@@ -3619,9 +3619,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                             justifyContent: 'center',
                             fontSize: '12px',
                             fontWeight: createStatus === 'PENDING' ? 700 : 500,
-                            background: createStatus === 'PENDING' ? '#fef9c3' : '#ffffff',
-                            color: createStatus === 'PENDING' ? '#854d0e' : '#475569',
-                            borderColor: createStatus === 'PENDING' ? '#eab308' : '#cbd5e1',
+                            background: createStatus === 'PENDING' ? 'var(--dm-amber-bg)' : 'var(--dm-surface)',
+                            color: createStatus === 'PENDING' ? 'var(--dm-amber-text)' : 'var(--dm-text-secondary)',
+                            borderColor: createStatus === 'PENDING' ? '#eab308' : 'var(--dm-border-strong)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '5px',
@@ -3635,7 +3635,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                     {/* Ghi chú chính quyền */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                         Ghi chú thẩm định &amp; Phương án xử lý
                       </label>
                       <input
@@ -3647,10 +3647,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                         }}
                       />
@@ -3663,14 +3663,14 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                   <span>⚡ Điểm nguy hiểm công bố sẽ được đồng bộ ngay lập tức tới App và Bản đồ tác chiến.</span>
                 </div>
 

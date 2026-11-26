@@ -169,14 +169,11 @@ export const CitizensManagementView: React.FC = () => {
         <div className="sos-view-card-header">
           <div className="sos-view-card-title">
             <Users size={18} color="#ef4444" />
-            <span>
-              Quản Lý Tài Khoản Người Dân Thực Tế Trong Database ({citizens.length} người dùng)
-            </span>
+            <span>Người dân ({citizens.length})</span>
           </div>
           <button
             type="button"
-            className="sos-btn-action"
-            style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569' }}
+            className="sos-btn sos-btn--outline sos-btn--sm"
             onClick={loadData}
             disabled={loading}
           >

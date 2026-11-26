@@ -528,7 +528,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const renderStepper = (effectiveStatus: string) => {
     if (effectiveStatus === 'CANCELLED' || effectiveStatus === 'REJECTED') {
       return (
-        <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 12.5, fontWeight: 600 }}>
+        <div style={{ padding: '10px 14px', background: 'var(--dm-surface-subtle)', borderRadius: 8, border: '1px solid var(--dm-border-strong)', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--dm-text-muted)', fontSize: 12.5, fontWeight: 600 }}>
           <XCircle size={16} color="#64748b" />
           <span>Yêu cầu cứu nạn đã được hủy (Người dân báo đã an toàn hoặc hủy bỏ)</span>
         </div>
@@ -992,8 +992,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               {loading && displaySosList.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
-                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
-                    <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu cứu nạn...</p>
+                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
+                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu cứu nạn...</p>
                   </td>
                 </tr>
               ) : filteredSosList.length === 0 ? (
@@ -1080,8 +1080,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                   padding: '1px 5px',
                                   borderRadius: 4,
                                   marginLeft: 4,
-                                  background: sos.priority === 'UNASSESSED' ? '#fff7ed' : '#eef2ff',
-                                  color: sos.priority === 'UNASSESSED' ? '#c2410c' : '#3730a3',
+                                  background: sos.priority === 'UNASSESSED' ? 'var(--dm-orange-bg)' : 'var(--dm-purple-bg)',
+                                  color: sos.priority === 'UNASSESSED' ? 'var(--dm-orange-text)' : 'var(--dm-purple-text)',
                                 }}
                                 title={(sos.riskAssessment?.reasons || sos.aiAssessment?.reasons || []).join(' • ')}
                               >
@@ -1390,7 +1390,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <div className="sos-panel-body">
               {/* BLOCK 0: PHÂN TÍCH SOS BẰNG AI */}
               {(selectedSosDetail.aiAssessment || selectedSosDetail.riskAssessment) && (
-                <div className="sos-panel-card" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)', borderColor: '#bae6fd' }}>
+                <div className="sos-panel-card" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)', borderColor: 'var(--dm-blue-border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <div className="sos-panel-card-title" style={{ marginBottom: 0 }}>
                       <span>✨</span>
@@ -1403,18 +1403,16 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           fontWeight: 900,
                           padding: '2px 8px',
                           borderRadius: 6,
-                          background:
-                            selectedSosDetail.priority === 'CRITICAL'
-                              ? '#fee2e2'
+                          background: selectedSosDetail.priority === 'CRITICAL'
+                              ? 'var(--dm-red-bg)'
                               : selectedSosDetail.priority === 'HIGH'
-                              ? '#ffedd5'
-                              : '#fef3c7',
-                          color:
-                            selectedSosDetail.priority === 'CRITICAL'
-                              ? '#b91c1c'
+                              ? 'var(--dm-orange-bg)'
+                              : 'var(--dm-amber-bg)',
+                          color: selectedSosDetail.priority === 'CRITICAL'
+                              ? 'var(--dm-red-text)'
                               : selectedSosDetail.priority === 'HIGH'
-                              ? '#c2410c'
-                              : '#b45309',
+                              ? 'var(--dm-orange-text)'
+                              : 'var(--dm-amber-text)',
                         }}
                       >
                         {selectedSosDetail.priority === 'UNASSESSED' ? 'CHƯA PHÂN LOẠI' : selectedSosDetail.priority}
@@ -1435,9 +1433,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           fontWeight: 800,
                           padding: '2px 7px',
                           borderRadius: 5,
-                          border: '1px solid #c7d2fe',
-                          background: '#ffffff',
-                          color: '#3730a3',
+                          border: '1px solid var(--dm-purple-border)',
+                          background: 'var(--dm-surface)',
+                          color: 'var(--dm-purple-text)',
                           cursor: 'pointer',
                         }}
                         title="Chạy lại phân tích AI Gemini cho ca này"
@@ -1446,7 +1444,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       </button>
                     </div>
                   </div>
-                  <div style={{ marginTop: 5, fontSize: 10.5, color: '#475569' }}>
+                  <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--dm-text-secondary)' }}>
                     {selectedSosDetail.priorityLockedByAuthority
                       ? 'Mức ưu tiên đã được cán bộ xác minh.'
                       : selectedSosDetail.priority === 'UNASSESSED'
@@ -1459,21 +1457,21 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     {selectedSosDetail.aiAssessment?.status === 'UNAVAILABLE' && ' AI chưa được cấu hình; cần cán bộ đánh giá thủ công.'}
                   </div>
                   {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).length > 0 && (
-                    <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: 'var(--dm-text-secondary)', lineHeight: 1.45 }}>
                       {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>
                   )}
                   {selectedSosDetail.aiAssessment?.status === 'COMPLETED' && (
-                    <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #dbeafe', fontSize: 11, color: '#3730a3' }}>
+                    <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid var(--dm-blue-border)', fontSize: 11, color: 'var(--dm-purple-text)' }}>
                       AI đề xuất: {selectedSosDetail.aiAssessment.recommendedPriority || 'chưa phân loại'}
                       {selectedSosDetail.aiAssessment.confidence && ` • Mức chắc chắn tự đánh giá: ${selectedSosDetail.aiAssessment.confidence.toLowerCase()} (chưa hiệu chuẩn)`}
                       {selectedSosDetail.aiAssessment.evidence?.length ? (
-                        <div style={{ marginTop: 3, color: '#475569' }}>Căn cứ AI: {selectedSosDetail.aiAssessment.evidence.join(' • ')}</div>
+                        <div style={{ marginTop: 3, color: 'var(--dm-text-secondary)' }}>Căn cứ AI: {selectedSosDetail.aiAssessment.evidence.join(' • ')}</div>
                       ) : null}
                       {selectedSosDetail.aiAssessment.unknowns?.length ? (
-                        <div style={{ marginTop: 3, color: '#92400e' }}>Chưa rõ: {selectedSosDetail.aiAssessment.unknowns.join(' • ')}</div>
+                        <div style={{ marginTop: 3, color: 'var(--dm-amber-text)' }}>Chưa rõ: {selectedSosDetail.aiAssessment.unknowns.join(' • ')}</div>
                       ) : null}
                     </div>
                   )}
@@ -1487,12 +1485,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </div>
 
                 {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
-                  <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 800, fontSize: 13 }}>
+                  <div style={{ background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border-strong)', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-text-secondary)', fontWeight: 800, fontSize: 13 }}>
                       <XCircle size={15} color="#64748b" />
                       <span>Yêu cầu cứu nạn đã hủy (An toàn)</span>
                     </div>
-                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--dm-text-muted)', lineHeight: 1.5 }}>
                       Người dân đã xác nhận tự thoát hiểm an toàn hoặc hủy bỏ yêu cầu cứu nạn trên ứng dụng di động. Không cần điều động thêm lực lượng.
                     </p>
                   </div>
@@ -1500,7 +1498,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13.5, color: '#0f172a', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13.5, color: 'var(--dm-text-strong)', minWidth: 0 }}>
                           <Shield size={14} color="#0284c7" style={{ flexShrink: 0 }} />
                           <span>{getAssignedTeamName(selectedSosDetail) || 'Đội cứu hộ tác chiến'}</span>
                         </div>
@@ -1509,7 +1507,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         </span>
                       </div>
                       {getAssignedVehicle(selectedSosDetail) && (
-                        <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: 'var(--dm-text-strong)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Truck size={14} color="#0284c7" style={{ flexShrink: 0 }} />
                           <span>Phương tiện: <strong>{getAssignedVehicle(selectedSosDetail)}</strong></span>
                         </div>
@@ -1518,10 +1516,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                     {/* Chỉ huy đội & SĐT gọi trực tiếp */}
                     {getAssignedLeader(selectedSosDetail) && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', padding: '6px 10px', borderRadius: 8, border: '1px solid #bae6fd' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--dm-surface)', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dm-blue-border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Users size={13} color="#0284c7" />
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-body)' }}>
                             Chỉ huy: {getAssignedLeader(selectedSosDetail)?.name}
                           </span>
                         </div>
@@ -1540,8 +1538,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                     {/* Danh sách vật tư kho khu vực đã cấp phát */}
                     {Array.isArray(selectedSosDetail.assignment.supplies) && selectedSosDetail.assignment.supplies.length > 0 && (
-                      <div style={{ marginTop: 2, paddingTop: 6, borderTop: '1px dashed #bae6fd' }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: '#0369a1', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ marginTop: 2, paddingTop: 6, borderTop: '1px dashed var(--dm-blue-border)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--dm-blue-text)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Package size={12} />
                           <span>Vật tư kho khu vực đã cấp phát:</span>
                         </div>
@@ -1556,11 +1554,11 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     )}
                   </div>
                 ) : (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 12px', marginTop: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#b45309', fontWeight: 800, fontSize: 12.5 }}>
+                  <div style={{ background: 'var(--dm-amber-bg)', border: '1px solid var(--dm-amber-border)', borderRadius: 8, padding: '10px 12px', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-amber-text)', fontWeight: 800, fontSize: 12.5 }}>
                       <span>Chưa phân công đội cứu hộ</span>
                     </div>
-                    <p style={{ margin: '4px 0 8px', fontSize: 11.5, color: '#92400e', lineHeight: 1.4 }}>
+                    <p style={{ margin: '4px 0 8px', fontSize: 11.5, color: 'var(--dm-amber-text)', lineHeight: 1.4 }}>
                       Ca SOS này đang chờ ban chỉ huy điều động lực lượng và phương tiện từ bản đồ tác chiến.
                     </p>
                     <button
@@ -1639,7 +1637,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           <span>{selectedSosDetail.citizenId.phone}</span>
                         </span>
                       ) : (
-                        <span className="text-muted" style={{ fontSize: 12, color: '#94a3b8' }}>Chưa cập nhật SĐT</span>
+                        <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Chưa cập nhật SĐT</span>
                       )}
                     </span>
                   </div>
@@ -1654,7 +1652,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           <span>{selectedSosDetail.contactPhone}</span>
                         </span>
                       ) : (
-                        <span className="text-muted" style={{ fontSize: 12, color: '#94a3b8' }}>Dùng SĐT tài khoản người gửi</span>
+                        <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Dùng SĐT tài khoản người gửi</span>
                       )}
                     </span>
                   </div>
@@ -1662,9 +1660,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   {/* SĐT dự phòng hoặc người thân */}
                   {selectedSosDetail.secondaryPhone && (
                     <div className="sos-info-box relative-phone" style={{ gridColumn: 'span 2' }}>
-                      <span className="info-label" style={{ color: '#166534', fontWeight: 800 }}>SĐT dự phòng hoặc người thân</span>
+                      <span className="info-label" style={{ color: 'var(--dm-green-text)', fontWeight: 800 }}>SĐT dự phòng hoặc người thân</span>
                       <span className="info-value">
-                        <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: '#15803d' }}>
+                        <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: 'var(--dm-green-text)' }}>
                           <PhoneCall size={14} />
                           <strong style={{ fontSize: 13.5 }}>{selectedSosDetail.secondaryPhone}</strong>
                           <span className="badge-call" style={{ backgroundColor: '#16a34a' }}>Gọi số phụ</span>
@@ -1684,12 +1682,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   {/* Người thân trong hồ sơ cá nhân */}
                   {typeof selectedSosDetail.citizenId === 'object' && (selectedSosDetail.citizenId as any)?.citizenProfile?.emergencyContact?.phone ? (
                     <div className="sos-info-box relative-phone">
-                      <span className="info-label" style={{ color: '#166534' }}>Người thân trong hồ sơ cá nhân</span>
+                      <span className="info-label" style={{ color: 'var(--dm-green-text)' }}>Người thân trong hồ sơ cá nhân</span>
                       <span className="info-value">
                         <a
                           href={`tel:${(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}`}
                           className="phone-clickable"
-                          style={{ color: '#15803d' }}
+                          style={{ color: 'var(--dm-green-text)' }}
                         >
                           <Phone size={12} />
                           <span>
@@ -1711,12 +1709,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 {/* Nhóm đối tượng ưu tiên đặc biệt */}
                 {selectedSosDetail.priorityGroups && selectedSosDetail.priorityGroups.length > 0 && (
                   <div className="sos-priority-groups-wrap">
-                    <span className="priority-groups-label" style={{ color: '#0f172a' }}>
+                    <span className="priority-groups-label" style={{ color: 'var(--dm-text-strong)' }}>
                       Đối tượng cần ưu tiên đặc biệt:
                     </span>
                     <div className="priority-chips">
                       {selectedSosDetail.priorityGroups.map((grp, idx) => (
-                        <span key={idx} className="priority-chip-item" style={{ color: '#0f172a' }}>
+                        <span key={idx} className="priority-chip-item" style={{ color: 'var(--dm-text-strong)' }}>
                           {formatPriorityGroupLabel(grp)}
                         </span>
                       ))}
@@ -1732,11 +1730,11 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   <span>ĐỊA ĐIỂM &amp; TỌA ĐỘ VỆ TINH (GPS)</span>
                 </div>
 
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.4 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-strong)', lineHeight: 1.4 }}>
                   {selectedSosDetail.address}
                 </div>
                 {selectedSosDetail.location?.coordinates && (
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                  <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 3 }}>
                     Tọa độ GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(6)}, {selectedSosDetail.location.coordinates[0]?.toFixed(6)}]
                   </div>
                 )}
@@ -1765,7 +1763,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </div>
 
                 {selectedSosDetail.description && (
-                  <div style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, fontStyle: 'italic', color: '#334155', lineHeight: 1.5 }}>
+                  <div style={{ padding: '8px 12px', background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border)', borderRadius: 8, fontSize: 12, fontStyle: 'italic', color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
                     "{selectedSosDetail.description.replace(/⚡\s*/g, '').trim()}"
                   </div>
                 )}
@@ -1846,19 +1844,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <div
                       className="sos-panel-card"
                       style={{
-                        background: citizenPhotos.length > 0 ? '#f0fdf4' : '#f8fafc',
-                        borderColor: citizenPhotos.length > 0 ? '#bbf7d0' : '#e2e8f0',
+                        background: citizenPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                        borderColor: citizenPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
                       }}
                     >
                       <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Camera size={16} color={citizenPhotos.length > 0 ? '#16a34a' : '#64748b'} />
-                          <span style={{ color: citizenPhotos.length > 0 ? '#15803d' : '#475569', fontWeight: 800 }}>
+                          <span style={{ color: citizenPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
                             ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)
                           </span>
                         </div>
                         {citizenPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 7px', borderRadius: 10, border: '1px solid #86efac' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
                             {citizenPhotos.length} ảnh
                           </span>
                         )}
@@ -1874,7 +1872,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 height: 64,
                                 borderRadius: 8,
                                 overflow: 'hidden',
-                                border: '1.5px solid #86efac',
+                                border: '1.5px solid var(--dm-green-border)',
                                 cursor: 'pointer',
                                 flexShrink: 0,
                                 position: 'relative',
@@ -1894,7 +1892,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           ))}
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
                           <span>Người dân không đính kèm hình ảnh khi phát tín hiệu SOS</span>
                         </div>
                       )}
@@ -1904,19 +1902,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <div
                       className="sos-panel-card"
                       style={{
-                        background: teamProofPhotos.length > 0 ? '#f0fdf4' : '#f8fafc',
-                        borderColor: teamProofPhotos.length > 0 ? '#bbf7d0' : '#e2e8f0',
+                        background: teamProofPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                        borderColor: teamProofPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
                       }}
                     >
                       <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <ShieldCheck size={16} color={teamProofPhotos.length > 0 ? '#16a34a' : '#64748b'} />
-                          <span style={{ color: teamProofPhotos.length > 0 ? '#15803d' : '#475569', fontWeight: 800 }}>
+                          <span style={{ color: teamProofPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
                             ẢNH ĐỘI CỨU HỘ CHỤP (HOÀN THÀNH NHIỆM VỤ)
                           </span>
                         </div>
                         {teamProofPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 7px', borderRadius: 10, border: '1px solid #86efac' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
                             {teamProofPhotos.length} ảnh nghiệm thu
                           </span>
                         )}
@@ -1926,7 +1924,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           {/* Nhóm ảnh 1: Đội đi cứu */}
                           <div>
-                            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#166534', marginBottom: 5 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-green-text)', marginBottom: 5 }}>
                               Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
                             </div>
                             {primarySectionPhotos.length > 0 ? (
@@ -1939,7 +1937,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                       height: 64,
                                       borderRadius: 8,
                                       overflow: 'hidden',
-                                      border: '1.5px solid #86efac',
+                                      border: '1.5px solid var(--dm-green-border)',
                                       cursor: 'pointer',
                                       flexShrink: 0,
                                       position: 'relative',
@@ -1959,7 +1957,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 ))}
                               </div>
                             ) : (
-                              <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                              <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
                                 {selectedSosDetail.assignment?.status === 'COMPLETED'
                                   ? 'Đội đi cứu chưa tải ảnh nghiệm thu'
                                   : 'Chờ đội đi cứu hoàn tất & tải ảnh nghiệm thu'}
@@ -1968,8 +1966,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           </div>
 
                           {/* Nhóm ảnh 2: Đội xe cứu thương / tiếp vận */}
-                          <div style={{ borderTop: '1px dashed #bbf7d0', paddingTop: 8 }}>
-                            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0369a1', marginBottom: 5 }}>
+                          <div style={{ borderTop: '1px dashed var(--dm-green-border)', paddingTop: 8 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-blue-text)', marginBottom: 5 }}>
                               Đội xe tiếp vận: {handoffTeamLabel}
                               {handoffVehiclePlate ? ` (${handoffVehiclePlate})` : ''} ({handoffTeamPhotos.length} ảnh)
                             </div>
@@ -1983,7 +1981,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                       height: 64,
                                       borderRadius: 8,
                                       overflow: 'hidden',
-                                      border: '1.5px solid #7dd3fc',
+                                      border: '1.5px solid var(--dm-blue-border)',
                                       cursor: 'pointer',
                                       flexShrink: 0,
                                       position: 'relative',
@@ -2003,7 +2001,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 ))}
                               </div>
                             ) : (
-                              <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                              <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
                                 {selectedSosDetail.shoreHandoff?.status === 'COMPLETED' ||
                                   selectedSosDetail.shoreHandoffAssignment?.status === 'COMPLETED'
                                   ? 'Đội xe tiếp vận chưa tải ảnh nghiệm thu'
@@ -2015,7 +2013,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           {(selectedSosDetail.assignment?.actualRecipient ||
                             selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
                             (selectedSosDetail as any).actualRecipient) && (
-                              <div style={{ fontSize: 11.5, color: '#166534', fontWeight: 600 }}>
+                              <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', fontWeight: 600 }}>
                                 ✓ Người tiếp nhận:{' '}
                                 <strong>
                                   {selectedSosDetail.assignment?.actualRecipient ||
@@ -2036,7 +2034,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                   height: 64,
                                   borderRadius: 8,
                                   overflow: 'hidden',
-                                  border: '1.5px solid #86efac',
+                                  border: '1.5px solid var(--dm-green-border)',
                                   cursor: 'pointer',
                                   flexShrink: 0,
                                   position: 'relative',
@@ -2056,13 +2054,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             ))}
                           </div>
                           {(selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient) && (
-                            <div style={{ fontSize: 11.5, color: '#166534', marginTop: 4, fontWeight: 600 }}>
+                            <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', marginTop: 4, fontWeight: 600 }}>
                               ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient}</strong>
                             </div>
                           )}
                         </>
                       ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
                           <span>
                             {getEffectiveStatus(selectedSosDetail) === 'COMPLETED'
                               ? 'Đội cứu hộ chưa tải ảnh nghiệm thu bàn giao'
@@ -2120,9 +2118,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               fontWeight: 600,
                               padding: '3px 8px',
                               borderRadius: 999,
-                              background: '#f8fafc',
-                              color: '#334155',
-                              border: '1px solid #e2e8f0',
+                              background: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-secondary)',
+                              border: '1px solid var(--dm-border)',
                             }}
                           >
                             {tag}
@@ -2134,13 +2132,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       <div
                         style={{
                           fontSize: 12.5,
-                          color: '#334155',
+                          color: 'var(--dm-text-secondary)',
                           fontStyle: 'italic',
                           lineHeight: 1.5,
-                          background: '#f8fafc',
+                          background: 'var(--dm-surface-subtle)',
                           padding: '8px 10px',
                           borderRadius: 8,
-                          border: '1px solid #e2e8f0',
+                          border: '1px solid var(--dm-border)',
                         }}
                       >
                         "{fb.comment}"
@@ -2157,12 +2155,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   <div
                     className="sos-panel-card"
                     style={{
-                      background: '#f8fafc',
-                      borderColor: '#e2e8f0',
+                      background: 'var(--dm-surface-subtle)',
+                      borderColor: 'var(--dm-border)',
                       borderStyle: 'solid',
                     }}
                   >
-                    <div className="sos-panel-card-title" style={{ color: '#475569', marginBottom: 6 }}>
+                    <div className="sos-panel-card-title" style={{ color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
                       <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
                     </div>
                     {(() => {
@@ -2173,11 +2171,11 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                       return (
                         <>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                             {name || address || 'Điểm đón ven bờ'}
                           </div>
                           {!isDuplicate && (
-                            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                            <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                               {address}
                             </div>
                           )}
@@ -2211,13 +2209,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               gap: 8,
                               flexWrap: 'wrap',
                               marginTop: 8,
-                              background: '#ffffff',
+                              background: 'var(--dm-surface)',
                               padding: '7px 10px',
                               borderRadius: 6,
-                              border: '1px solid #e2e8f0',
+                              border: '1px solid var(--dm-border)',
                             }}
                           >
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#334155' }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                               {handoff.vehicleTypeNeeded === 'AMBULANCE' ? '🚑 Xe Cứu Thương 115' : '🚒 Xe Tải Cứu Hộ'}{' '}
                               ({handoff.peopleCount} người)
                             </span>
@@ -2241,9 +2239,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 style={{
                                   fontSize: 10.5,
                                   fontWeight: 700,
-                                  color: '#64748b',
-                                  background: '#f1f5f9',
-                                  border: '1px solid #e2e8f0',
+                                  color: 'var(--dm-text-muted)',
+                                  background: 'var(--dm-surface-muted)',
+                                  border: '1px solid var(--dm-border)',
                                   padding: '2px 8px',
                                   borderRadius: 4,
                                 }}
@@ -2257,19 +2255,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             <div
                               style={{
                                 marginTop: 6,
-                                background: '#ffffff',
+                                background: 'var(--dm-surface)',
                                 padding: '7px 10px',
                                 borderRadius: 6,
-                                border: '1px solid #bbf7d0',
+                                border: '1px solid var(--dm-green-border)',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: 3,
                                 fontSize: 11.5,
-                                color: '#334155',
+                                color: 'var(--dm-text-secondary)',
                               }}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <strong style={{ color: '#0f172a' }}>
+                                <strong style={{ color: 'var(--dm-text-strong)' }}>
                                   {handoff.assignedVehicleName ||
                                     (handoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ')}
                                 </strong>
@@ -2281,9 +2279,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                       fontFamily: 'monospace',
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: '#f1f5f9',
-                                      border: '1px solid #cbd5e1',
-                                      color: '#0f172a',
+                                      background: 'var(--dm-surface-muted)',
+                                      border: '1px solid var(--dm-border-strong)',
+                                      color: 'var(--dm-text-strong)',
                                     }}
                                   >
                                     {handoff.assignedVehiclePlate}
@@ -2291,13 +2289,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 )}
                               </div>
                               {handoff.assignedRoadTeamName && (
-                                <div style={{ fontSize: 11, color: '#475569' }}>
-                                  Đội tiếp ứng: <strong style={{ color: '#1e293b' }}>{handoff.assignedRoadTeamName}</strong>
+                                <div style={{ fontSize: 11, color: 'var(--dm-text-secondary)' }}>
+                                  Đội tiếp ứng: <strong style={{ color: 'var(--dm-text-body)' }}>{handoff.assignedRoadTeamName}</strong>
                                 </div>
                               )}
                               {handoff.assignedDriverName && (
-                                <div style={{ fontSize: 11, color: '#64748b' }}>
-                                  Phụ trách / Tài xế: <strong style={{ color: '#334155' }}>{handoff.assignedDriverName}</strong>
+                                <div style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
+                                  Phụ trách / Tài xế: <strong style={{ color: 'var(--dm-text-secondary)' }}>{handoff.assignedDriverName}</strong>
                                   {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
                                 </div>
                               )}
@@ -2322,9 +2320,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         gap: 6,
                         padding: '8px 14px',
                         borderRadius: 8,
-                        background: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        color: '#475569',
+                        background: 'var(--dm-surface-muted)',
+                        border: '1px solid var(--dm-border-strong)',
+                        color: 'var(--dm-text-secondary)',
                         fontSize: 12.5,
                         fontWeight: 700,
                       }}
@@ -2500,13 +2498,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
         >
           <div
             style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--dm-surface)',
               borderRadius: '24px',
               padding: '24px 22px',
               maxWidth: '340px',
               width: '100%',
               boxShadow: '0 20px 40px rgba(0, 0, 0, 0.22)',
-              border: '1.5px solid #E2E8F0',
+              border: '1.5px solid var(--dm-border)',
               textAlign: 'center',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2517,8 +2515,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 width: '64px',
                 height: '64px',
                 borderRadius: '32px',
-                backgroundColor: '#FEE2E2',
-                border: '2px solid #FCA5A5',
+                backgroundColor: 'var(--dm-red-bg)',
+                border: '2px solid var(--dm-red-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2550,7 +2548,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               style={{
                 fontSize: '18px',
                 fontWeight: '800',
-                color: '#0F172A',
+                color: 'var(--dm-text-strong)',
                 textAlign: 'center',
                 marginBottom: '8px',
                 lineHeight: 1.3,
@@ -2563,7 +2561,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <p
               style={{
                 fontSize: '14px',
-                color: '#475569',
+                color: 'var(--dm-text-secondary)',
                 textAlign: 'center',
                 lineHeight: '21px',
                 marginBottom: '22px',

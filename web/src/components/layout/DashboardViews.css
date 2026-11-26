@@ -1,20 +1,23 @@
 /* ==========================================================================
-   SHARED DASHBOARD LAYOUT & UI PRIMITIVES
-   Extracted domain-specific styles into src/features/{sos,hazards,settings,alerts,shelters}/
+   CHRONICLE (shadcnstore) SHARED DASHBOARD CARDS, KPI STATS, TABLES & CONTROLS
+   Automatically adapts to Light/Dark & all 5 OKLCH Theme Presets
    ========================================================================== */
+
 .sos-views-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  color: var(--foreground);
 }
 
 /* CARDS & PANELS */
 .sos-view-card {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.3);
   padding: 20px;
-  backdrop-filter: blur(8px);
+  box-shadow: var(--surface-shadow);
+  color: var(--card-foreground);
 }
 
 .sos-view-card-header {
@@ -23,15 +26,16 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 12px;
 }
 
 .sos-view-card-title {
   font-size: 15px;
-  font-weight: 700;
-  color: #f8fafc;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -41,24 +45,25 @@
 .sos-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
 .sos-stat-box {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.2);
+  padding: 16px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
+  box-shadow: var(--surface-shadow);
 }
 
 .sos-stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: calc(var(--radius) * 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -66,616 +71,352 @@
 }
 
 .sos-stat-icon.red {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--sos-danger-soft);
+  color: var(--sos-danger-text);
 }
 
 .sos-stat-icon.blue {
-  background: rgba(2, 132, 199, 0.15);
-  color: #38bdf8;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .sos-stat-icon.green {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: var(--sos-success-soft);
+  color: var(--sos-success-text);
 }
 
 .sos-stat-icon.yellow {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
+  background: var(--sos-warning-soft);
+  color: var(--sos-warning-text);
 }
 
 .sos-stat-icon.purple {
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
+  background: color-mix(in oklch, var(--sos-accent-purple) 14%, transparent);
+  color: var(--sos-accent-purple);
 }
 
 .sos-stat-meta {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .sos-stat-value {
   font-size: 22px;
-  font-weight: 800;
-  color: #f8fafc;
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
   line-height: 1.2;
 }
 
 .sos-stat-label {
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
   font-weight: 500;
 }
 
-/* DATA TABLE */
+/* DATA TABLE (Chronicle Clean Table Spec) */
 .sos-table-wrapper {
   overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: calc(var(--radius) * 1.2);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--surface-shadow);
 }
 
 .sos-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 13.5px;
   text-align: left;
 }
 
 .sos-table th {
-  background: rgba(30, 41, 59, 0.7);
-  padding: 12px 14px;
-  color: #94a3b8;
-  font-weight: 700;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--card);
+  padding: 12px 16px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .sos-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.sos-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .sos-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--sos-table-hover);
 }
 
-/* STATUS BADGES */
+/* STATUS BADGES (Chronicle Soft Tinted Pills) */
 .sos-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 700;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
+  border: 1px solid transparent;
 }
 
 .sos-badge.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: var(--sos-danger-soft);
+  color: var(--sos-danger-text);
+  border-color: var(--sos-danger-border);
 }
 
 .sos-badge.high {
-  background: rgba(249, 115, 22, 0.2);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.4);
+  background: var(--sos-warning-soft);
+  color: var(--sos-warning-text);
+  border-color: var(--sos-warning-border);
 }
 
-.sos-badge.medium {
-  background: rgba(234, 179, 8, 0.2);
-  color: #facc15;
-  border: 1px solid rgba(234, 179, 8, 0.4);
-}
-
+.sos-badge.medium,
 .sos-badge.verified {
-  background: rgba(56, 189, 248, 0.2);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--sos-primary-border);
 }
 
 .sos-badge.active {
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: var(--sos-success-soft);
+  color: var(--sos-success-text);
+  border-color: var(--sos-success-border);
 }
 
 .sos-badge.pending {
-  background: rgba(148, 163, 184, 0.2);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border-color: var(--border);
 }
 
 /* ACTION BUTTONS */
 .sos-btn-action {
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: calc(var(--radius) * 0.75);
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all 0.2s;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
 .sos-btn-action.primary {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .sos-btn-action.primary:hover {
-  background: #1d4ed8;
+  background: var(--primary-hover);
 }
 
 .sos-btn-action.success {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-  border-color: rgba(34, 197, 94, 0.3);
+  background: var(--sos-success-soft);
+  color: var(--sos-success-text);
+  border-color: var(--sos-success-border);
 }
 
 .sos-btn-action.success:hover {
-  background: #22c55e;
+  background: var(--success);
   color: #ffffff;
 }
 
 .sos-btn-action.danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--sos-danger-soft);
+  color: var(--sos-danger-text);
+  border-color: var(--sos-danger-border);
 }
 
 .sos-btn-action.danger:hover {
-  background: #ef4444;
+  background: var(--destructive);
   color: #ffffff;
 }
 
-/* ==========================================================================
-   TACTICAL AUDIT & OPERATION TIMELINE (NHẬT KÝ TÁC CHIẾN)
-/* Audit Logs & Timeline styles have been extracted to components/audit/AuditLogsView.css */
-
-
 /* FORM CONTROLS & MODALS */
 .sos-form-label {
-  color: #94a3b8;
+  color: var(--foreground);
   font-weight: 500;
+  font-size: 13px;
 }
 
 .sos-form-input,
 .sos-form-select,
 .sos-form-textarea {
-  background: #1e293b;
-  border: 1px solid #475569;
-  color: #ffffff;
+  background: var(--card);
+  border: 1px solid var(--input);
+  color: var(--foreground);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
+  border-radius: calc(var(--radius) * 0.8);
   outline: none;
-  transition: all 0.18s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .sos-form-input:focus,
 .sos-form-select:focus,
 .sos-form-textarea:focus {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--sos-ring);
 }
 
 .sos-btn-refresh {
-  background: #1e293b;
-  color: #f1f5f9;
-  border: 1px solid #475569;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
 }
 
 .sos-btn-refresh:hover {
-  background: #334155;
-  color: #ffffff;
+  background: var(--muted);
 }
 
 .sos-modal-card {
-  background: #0f172a;
-  border: 1px solid #334155;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--surface-shadow-raised);
+  color: var(--foreground);
 }
 
 .sos-modal-title {
-  color: #f8fafc;
+  color: var(--foreground);
 }
 
-/* ============================================================
-   LIGHT THEME SYNCHRONIZATION FOR ALL DASHBOARD VIEWS
-   ============================================================ */
-[data-theme="light"] .sos-view-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+/* AUDIT LOGS & TIMELINE (LIGHT + DARK OKLCH HARMONY) */
+.sos-audit-stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--surface-shadow);
 }
-
-[data-theme="light"] .sos-view-card-header {
-  border-bottom: 1px solid #f1f5f9;
+.sos-audit-stat-value { color: var(--foreground); }
+.sos-audit-stat-label { color: var(--muted-foreground); }
+.sos-audit-search-input {
+  background: var(--card);
+  border: 1px solid var(--input);
+  color: var(--foreground);
 }
-
-[data-theme="light"] .sos-view-card-title {
-  color: #0f172a;
+.sos-audit-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--sos-ring);
 }
-
-[data-theme="light"] .sos-stat-box {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+.sos-audit-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--surface-shadow);
 }
-
-[data-theme="light"] .sos-stat-value {
-  color: #0f172a;
+.sos-audit-card:hover {
+  border-color: var(--sos-primary-border);
+  box-shadow: var(--surface-shadow-raised);
 }
-
-[data-theme="light"] .sos-stat-label {
-  color: #64748b;
+.sos-audit-node { background: var(--card); }
+.sos-audit-actor-name { color: var(--foreground); }
+.sos-audit-actor-sub { color: var(--muted-foreground); }
+.sos-audit-time-badge {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
 }
-
-[data-theme="light"] .sos-table-wrapper {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+.sos-audit-action-text { color: var(--primary); }
+.sos-audit-entity-tag {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--foreground);
 }
-
-[data-theme="light"] .sos-table th {
-  background: #f8fafc;
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
+.sos-audit-meta-grid {
+  background: var(--muted);
+  border: 1px solid var(--border);
 }
-
-[data-theme="light"] .sos-table td {
-  color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
+.sos-audit-meta-key { color: var(--muted-foreground); }
+.sos-audit-meta-val { color: var(--foreground); }
+.sos-timeline-item {
+  background: var(--card);
+  border: 1px solid var(--border);
 }
+.sos-timeline-text { color: var(--foreground); }
+.sos-timeline-time { color: var(--muted-foreground); }
 
-[data-theme="light"] .sos-table tr:hover td {
-  background: #f8fafc;
-}
-
-[data-theme="light"] .sos-form-label {
-  color: #475569;
-}
-
-[data-theme="light"] .sos-form-input,
-[data-theme="light"] .sos-form-select,
-[data-theme="light"] .sos-form-textarea {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-form-input:focus,
-[data-theme="light"] .sos-form-select:focus,
-[data-theme="light"] .sos-form-textarea:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-}
-
-[data-theme="light"] .sos-btn-refresh {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-}
-
-[data-theme="light"] .sos-btn-refresh:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-modal-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-[data-theme="light"] .sos-modal-title {
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-audit-stat-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-[data-theme="light"] .sos-audit-stat-value {
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-audit-stat-label {
-  color: #64748b;
-}
-
-[data-theme="light"] .sos-audit-search-input {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: #0f172a;
-  box-shadow: none;
-  outline: none;
-}
-
-[data-theme="light"] .sos-audit-search-input:focus {
-  border-color: #94a3b8;
-  box-shadow: none;
-  outline: none;
-  background: #ffffff;
-}
-
-[data-theme="light"] .sos-audit-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="light"] .sos-audit-card:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08);
-}
-
-[data-theme="light"] .sos-audit-node {
-  background: #ffffff;
-}
-
-[data-theme="light"] .sos-audit-actor-name {
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-audit-actor-sub {
-  color: #64748b;
-}
-
-[data-theme="light"] .sos-audit-time-badge {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
-}
-
-[data-theme="light"] .sos-audit-action-text {
-  color: #0284c7;
-}
-
-[data-theme="light"] .sos-audit-entity-tag {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-}
-
-[data-theme="light"] .sos-audit-meta-grid {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-}
-
-[data-theme="light"] .sos-audit-meta-key {
-  color: #64748b;
-}
-
-[data-theme="light"] .sos-audit-meta-val {
-  color: #0f172a;
-}
-
-[data-theme="light"] .sos-timeline-item {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-}
-
-[data-theme="light"] .sos-timeline-text {
-  color: #1e293b;
-}
-
-[data-theme="light"] .sos-timeline-time {
-  color: #64748b;
-}
-
-
-[data-theme="light"] .sos-badge.pending {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
-}
-
-[data-theme="light"] .sos-badge.verified {
-  background: #e0f2fe;
-  color: #0284c7;
-  border: 1px solid #bae6fd;
-}
-
-[data-theme="light"] .sos-badge.active {
-  background: #dcfce7;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
-}
-
-
-/* ==========================================================================
-   FILTER PILLS & TABS (SHARED)
-   ========================================================================== */
-/* ==========================================================================
-   FILTER PILLS & TABS
-   ========================================================================== */
+/* FILTER PILLS & TABS */
 .sos-btn-filter-pill {
-  padding: 5px 12px;
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 23, 42, 0.6);
-  color: #94a3b8;
+  padding: 5.5px 12px;
+  border-radius: calc(var(--radius) * 0.8);
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .sos-btn-filter-pill:hover {
-  background: rgba(30, 41, 59, 0.8);
-  color: #f1f5f9;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--muted);
+  color: var(--foreground);
 }
 
-.sos-btn-filter-pill.active {
-  background: #1e293b;
-  color: #ffffff;
-  border-color: #334155;
-  box-shadow: none;
-}
-
+.sos-btn-filter-pill.active,
+.sos-btn-filter-pill.active-blue,
 .sos-btn-filter-pill.active-green,
 .sos-btn-filter-pill.active-red,
-.sos-btn-filter-pill.active-yellow,
-.sos-btn-filter-pill.active-blue {
-  background: #1e293b;
-  color: #ffffff;
-  border-color: #334155;
-  box-shadow: none;
+.sos-btn-filter-pill.active-yellow {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--sos-primary-border);
+  font-weight: 600;
 }
 
-
-/* ==========================================================================
-   PAGE-SPECIFIC THEME ISOLATION (CHỈNH SÁNG 6 TRANG, CÒN LẠI GIỮ TỐI)
-   ========================================================================== */
-/* ============================================================
-   PAGE-SPECIFIC THEME ISOLATION (CHỈNH SÁNG 6 TRANG, CÒN LẠI GIỮ TỐI)
-   1. Các trang SÁNG dễ nhìn: Điều phối, Đội cứu hộ, Phương tiện, Xác minh cứu nạn, Cán bộ tổ chức, Khu vực hành chính
-   2. Các trang còn lại: Trả lại giao diện màu TỐI chuẩn tác chiến
-   ============================================================ */
-
-/* --- 1. SÁNG CHO 6 TRANG QUẢN TRỊ NGHIỆP VỤ --- */
-.sos-main-content.sos-page-theme-light {
-  background-color: #f8fafc !important;
+/* SYSTEM SETTINGS & REVIEW MODALS */
+.sos-settings-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--surface-shadow);
 }
 
-.sos-main-content.sos-page-theme-light .sos-main-header {
-  background: #ffffff !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+.sos-settings-card-head {
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
 }
 
-.sos-main-content.sos-page-theme-light .sos-page-title {
-  color: #0f172a !important;
+.sos-settings-card-head h4 {
+  color: var(--foreground);
 }
 
-.sos-main-content.sos-page-theme-light .sos-page-desc {
-  color: #64748b !important;
+.sos-filter-tab {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
 
-.sos-light-view,
-.sos-page-theme-light .sos-views-container {
-  color: #0f172a;
+.sos-filter-tab:hover {
+  background: var(--muted);
+  color: var(--foreground);
 }
 
-.sos-light-view .sos-view-card,
-.sos-page-theme-light .sos-view-card {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
-  color: #0f172a !important;
+.sos-filter-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
 }
 
-.sos-light-view .sos-view-card-header,
-.sos-page-theme-light .sos-view-card-header {
-  border-bottom: 1px solid #f1f5f9 !important;
+.sos-review-modal {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--foreground);
 }
-
-.sos-light-view .sos-view-card-title,
-.sos-page-theme-light .sos-view-card-title {
-  color: #0f172a !important;
-}
-
-.sos-light-view .sos-stat-box,
-.sos-page-theme-light .sos-stat-box {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
-}
-
-.sos-light-view .sos-stat-value,
-.sos-page-theme-light .sos-stat-value {
-  color: #0f172a !important;
-}
-
-.sos-light-view .sos-stat-label,
-.sos-page-theme-light .sos-stat-label {
-  color: #64748b !important;
-}
-
-.sos-light-view .sos-table-wrapper,
-.sos-page-theme-light .sos-table-wrapper {
-  background: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
-}
-
-.sos-light-view .sos-table th,
-.sos-page-theme-light .sos-table th {
-  background: #f8fafc !important;
-  color: #475569 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-.sos-light-view .sos-table td,
-.sos-page-theme-light .sos-table td {
-  color: #1e293b !important;
-  border-bottom: 1px solid #f1f5f9 !important;
-}
-
-.sos-light-view .sos-table tr:hover td,
-.sos-page-theme-light .sos-table tr:hover td {
-  background: #f8fafc !important;
-}
-
-.sos-light-view .sos-form-label,
-.sos-page-theme-light .sos-form-label {
-  color: #475569 !important;
-}
-
-.sos-light-view .sos-form-input,
-.sos-light-view .sos-form-select,
-.sos-light-view .sos-form-textarea,
-.sos-page-theme-light .sos-form-input,
-.sos-page-theme-light .sos-form-select,
-.sos-page-theme-light .sos-form-textarea {
-  background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
-}
-
-.sos-light-view .sos-btn-refresh,
-.sos-page-theme-light .sos-btn-refresh {
-  background: #ffffff !important;
-  color: #475569 !important;
-  border: 1px solid #cbd5e1 !important;
-}
-
-.sos-light-view .sos-btn-refresh:hover,
-.sos-page-theme-light .sos-btn-refresh:hover {
-  background: #f1f5f9 !important;
-  color: #0f172a !important;
-}
-
-.sos-light-view .sos-btn-filter-pill,
-.sos-page-theme-light .sos-btn-filter-pill {
-  background: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #475569 !important;
-}
-
-.sos-light-view .sos-btn-filter-pill:hover,
-.sos-page-theme-light .sos-btn-filter-pill:hover {
-  background: #e2e8f0 !important;
-  color: #0f172a !important;
-}
-
-.sos-light-view .sos-btn-filter-pill.active-blue,
-.sos-page-theme-light .sos-btn-filter-pill.active-blue {
-  background: #e0f2fe !important;
-  color: #0284c7 !important;
-  border-color: #bae6fd !important;
-}
-

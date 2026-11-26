@@ -161,8 +161,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             width: '100%',
             padding: '6px 10px',
             borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            background: '#f8fafc',
+            border: '1px solid var(--dm-border-strong)',
+            background: 'var(--dm-surface-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -171,12 +171,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
-            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
+            <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: 'var(--dm-text-muted)' }}></i>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
               {authorityAreaName}
             </span>
           </div>
-          <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--dm-text-secondary)', background: 'var(--dm-surface-hover)', padding: '1px 6px', borderRadius: '4px' }}>
             Địa bàn phụ trách
           </span>
         </div>
@@ -200,9 +200,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             width: '100%',
             padding: '7px 10px',
             borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            background: '#ffffff',
-            color: '#0f172a',
+            border: '1px solid var(--dm-border-strong)',
+            background: 'var(--dm-surface)',
+            color: 'var(--dm-text-strong)',
             fontSize: '12.5px',
             fontWeight: 500,
           }}
@@ -220,7 +220,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             })),
           ]}
         />
-        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '4px' }}>
           Phạm vi nhận tin: <strong>{authorityAreaName}</strong>
         </div>
       </div>
@@ -834,9 +834,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       return <i className="bi bi-arrow-down-up" style={{ marginLeft: '4px', opacity: 0.35, fontSize: '11px' }}></i>;
     }
     return sortOrder === 'asc' ? (
-      <i className="bi bi-arrow-up" style={{ marginLeft: '4px', color: '#2563eb', fontSize: '11px' }}></i>
+      <i className="bi bi-arrow-up" style={{ marginLeft: '4px', color: 'var(--dm-blue-text)', fontSize: '11px' }}></i>
     ) : (
-      <i className="bi bi-arrow-down" style={{ marginLeft: '4px', color: '#2563eb', fontSize: '11px' }}></i>
+      <i className="bi bi-arrow-down" style={{ marginLeft: '4px', color: 'var(--dm-blue-text)', fontSize: '11px' }}></i>
     );
   };
 
@@ -878,8 +878,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '14px 20px',
-          background: '#ffffff',
-          border: '1px solid #cbd5e1',
+          background: 'var(--dm-surface)',
+          border: '1px solid var(--dm-border-strong)',
           borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
           flexWrap: 'wrap',
@@ -887,11 +887,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="bi bi-bell" style={{ fontSize: '15px', color: '#64748b' }}></i>
-          <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+          <i className="bi bi-bell" style={{ fontSize: '15px', color: 'var(--dm-text-muted)' }}></i>
+          <span style={{ color: 'var(--dm-text-muted)', fontWeight: 500, fontSize: '13.5px' }}>
             {isAdmin ? 'Phạm vi phát tin:' : 'Địa bàn:'}
           </span>
-          <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+          <strong style={{ color: 'var(--dm-text-strong)', fontWeight: 700, fontSize: '14px' }}>
             {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : authorityAreaName}
           </strong>
         </div>
@@ -1026,7 +1026,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               left: '10px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--dm-text-muted)',
               fontSize: '12px',
             }}
           ></i>
@@ -1047,8 +1047,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               fontSize: '12.5px',
               width: '260px',
               borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
+              border: '1px solid var(--dm-border-strong)',
+              backgroundColor: 'var(--dm-surface)',
             }}
           />
           {broadcastSearch && (
@@ -1065,7 +1065,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 transform: 'translateY(-50%)',
                 background: 'none',
                 border: 'none',
-                color: '#94a3b8',
+                color: 'var(--dm-text-muted)',
                 cursor: 'pointer',
                 padding: '2px',
               }}
@@ -1086,9 +1086,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--dm-surface)',
           borderRadius: '8px',
-          border: '1px solid #cbd5e1',
+          border: '1px solid var(--dm-border-strong)',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
           overflow: 'hidden',
         }}
@@ -1098,8 +1098,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           <div
             style={{
               padding: '10px 16px',
-              backgroundColor: '#eff6ff',
-              borderBottom: '1px solid #bfdbfe',
+              backgroundColor: 'var(--dm-blue-bg)',
+              borderBottom: '1px solid var(--dm-blue-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1108,8 +1108,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontWeight: 600, color: '#1e40af', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <i className="bi bi-check2-square" style={{ fontSize: '16px', color: '#2563eb' }}></i>
+              <span style={{ fontWeight: 600, color: 'var(--dm-blue-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="bi bi-check2-square" style={{ fontSize: '16px', color: 'var(--dm-blue-text)' }}></i>
                 <span>Đã chọn <strong>{selectedAlertIds.length}</strong> thông báo</span>
               </span>
               <button
@@ -1118,7 +1118,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   fontSize: '12px',
                   cursor: 'pointer',
                   textDecoration: 'underline',
@@ -1251,8 +1251,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <tbody>
               {paginatedBroadcasts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
-                    <i className="bi bi-bell" style={{ fontSize: '28px', color: '#94a3b8', display: 'inline-block', marginBottom: '8px' }}></i>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
+                    <i className="bi bi-bell" style={{ fontSize: '28px', color: 'var(--dm-text-muted)', display: 'inline-block', marginBottom: '8px' }}></i>
                     <div>Chưa có bản tin thông báo nào được ghi nhận trong danh mục này.</div>
                     <button
                       type="button"
@@ -1261,9 +1261,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         marginTop: '12px',
                         padding: '6px 14px',
                         fontSize: '12px',
-                        color: '#2563eb',
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
+                        color: 'var(--dm-blue-text)',
+                        background: 'var(--dm-blue-bg)',
+                        border: '1px solid var(--dm-blue-border)',
                         borderRadius: '6px',
                         cursor: 'pointer',
                         fontWeight: 600,
@@ -1301,7 +1301,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     <tr
                       key={item.id}
                       style={{
-                        backgroundColor: selectedAlertIds.includes(item.id) ? '#f0f9ff' : undefined,
+                        backgroundColor: selectedAlertIds.includes(item.id) ? 'var(--dm-blue-bg)' : undefined,
                       }}
                     >
                       {/* 0. Checkbox chọn từng mục */}
@@ -1327,8 +1327,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               width: 34,
                               height: 34,
                               borderRadius: '8px',
-                              backgroundColor: '#f1f5f9',
-                              border: '1px solid #e2e8f0',
+                              backgroundColor: 'var(--dm-surface-muted)',
+                              border: '1px solid var(--dm-border)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1337,26 +1337,26 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             }}
                           >
                             {isInstant ? (
-                              <i className="bi bi-lightning-charge" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-lightning-charge" style={{ fontSize: '15px', color: 'var(--dm-text-secondary)' }}></i>
                             ) : item.type === 'SAFETY_CHECK' ? (
-                              <i className="bi bi-shield-check" style={{ fontSize: '15px', color: '#16a34a' }}></i>
+                              <i className="bi bi-shield-check" style={{ fontSize: '15px', color: 'var(--dm-green-text)' }}></i>
                             ) : item.type === 'BLOOD_DONATION' ? (
-                              <i className="bi bi-droplet-fill" style={{ fontSize: '15px', color: '#dc2626' }}></i>
+                              <i className="bi bi-droplet-fill" style={{ fontSize: '15px', color: 'var(--dm-red-text)' }}></i>
                             ) : item.type === 'WEATHER' ? (
-                              <i className="bi bi-cloud-sun" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-cloud-sun" style={{ fontSize: '15px', color: 'var(--dm-text-secondary)' }}></i>
                             ) : item.type === 'SAFE_LOCATION' ? (
-                              <i className="bi bi-house-heart" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-house-heart" style={{ fontSize: '15px', color: 'var(--dm-text-secondary)' }}></i>
                             ) : item.type === 'HAZARD' ? (
-                              <i className="bi bi-exclamation-triangle" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-exclamation-triangle" style={{ fontSize: '15px', color: 'var(--dm-text-secondary)' }}></i>
                             ) : (
-                              <i className="bi bi-megaphone" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-megaphone" style={{ fontSize: '15px', color: 'var(--dm-text-secondary)' }}></i>
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: 'var(--dm-blue-text)',
                                 fontSize: '13.5px',
                                 lineHeight: '1.4',
                                 cursor: 'pointer',
@@ -1369,7 +1369,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             <div
                               style={{
                                 fontSize: '12px',
-                                color: '#64748b',
+                                color: 'var(--dm-text-muted)',
                                 marginTop: '3px',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -1393,7 +1393,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                 objectFit: 'cover',
                                 flexShrink: 0,
                                 marginLeft: '8px',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid var(--dm-border)',
                               }}
                             />
                           )}
@@ -1404,7 +1404,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       <td>
                         <span
                           className="sos-badge"
-                          style={{ fontSize: '11.5px', padding: '3px 8px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0' }}
+                          style={{ fontSize: '11.5px', padding: '3px 8px', background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border)' }}
                         >
                           {typeLabels[String(item.type || '').toUpperCase()] || 'Hệ thống'}
                         </span>
@@ -1422,9 +1422,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               borderRadius: '6px',
                               fontSize: '11px',
                               fontWeight: 600,
-                              background: '#fef2f2',
-                              color: '#dc2626',
-                              border: '1px solid #fecaca',
+                              background: 'var(--dm-red-bg)',
+                              color: 'var(--dm-red-text)',
+                              border: '1px solid var(--dm-red-border)',
                             }}
                           >
                             <i className="bi bi-circle-fill me-1" style={{ fontSize: '6px' }}></i>
@@ -1440,9 +1440,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               borderRadius: '6px',
                               fontSize: '11px',
                               fontWeight: 600,
-                              background: '#fff7ed',
-                              color: '#c2410c',
-                              border: '1px solid #ffedd5',
+                              background: 'var(--dm-orange-bg)',
+                              color: 'var(--dm-orange-text)',
+                              border: '1px solid var(--dm-orange-border)',
                             }}
                           >
                             <i className="bi bi-circle-fill me-1" style={{ fontSize: '6px' }}></i>
@@ -1458,9 +1458,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               borderRadius: '6px',
                               fontSize: '11px',
                               fontWeight: 600,
-                              background: '#f8fafc',
-                              color: '#475569',
-                              border: '1px solid #e2e8f0',
+                              background: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-secondary)',
+                              border: '1px solid var(--dm-border)',
                             }}
                           >
                             <i className="bi bi-circle-fill me-1" style={{ fontSize: '6px' }}></i>
@@ -1476,9 +1476,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               borderRadius: '6px',
                               fontSize: '11px',
                               fontWeight: 500,
-                              background: '#f8fafc',
-                              color: '#64748b',
-                              border: '1px solid #e2e8f0',
+                              background: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-muted)',
+                              border: '1px solid var(--dm-border)',
                             }}
                           >
                             Thường
@@ -1497,22 +1497,22 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             borderRadius: '5px',
                             fontSize: '12px',
                             fontWeight: 500,
-                            background: '#f8fafc',
-                            color: '#0f172a',
-                            border: '1px solid #cbd5e1',
+                            background: 'var(--dm-surface-subtle)',
+                            color: 'var(--dm-text-strong)',
+                            border: '1px solid var(--dm-border-strong)',
                           }}
                         >
-                          <i className="bi bi-geo-alt" style={{ fontSize: '11px', color: '#64748b' }}></i>
+                          <i className="bi bi-geo-alt" style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}></i>
                           <span>{item.areaName || 'Toàn thành phố'}</span>
                         </span>
                       </td>
 
                       {/* 5. Thời gian gửi & Người phát */}
                       <td>
-                        <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: 600 }}>
+                        <div style={{ fontSize: '12px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
                           {formatDateTime(item.createdAt)}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
                           Bởi: {item.createdBy?.fullName || 'Hệ thống SOS'}
                         </div>
                       </td>
@@ -1525,12 +1525,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             onClick={() => setDetailBroadcast(item)}
                             className="sos-btn-table-action"
                             style={{
-                              background: '#f1f5f9',
-                              border: '1px solid #cbd5e1',
+                              background: 'var(--dm-surface-muted)',
+                              border: '1px solid var(--dm-border-strong)',
                               borderRadius: '5px',
                               padding: '5px 8px',
                               cursor: 'pointer',
-                              color: '#334155',
+                              color: 'var(--dm-text-secondary)',
                             }}
                             title="Xem chi tiết"
                           >
@@ -1542,12 +1542,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             onClick={() => handleDeleteBroadcast(item.id)}
                             className="sos-btn-table-action"
                             style={{
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
+                              background: 'var(--dm-red-bg)',
+                              border: '1px solid var(--dm-red-border)',
                               borderRadius: '5px',
                               padding: '5px 8px',
                               cursor: 'pointer',
-                              color: '#dc2626',
+                              color: 'var(--dm-red-text)',
                             }}
                             title="Thu hồi thông báo"
                           >
@@ -1568,17 +1568,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           <div
             style={{
               padding: '10px 16px',
-              borderTop: '1px solid #e2e8f0',
+              borderTop: '1px solid var(--dm-border)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              backgroundColor: '#f8fafc',
+              backgroundColor: 'var(--dm-surface-subtle)',
               flexWrap: 'wrap',
               gap: '10px',
               flexShrink: 0,
             }}
           >
-            <div style={{ fontSize: '12.5px', color: '#64748b' }}>
+            <div style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)' }}>
               Hiển thị <strong>{paginatedBroadcasts.length}</strong> / <strong>{totalItems}</strong> thông báo (Trang{' '}
               {currentPage}/{totalPages})
             </div>
@@ -1591,9 +1591,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 style={{
                   padding: '5px 10px',
                   borderRadius: '5px',
-                  border: '1px solid #cbd5e1',
-                  background: currentPage <= 1 ? '#f1f5f9' : '#ffffff',
-                  color: currentPage <= 1 ? '#94a3b8' : '#0f172a',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: currentPage <= 1 ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
+                  color: currentPage <= 1 ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
                   cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                 }}
@@ -1601,7 +1601,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 Trước
               </button>
 
-              <span style={{ fontSize: '12px', color: '#334155', padding: '0 4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--dm-text-secondary)', padding: '0 4px' }}>
                 {currentPage} / {totalPages}
               </span>
 
@@ -1612,9 +1612,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 style={{
                   padding: '5px 10px',
                   borderRadius: '5px',
-                  border: '1px solid #cbd5e1',
-                  background: currentPage >= totalPages ? '#f1f5f9' : '#ffffff',
-                  color: currentPage >= totalPages ? '#94a3b8' : '#0f172a',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: currentPage >= totalPages ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
+                  color: currentPage >= totalPages ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
                   cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                 }}
@@ -1636,7 +1636,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       padding: '4px 6px',
                       fontSize: '12px',
                       borderRadius: '4px',
-                      border: '1px solid #cbd5e1',
+                      border: '1px solid var(--dm-border-strong)',
                       textAlign: 'center',
                     }}
                     onKeyDown={(e) => {
@@ -1662,8 +1662,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       padding: '4px 8px',
                       fontSize: '11.5px',
                       borderRadius: '4px',
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
+                      border: '1px solid var(--dm-border-strong)',
+                      background: 'var(--dm-surface)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1695,7 +1695,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         >
           <div
             style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--dm-surface)',
               borderRadius: '12px',
               width: '100%',
               maxWidth: '960px',
@@ -1703,7 +1703,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               display: 'flex',
               flexDirection: 'column',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--dm-border-strong)',
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1712,11 +1712,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <div
               style={{
                 padding: '14px 20px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#f8fafc',
+                background: 'var(--dm-surface-subtle)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1725,8 +1725,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     width: '32px',
                     height: '32px',
                     borderRadius: '6px',
-                    backgroundColor: '#e2e8f0',
-                    color: '#334155',
+                    backgroundColor: 'var(--dm-surface-hover)',
+                    color: 'var(--dm-text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1735,10 +1735,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   <i className="bi bi-send" style={{ fontSize: '15px' }}></i>
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     Soạn &amp; Gửi Thông Báo
                   </h3>
-                  <p style={{ margin: '1px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
+                  <p style={{ margin: '1px 0 0 0', fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>
                     Phát thông báo tới ứng dụng di động người dân.
                   </p>
                 </div>
@@ -1751,7 +1751,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   padding: '4px',
                 }}
                 title="Đóng"
@@ -1776,19 +1776,19 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 {createErrors.general && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      color: '#b91c1c',
+                      color: 'var(--dm-red-text)',
                       fontSize: '12.5px',
                       fontWeight: 500,
                     }}
                   >
-                    <i className="bi bi-exclamation-triangle" style={{ color: '#dc2626', fontSize: '15px', flexShrink: 0 }}></i>
+                    <i className="bi bi-exclamation-triangle" style={{ color: 'var(--dm-red-text)', fontSize: '15px', flexShrink: 0 }}></i>
                     <span>{createErrors.general}</span>
                   </div>
                 )}
@@ -1804,8 +1804,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {/* Phân loại (Chỉ Tin khẩn cấp & Hệ thống) */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                        Phân loại <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '4px' }}>
+                        Phân loại <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <select
                         value={notificationCategory === 'SYSTEM' ? 'SYSTEM' : 'INSTANT'}
@@ -1815,9 +1815,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
-                          background: '#ffffff',
-                          color: '#0f172a',
+                          border: '1px solid var(--dm-border-strong)',
+                          background: 'var(--dm-surface)',
+                          color: 'var(--dm-text-strong)',
                           fontSize: '13px',
                           fontWeight: 500,
                           outline: 'none',
@@ -1828,7 +1828,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         <option value="INSTANT">Tin khẩn cấp</option>
                         <option value="SYSTEM">Hệ thống</option>
                       </select>
-                      <div style={{ marginTop: '5px', fontSize: '11.5px', color: '#64748b', lineHeight: 1.4 }}>
+                      <div style={{ marginTop: '5px', fontSize: '11.5px', color: 'var(--dm-text-muted)', lineHeight: 1.4 }}>
                         Các thông báo <strong>Thời tiết, Điểm an toàn, Điểm nguy hiểm</strong> tự động phát khi tạo/duyệt ở tab riêng và vẫn lưu tại danh sách thông báo.
                       </div>
                     </div>
@@ -1838,8 +1838,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       <>
                         {notificationCategory === 'WEATHER' && (
                           <div>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                              Chọn bản tin Thời tiết đã duyệt từ CSDL <span style={{ color: '#dc2626' }}>*</span>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
+                              Chọn bản tin Thời tiết đã duyệt từ CSDL <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                             </label>
                             <SearchableSelect
                               value={selectedPointId}
@@ -1850,7 +1850,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               className="sos-form-select"
                               ariaLabel="Chọn bản tin Thời tiết đã duyệt từ CSDL"
                               searchPlaceholder="Tìm nhanh bản tin thời tiết..."
-                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid var(--dm-border-strong)', borderRadius: '6px', background: 'var(--dm-surface)', fontSize: '12.5px' }}
                               options={[
                                 {
                                   value: '',
@@ -1868,7 +1868,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               ]}
                             />
                             {!loadingPoints && weatherOptions.length === 0 && (
-                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                              <small style={{ color: 'var(--dm-amber-text)', display: 'block', marginTop: '3px' }}>
                                 Chưa có bản tin thời tiết nào được duyệt (APPROVED / ACTIVE) trong cơ sở dữ liệu. Vui lòng duyệt bản tin tại mục Quản lý thời tiết trước khi phát thông báo.
                               </small>
                             )}
@@ -1877,8 +1877,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                         {notificationCategory === 'SAFE_LOCATION' && (
                           <div>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                              Chọn Điểm an toàn từ DB <span style={{ color: '#dc2626' }}>*</span>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
+                              Chọn Điểm an toàn từ DB <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                             </label>
                             <SearchableSelect
                               value={selectedPointId}
@@ -1889,7 +1889,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               className="sos-form-select"
                               ariaLabel="Chọn Điểm an toàn từ DB"
                               searchPlaceholder="Tìm điểm an toàn theo tên hoặc địa chỉ..."
-                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid var(--dm-border-strong)', borderRadius: '6px', background: 'var(--dm-surface)', fontSize: '12.5px' }}
                               options={[
                                 {
                                   value: '',
@@ -1908,7 +1908,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               ]}
                             />
                             {!loadingPoints && safeLocationOptions.length === 0 && (
-                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                              <small style={{ color: 'var(--dm-amber-text)', display: 'block', marginTop: '3px' }}>
                                 Chưa có điểm an toàn hoạt động nào có GPS hợp lệ trên địa bàn quản lý.
                               </small>
                             )}
@@ -1917,8 +1917,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                         {notificationCategory === 'HAZARD' && (
                           <div>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                              Chọn Điểm nguy hiểm từ DB <span style={{ color: '#dc2626' }}>*</span>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
+                              Chọn Điểm nguy hiểm từ DB <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                             </label>
                             <SearchableSelect
                               value={selectedPointId}
@@ -1929,7 +1929,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               className="sos-form-select"
                               ariaLabel="Chọn Điểm nguy hiểm từ DB"
                               searchPlaceholder="Tìm điểm nguy hiểm theo tên hoặc địa chỉ..."
-                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid var(--dm-border-strong)', borderRadius: '6px', background: 'var(--dm-surface)', fontSize: '12.5px' }}
                               options={[
                                 {
                                   value: '',
@@ -1950,7 +1950,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               ]}
                             />
                             {!loadingPoints && hazardOptions.length === 0 && (
-                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                              <small style={{ color: 'var(--dm-amber-text)', display: 'block', marginTop: '3px' }}>
                                 Chưa có điểm nguy hiểm được duyệt nào trên địa bàn đã chọn.
                               </small>
                             )}
@@ -1959,8 +1959,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                         {/* Địa bàn tiếp nhận thông báo */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                            Địa bàn phát thông báo <span style={{ color: '#dc2626' }}>*</span>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '4px' }}>
+                            Địa bàn phát thông báo <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                           </label>
                           {renderTargetAreaSelector()}
                         </div>
@@ -1969,18 +1969,18 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         <div
                           style={{
                             padding: '10px 12px',
-                            background: '#f0fdf4',
-                            border: '1px solid #bbf7d0',
+                            background: 'var(--dm-green-bg)',
+                            border: '1px solid var(--dm-green-border)',
                             borderRadius: '8px',
                             display: 'flex',
                             alignItems: 'flex-start',
                             gap: '8px',
                           }}
                         >
-                          <i className="bi bi-database-check" style={{ fontSize: '16px', color: '#16a34a', flexShrink: 0, marginTop: '2px' }}></i>
-                          <div style={{ fontSize: '12px', color: '#166534', lineHeight: 1.45 }}>
+                          <i className="bi bi-database-check" style={{ fontSize: '16px', color: 'var(--dm-green-text)', flexShrink: 0, marginTop: '2px' }}></i>
+                          <div style={{ fontSize: '12px', color: 'var(--dm-green-text)', lineHeight: 1.45 }}>
                             <strong>Dữ liệu nguồn trực tiếp từ CSDL</strong>
-                            <div style={{ marginTop: '2px', color: '#15803d', fontSize: '11.5px' }}>
+                            <div style={{ marginTop: '2px', color: 'var(--dm-green-text)', fontSize: '11.5px' }}>
                               Dữ liệu đã có sẵn trong cơ sở dữ liệu, không cần nhập form. Hệ thống sẽ phát trực tiếp tới điện thoại người dân.
                             </div>
                           </div>
@@ -1991,15 +1991,15 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       <>
                         {/* Địa bàn tiếp nhận thông báo */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                            Địa bàn nhận tin <span style={{ color: '#dc2626' }}>*</span>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '4px' }}>
+                            Địa bàn nhận tin <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                           </label>
                           {renderTargetAreaSelector()}
                         </div>
 
                         {/* Mẫu nhanh */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
                             Mẫu nhanh:
                           </label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -2012,9 +2012,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                 style={{
                                   padding: '4px 9px',
                                   borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
-                                  background: '#ffffff',
-                                  color: '#334155',
+                                  border: '1px solid var(--dm-border-strong)',
+                                  background: 'var(--dm-surface)',
+                                  color: 'var(--dm-text-secondary)',
                                   fontSize: '11.5px',
                                   fontWeight: 500,
                                   cursor: 'pointer',
@@ -2025,7 +2025,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                <i className={`bi ${t.icon || 'bi-bookmark'}`} style={{ fontSize: '11px', color: '#475569' }}></i>
+                                <i className={`bi ${t.icon || 'bi-bookmark'}`} style={{ fontSize: '11px', color: 'var(--dm-text-secondary)' }}></i>
                                 <span>{t.title}</span>
                               </button>
                             ))}
@@ -2040,7 +2040,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     {isDbSourceCategory ? (
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
+                          <label style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                             Xem trước dữ liệu phát thông báo
                           </label>
                           <span
@@ -2048,10 +2048,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               fontSize: '11px',
                               padding: '2px 8px',
                               borderRadius: '4px',
-                              background: '#eff6ff',
-                              color: '#1d4ed8',
+                              background: 'var(--dm-blue-bg)',
+                              color: 'var(--dm-blue-text)',
                               fontWeight: 600,
-                              border: '1px solid #bfdbfe',
+                              border: '1px solid var(--dm-blue-border)',
                             }}
                           >
                             <i className="bi bi-database me-1"></i>Từ cơ sở dữ liệu
@@ -2062,9 +2062,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         {selectedPointId ? (
                           <div
                             style={{
-                              border: '1px solid #cbd5e1',
+                              border: '1px solid var(--dm-border-strong)',
                               borderRadius: '8px',
-                              background: '#ffffff',
+                              background: 'var(--dm-surface)',
                               padding: '14px',
                               display: 'flex',
                               flexDirection: 'column',
@@ -2084,9 +2084,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                     fontWeight: 700,
                                     padding: '3px 8px',
                                     borderRadius: '5px',
-                                    background: '#f1f5f9',
-                                    color: '#0f172a',
-                                    border: '1px solid #e2e8f0',
+                                    background: 'var(--dm-surface-muted)',
+                                    color: 'var(--dm-text-strong)',
+                                    border: '1px solid var(--dm-border)',
                                   }}
                                 >
                                   {notificationCategory === 'WEATHER' && <i className="bi bi-cloud-sun text-primary"></i>}
@@ -2102,7 +2102,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                 </span>
 
                                 {notificationCategory === 'WEATHER' && selectedWeatherArticle?.relevance_score !== undefined && (
-                                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                  <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>
                                     Độ tin cậy: <strong>{selectedWeatherArticle.relevance_score}%</strong>
                                   </span>
                                 )}
@@ -2112,11 +2112,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                 style={{
                                   fontSize: '11px',
                                   fontWeight: 600,
-                                  color: '#059669',
-                                  background: '#ecfdf5',
+                                  color: 'var(--dm-green-text)',
+                                  background: 'var(--dm-green-bg)',
                                   padding: '2px 8px',
                                   borderRadius: '4px',
-                                  border: '1px solid #a7f3d0',
+                                  border: '1px solid var(--dm-green-border)',
                                 }}
                               >
                                 <i className="bi bi-check-circle me-1"></i>Hợp lệ để phát
@@ -2125,10 +2125,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                             {/* Tiêu đề mục được chọn */}
                             <div>
-                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
                                 Tiêu đề thông báo
                               </div>
-                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#0f172a', lineHeight: 1.4 }}>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--dm-text-strong)', lineHeight: 1.4 }}>
                                 {notificationCategory === 'WEATHER' && (selectedWeatherArticle?.title || 'Chưa có tiêu đề')}
                                 {notificationCategory === 'SAFE_LOCATION' && `Điểm an toàn: ${selectedSafeLocation?.name || ''}`}
                                 {notificationCategory === 'HAZARD' && (selectedHazardReport?.title || 'Chưa có tiêu đề')}
@@ -2137,18 +2137,18 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                             {/* Nội dung chi tiết */}
                             <div>
-                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
                                 Nội dung phát đi
                               </div>
                               <div
                                 style={{
                                   fontSize: '12.5px',
-                                  color: '#334155',
+                                  color: 'var(--dm-text-secondary)',
                                   lineHeight: 1.5,
-                                  background: '#f8fafc',
+                                  background: 'var(--dm-surface-subtle)',
                                   padding: '10px 12px',
                                   borderRadius: '6px',
-                                  border: '1px solid #e2e8f0',
+                                  border: '1px solid var(--dm-border)',
                                   maxHeight: '140px',
                                   overflowY: 'auto',
                                   whiteSpace: 'pre-line',
@@ -2178,18 +2178,18 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                             {/* Thông tin mở rộng & Nguồn bài viết */}
                             {notificationCategory === 'WEATHER' && (
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px', color: '#475569' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px', color: 'var(--dm-text-secondary)' }}>
                                 <div>
-                                  <span style={{ color: '#64748b' }}>Nguồn:</span> <strong>{selectedWeatherArticle?.sourceName || selectedWeatherArticle?.source_name || 'Trung tâm KTTV'}</strong>
+                                  <span style={{ color: 'var(--dm-text-muted)' }}>Nguồn:</span> <strong>{selectedWeatherArticle?.sourceName || selectedWeatherArticle?.source_name || 'Trung tâm KTTV'}</strong>
                                 </div>
                                 {selectedWeatherArticle?.source_url || selectedWeatherArticle?.articleUrl ? (
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    <span style={{ color: '#64748b' }}>Tham chiếu:</span>{' '}
+                                    <span style={{ color: 'var(--dm-text-muted)' }}>Tham chiếu:</span>{' '}
                                     <a
                                       href={selectedWeatherArticle.source_url || selectedWeatherArticle.articleUrl}
                                       target="_blank"
                                       rel="noreferrer"
-                                      style={{ color: '#2563eb', textDecoration: 'none' }}
+                                      style={{ color: 'var(--dm-blue-text)', textDecoration: 'none' }}
                                     >
                                       Xem bài gốc <i className="bi bi-box-arrow-up-right" style={{ fontSize: '10px' }}></i>
                                     </a>
@@ -2209,18 +2209,18 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                       : selectedHazardReport?.images?.[0]
                                   }
                                   alt="preview"
-                                  style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+                                  style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--dm-border-strong)' }}
                                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                                 />
-                                <span style={{ fontSize: '11.5px', color: '#64748b' }}>Hình ảnh minh họa có sẵn từ DB</span>
+                                <span style={{ fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>Hình ảnh minh họa có sẵn từ DB</span>
                               </div>
                             )}
 
                             {/* Box push ready */}
                             <div
                               style={{
-                                background: '#eff6ff',
-                                border: '1px solid #bfdbfe',
+                                background: 'var(--dm-blue-bg)',
+                                border: '1px solid var(--dm-blue-border)',
                                 borderRadius: '6px',
                                 padding: '8px 12px',
                                 display: 'flex',
@@ -2230,7 +2230,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <i className="bi bi-broadcast text-primary" style={{ fontSize: '14px' }}></i>
-                                <span style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>
+                                <span style={{ fontSize: '12px', color: 'var(--dm-blue-text)', fontWeight: 600 }}>
                                   Sẵn sàng phát tới điện thoại người dân
                                 </span>
                               </div>
@@ -2243,9 +2243,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           /* Trạng thái chưa chọn mục từ DB */
                           <div
                             style={{
-                              border: '1.5px dashed #cbd5e1',
+                              border: '1.5px dashed var(--dm-border-strong)',
                               borderRadius: '8px',
-                              background: '#f8fafc',
+                              background: 'var(--dm-surface-subtle)',
                               padding: '36px 20px',
                               textAlign: 'center',
                               display: 'flex',
@@ -2260,8 +2260,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                                 width: '48px',
                                 height: '48px',
                                 borderRadius: '50%',
-                                background: '#e2e8f0',
-                                color: '#64748b',
+                                background: 'var(--dm-surface-hover)',
+                                color: 'var(--dm-text-muted)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -2270,10 +2270,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             >
                               <i className="bi bi-database" style={{ fontSize: '22px' }}></i>
                             </div>
-                            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: 'var(--dm-text-body)' }}>
                               Chọn dữ liệu từ cơ sở dữ liệu
                             </h4>
-                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', maxWidth: '300px', lineHeight: 1.45 }}>
+                            <p style={{ margin: 0, fontSize: '12px', color: 'var(--dm-text-muted)', maxWidth: '300px', lineHeight: 1.45 }}>
                               {notificationCategory === 'WEATHER' && 'Vui lòng chọn một bản tin thời tiết ở danh sách bên trái để xem trước và phát thông báo.'}
                               {notificationCategory === 'SAFE_LOCATION' && 'Vui lòng chọn một điểm an toàn ở danh sách bên trái để xem trước và phát thông báo.'}
                               {notificationCategory === 'HAZARD' && 'Vui lòng chọn một điểm nguy hiểm đã duyệt ở danh sách bên trái để xem trước và phát thông báo.'}
@@ -2286,8 +2286,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       <>
                         {/* Tiêu đề */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                            Tiêu đề <span style={{ color: '#dc2626' }}>*</span>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '4px' }}>
+                            Tiêu đề <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                           </label>
                           <input
                             type="text"
@@ -2307,16 +2307,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               width: '100%',
                               padding: '7px 12px',
                               borderRadius: '6px',
-                              border: createErrors.title ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createErrors.title ? '#fff5f5' : '#ffffff',
+                              border: createErrors.title ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                              background: createErrors.title ? '#fff5f5' : 'var(--dm-surface)',
                               fontSize: '13px',
-                              color: '#0f172a',
+                              color: 'var(--dm-text-strong)',
                               boxSizing: 'border-box',
                               outline: 'none',
                             }}
                           />
                           {createErrors.title && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                               <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
                               <span>{createErrors.title}</span>
                             </div>
@@ -2325,8 +2325,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                         {/* Nội dung */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                            Nội dung <span style={{ color: '#dc2626' }}>*</span>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '4px' }}>
+                            Nội dung <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                           </label>
                           <textarea
                             rows={5}
@@ -2342,10 +2342,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               width: '100%',
                               padding: '7px 12px',
                               borderRadius: '6px',
-                              border: createErrors.content ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createErrors.content ? '#fff5f5' : '#ffffff',
+                              border: createErrors.content ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                              background: createErrors.content ? '#fff5f5' : 'var(--dm-surface)',
                               fontSize: '12.5px',
-                              color: '#0f172a',
+                              color: 'var(--dm-text-strong)',
                               boxSizing: 'border-box',
                               outline: 'none',
                               lineHeight: '1.45',
@@ -2353,7 +2353,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             }}
                           />
                           {createErrors.content && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                               <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
                               <span>{createErrors.content}</span>
                             </div>
@@ -2369,17 +2369,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
+                  borderTop: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                   flexWrap: 'wrap',
                   gap: '10px',
                 }}
               >
-                <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <i className="bi bi-phone" style={{ fontSize: '13px', color: '#64748b' }}></i>
+                <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="bi bi-phone" style={{ fontSize: '13px', color: 'var(--dm-text-muted)' }}></i>
                   <span>Truyền tin tới ứng dụng di động</span>
                 </div>
 
@@ -2447,7 +2447,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         >
           <div
             style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--dm-surface)',
               borderRadius: 0,
               width: '540px',
               maxWidth: '94vw',
@@ -2456,7 +2456,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               display: 'flex',
               flexDirection: 'column',
               boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.18)',
-              borderLeft: '1px solid #cbd5e1',
+              borderLeft: '1px solid var(--dm-border-strong)',
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2465,11 +2465,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <div
               style={{
                 padding: '14px 20px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#f8fafc',
+                background: 'var(--dm-surface-subtle)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2478,8 +2478,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     width: '32px',
                     height: '32px',
                     borderRadius: '6px',
-                    backgroundColor: '#e2e8f0',
-                    color: '#334155',
+                    backgroundColor: 'var(--dm-surface-hover)',
+                    color: 'var(--dm-text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2488,10 +2488,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   <i className="bi bi-info-circle" style={{ fontSize: '15px' }}></i>
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     Chi tiết thông báo
                   </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>
                     Thời gian phát: {formatDateTime(detailBroadcast.createdAt)}
                   </p>
                 </div>
@@ -2504,7 +2504,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   padding: '4px',
                 }}
                 title="Đóng"
@@ -2524,7 +2524,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               }}
             >
               {detailBroadcast.imageUrl && (
-                <div style={{ width: '100%', height: '200px', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0' }}>
+                <div style={{ width: '100%', height: '200px', borderRadius: '8px', overflow: 'hidden', background: 'var(--dm-surface-hover)' }}>
                   <img
                     src={detailBroadcast.imageUrl}
                     alt={detailBroadcast.title}
@@ -2536,7 +2536,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span
                   className="sos-badge"
-                  style={{ fontSize: '12px', padding: '3px 8px', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}
+                  style={{ fontSize: '12px', padding: '3px 8px', background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}
                 >
                   {({
                     INSTANT: 'Khẩn cấp',
@@ -2556,9 +2556,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   style={{
                     fontSize: '12px',
                     padding: '3px 8px',
-                    background: '#f8fafc',
-                    color: '#475569',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--dm-surface-subtle)',
+                    color: 'var(--dm-text-secondary)',
+                    border: '1px solid var(--dm-border-strong)',
                   }}
                 >
                   Mức độ: {String(detailBroadcast.priority || 'NORMAL').toUpperCase()}
@@ -2566,12 +2566,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               </div>
 
               <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: '#0f172a', margin: '4px 0 8px 0', lineHeight: 1.4 }}>
+                <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--dm-text-strong)', margin: '4px 0 8px 0', lineHeight: 1.4 }}>
                   {detailBroadcast.title}
                 </h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12.5px', color: '#64748b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12.5px', color: 'var(--dm-text-muted)' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <i className="bi bi-geo-alt" style={{ fontSize: '12px', color: '#64748b' }}></i>
+                    <i className="bi bi-geo-alt" style={{ fontSize: '12px', color: 'var(--dm-text-muted)' }}></i>
                     <strong>Địa bàn:</strong> {detailBroadcast.areaName || 'Toàn thành phố'}
                   </span>
                   <span>
@@ -2582,12 +2582,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: '8px',
                   padding: '14px 16px',
                   fontSize: '13px',
-                  color: '#1e293b',
+                  color: 'var(--dm-text-body)',
                   lineHeight: '1.6',
                   whiteSpace: 'pre-wrap',
                 }}
@@ -2605,14 +2605,14 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
-                      color: '#2563eb',
+                      color: 'var(--dm-blue-text)',
                       textDecoration: 'none',
                       fontWeight: 600,
                       fontSize: '12.5px',
                       padding: '6px 12px',
-                      background: '#eff6ff',
+                      background: 'var(--dm-blue-bg)',
                       borderRadius: '6px',
-                      border: '1px solid #bfdbfe',
+                      border: '1px solid var(--dm-blue-border)',
                     }}
                   >
                     <i className="bi bi-box-arrow-up-right" style={{ fontSize: '12px' }}></i>
@@ -2626,11 +2626,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <div
               style={{
                 padding: '12px 20px',
-                borderTop: '1px solid #e2e8f0',
+                borderTop: '1px solid var(--dm-border)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#f8fafc',
+                background: 'var(--dm-surface-subtle)',
               }}
             >
               <button
@@ -2640,9 +2640,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 style={{
                   padding: '7px 14px',
                   fontSize: '12.5px',
-                  color: '#dc2626',
-                  borderColor: '#fecaca',
-                  background: '#fef2f2',
+                  color: 'var(--dm-red-text)',
+                  borderColor: 'var(--dm-red-border)',
+                  background: 'var(--dm-red-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',

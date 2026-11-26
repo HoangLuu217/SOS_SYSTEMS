@@ -46,7 +46,7 @@ export const RbacMatrixView: React.FC = () => {
                 <td>Web Dashboard</td>
                 <td>✅ Toàn địa bàn</td>
                 <td>✅ Toàn quyền điều phối</td>
-                <td><strong style={{ color: '#16a34a' }}>✅ Toàn quyền Tạo &amp; Duyệt địa bàn</strong></td>
+                <td><strong style={{ color: 'var(--dm-green-text)' }}>✅ Toàn quyền Tạo &amp; Duyệt địa bàn</strong></td>
                 <td>❌ Giới hạn đội cứu hộ</td>
                 <td>❌ Không</td>
               </tr>
@@ -55,7 +55,7 @@ export const RbacMatrixView: React.FC = () => {
                 <td>Web Dashboard</td>
                 <td>✅ Toàn hệ thống</td>
                 <td>✅ Giám sát toàn bộ</td>
-                <td><strong style={{ color: '#16a34a' }}>✅ Toàn quyền Tạo &amp; Duyệt toàn TP</strong></td>
+                <td><strong style={{ color: 'var(--dm-green-text)' }}>✅ Toàn quyền Tạo &amp; Duyệt toàn TP</strong></td>
                 <td>✅ Toàn quyền quản trị</td>
                 <td>✅ Toàn quyền hệ thống</td>
               </tr>

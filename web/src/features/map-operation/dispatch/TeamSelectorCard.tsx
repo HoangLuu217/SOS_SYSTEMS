@@ -98,15 +98,15 @@ export const TeamSelectorCard: React.FC<Props> = ({
 
   const renderVehicleIcon = () => {
     if (vehicleCategory === 'NONE') {
-      return <Ban size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />;
+      return <Ban size={13} style={{ color: 'var(--dm-text-muted)', flexShrink: 0 }} />;
     }
     if (vehicleCategory === 'AMBULANCE') {
-      return <Ambulance size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+      return <Ambulance size={13.5} style={{ color: 'var(--dm-blue-text)', flexShrink: 0 }} />;
     }
     if (vehicleCategory === 'TRUCK') {
-      return <Truck size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+      return <Truck size={13.5} style={{ color: 'var(--dm-blue-text)', flexShrink: 0 }} />;
     }
-    return <Ship size={13.5} style={{ color: '#0369a1', flexShrink: 0 }} />;
+    return <Ship size={13.5} style={{ color: 'var(--dm-blue-text)', flexShrink: 0 }} />;
   };
 
   return (
@@ -118,13 +118,13 @@ export const TeamSelectorCard: React.FC<Props> = ({
         padding: '9px 11px',
         borderRadius: 9,
         border: isBusy
-          ? '1.5px dashed #cbd5e1'
+          ? '1.5px dashed var(--dm-border-strong)'
           : isSelected
           ? '2px solid #0284c7'
           : isRecommended
           ? '1.5px solid #a5b4fc'
-          : '1.5px solid #e2e8f0',
-        background: isBusy ? '#f8fafc' : isSelected ? '#f0f9ff' : isRecommended ? '#fafaff' : '#ffffff',
+          : '1.5px solid var(--dm-border)',
+        background: isBusy ? 'var(--dm-surface-subtle)' : isSelected ? 'var(--dm-blue-bg)' : isRecommended ? '#fafaff' : 'var(--dm-surface)',
         opacity: isBusy ? 0.65 : 1,
         boxShadow: isSelected && !isBusy ? '0 2px 8px -2px rgba(2, 132, 199, 0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
         cursor: isBusy ? 'not-allowed' : 'pointer',
@@ -140,13 +140,13 @@ export const TeamSelectorCard: React.FC<Props> = ({
           width: 18,
           height: 18,
           borderRadius: 4,
-          border: `2px solid ${isBusy ? '#cbd5e1' : isSelected ? '#0284c7' : '#94a3b8'}`,
+          border: `2px solid ${isBusy ? 'var(--dm-border-strong)' : isSelected ? '#0284c7' : 'var(--dm-border-strong)'}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
           marginTop: 2,
-          background: isBusy ? '#e2e8f0' : isSelected ? '#0284c7' : '#ffffff',
+          background: isBusy ? 'var(--dm-surface-hover)' : isSelected ? '#0284c7' : 'var(--dm-surface)',
           color: '#ffffff',
           transition: 'all 0.12s ease',
         }}
@@ -163,7 +163,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
               style={{
                 fontSize: 14,
                 fontWeight: 800,
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 lineHeight: 1.3,
               }}
               title={cleanTeamName}
@@ -173,13 +173,13 @@ export const TeamSelectorCard: React.FC<Props> = ({
             {codeTag && (
               <span
                 style={{
-                  background: '#f1f5f9',
-                  color: '#475569',
+                  background: 'var(--dm-surface-muted)',
+                  color: 'var(--dm-text-secondary)',
                   fontSize: 11,
                   fontWeight: 800,
                   padding: '1.5px 6px',
                   borderRadius: 4,
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--dm-border)',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
@@ -190,13 +190,13 @@ export const TeamSelectorCard: React.FC<Props> = ({
             {showWardBadge && (
               <span
                 style={{
-                  background: '#f0f9ff',
-                  color: '#0369a1',
+                  background: 'var(--dm-blue-bg)',
+                  color: 'var(--dm-blue-text)',
                   fontSize: 11,
                   fontWeight: 700,
                   padding: '1.5px 6px',
                   borderRadius: 4,
-                  border: '1px solid #bae6fd',
+                  border: '1px solid var(--dm-blue-border)',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
@@ -211,9 +211,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
               style={{
                 fontSize: 11,
                 fontWeight: 800,
-                background: '#fee2e2',
-                color: '#dc2626',
-                border: '1px solid #fca5a5',
+                background: 'var(--dm-red-bg)',
+                color: 'var(--dm-red-text)',
+                border: '1px solid var(--dm-red-border)',
                 padding: '2px 7px',
                 borderRadius: 4,
                 whiteSpace: 'nowrap',
@@ -227,9 +227,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
               style={{
                 fontSize: 11,
                 fontWeight: 800,
-                background: '#f1f5f9',
-                color: '#64748b',
-                border: '1px solid #cbd5e1',
+                background: 'var(--dm-surface-muted)',
+                color: 'var(--dm-text-muted)',
+                border: '1px solid var(--dm-border-strong)',
                 padding: '2px 7px',
                 borderRadius: 4,
                 letterSpacing: '0.2px',
@@ -244,9 +244,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
               style={{
                 fontSize: 11,
                 fontWeight: 800,
-                background: '#dcfce7',
-                color: '#15803d',
-                border: '1px solid #86efac',
+                background: 'var(--dm-green-bg)',
+                color: 'var(--dm-green-text)',
+                border: '1px solid var(--dm-green-border)',
                 padding: '2px 7px',
                 borderRadius: 4,
                 whiteSpace: 'nowrap',
@@ -259,13 +259,13 @@ export const TeamSelectorCard: React.FC<Props> = ({
         </div>
 
         {/* HÀNG 2: METADATA GỌN (AI ĐỀ XUẤT + CHUYÊN MÔN • PHƯƠNG TIỆN • ETA) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12.5, color: '#334155', lineHeight: 1.35 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--dm-text-secondary)', lineHeight: 1.35 }}>
           {isRecommended && (
             <span
               style={{
-                background: '#eef2ff',
-                color: '#3730a3',
-                border: '1px solid #c7d2fe',
+                background: 'var(--dm-purple-bg)',
+                color: 'var(--dm-purple-text)',
+                border: '1px solid var(--dm-purple-border)',
                 fontSize: 11,
                 fontWeight: 800,
                 padding: '1px 6px',
@@ -281,12 +281,12 @@ export const TeamSelectorCard: React.FC<Props> = ({
             </span>
           )}
           {teamTypeLabel && (
-            <span style={{ color: '#475569', fontWeight: 700, fontSize: 12 }}>
+            <span style={{ color: 'var(--dm-text-secondary)', fontWeight: 700, fontSize: 12 }}>
               {teamTypeLabel} •
             </span>
           )}
           <span
-            style={{ color: '#0f172a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            style={{ color: 'var(--dm-text-strong)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             title={vehicleSpec}
           >
             {renderVehicleIcon()}
@@ -294,7 +294,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
           </span>
           {hasValidEta && (
             <span
-              style={{ color: '#0369a1', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+              style={{ color: 'var(--dm-blue-text)', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 3 }}
             >
               <span style={{ color: '#cbd5e1' }}>•</span>
               <Clock size={12} style={{ flexShrink: 0 }} />
@@ -312,7 +312,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: '#0369a1',
+                  color: 'var(--dm-blue-text)',
                   lineHeight: 1.4,
                   display: 'flex',
                   alignItems: 'flex-start',
@@ -320,7 +320,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
                   minWidth: 0,
                 }}
               >
-                <Check size={12.5} style={{ color: '#0284c7', flexShrink: 0, marginTop: 2 }} />
+                <Check size={12.5} style={{ color: 'var(--dm-blue-text)', flexShrink: 0, marginTop: 2 }} />
                 <span style={{ wordBreak: 'break-word' }}>{reason}</span>
               </div>
             ))}
@@ -330,7 +330,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 style={{
                   fontSize: 11.5,
                   fontWeight: 600,
-                  color: '#b45309',
+                  color: 'var(--dm-amber-text)',
                   lineHeight: 1.4,
                   display: 'flex',
                   alignItems: 'flex-start',
@@ -338,7 +338,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
                   minWidth: 0,
                 }}
               >
-                <AlertTriangle size={12} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
+                <AlertTriangle size={12} style={{ color: 'var(--dm-amber-text)', flexShrink: 0, marginTop: 2 }} />
                 <span style={{ wordBreak: 'break-word' }}>{warning}</span>
               </div>
             ))}
@@ -351,17 +351,17 @@ export const TeamSelectorCard: React.FC<Props> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderTop: '1px dashed #e2e8f0',
+            borderTop: '1px dashed var(--dm-border)',
             paddingTop: 5,
             fontSize: 12,
-            color: '#64748b',
+            color: 'var(--dm-text-muted)',
             gap: 8,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            <User size={12.5} style={{ color: '#64748b', flexShrink: 0 }} />
+            <User size={12.5} style={{ color: 'var(--dm-text-muted)', flexShrink: 0 }} />
             <span>Chỉ huy:</span>
-            <strong style={{ color: '#1e293b', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <strong style={{ color: 'var(--dm-text-body)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {leadRescuer?.name || 'Trưởng đội'}
             </strong>
             <span>({memberCount} người)</span>
@@ -378,7 +378,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
               border: '1px solid rgba(2, 132, 199, 0.22)',
               borderRadius: 5,
               padding: '2px 8px',
-              color: '#0284c7',
+              color: 'var(--dm-blue-text)',
               fontSize: 12,
               fontWeight: 700,
               cursor: 'pointer',
@@ -428,11 +428,11 @@ export const TeamSelectorCard: React.FC<Props> = ({
           style={{
             width: 440,
             maxWidth: '92vw',
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--dm-surface)',
             borderRadius: 14,
             overflow: 'hidden',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--dm-border)',
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -441,7 +441,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
           <div
             style={{
               background: 'linear-gradient(to right, #fffbeb, #fef3c7)',
-              borderBottom: '1.5px solid #fde68a',
+              borderBottom: '1.5px solid var(--dm-amber-border)',
               padding: '14px 18px',
               display: 'flex',
               alignItems: 'center',
@@ -454,22 +454,22 @@ export const TeamSelectorCard: React.FC<Props> = ({
                   width: 34,
                   height: 34,
                   borderRadius: 8,
-                  backgroundColor: '#fef3c7',
-                  border: '1px solid #fde68a',
+                  backgroundColor: 'var(--dm-amber-bg)',
+                  border: '1px solid var(--dm-amber-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#d97706',
+                  color: 'var(--dm-amber-text)',
                   flexShrink: 0,
                 }}
               >
                 <AlertTriangle size={19} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 900, color: '#92400e', letterSpacing: '-0.2px' }}>
+                <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 900, color: 'var(--dm-amber-text)', letterSpacing: '-0.2px' }}>
                   QUY ĐỊNH TÁC CHIẾN CỨU HỘ
                 </h3>
-                <div style={{ fontSize: 11.5, color: '#b45309', fontWeight: 600, marginTop: 1 }}>
+                <div style={{ fontSize: 11.5, color: 'var(--dm-amber-text)', fontWeight: 600, marginTop: 1 }}>
                   Đội cứu hộ đang thực hiện nhiệm vụ khác
                 </div>
               </div>
@@ -484,10 +484,10 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#ffffff',
-                border: '1px solid #fde68a',
+                background: 'var(--dm-surface)',
+                border: '1px solid var(--dm-amber-border)',
                 borderRadius: 6,
-                color: '#78350f',
+                color: 'var(--dm-amber-text)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}
@@ -501,8 +501,8 @@ export const TeamSelectorCard: React.FC<Props> = ({
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div
               style={{
-                backgroundColor: '#f8fafc',
-                border: '1.5px solid #e2e8f0',
+                backgroundColor: 'var(--dm-surface-subtle)',
+                border: '1.5px solid var(--dm-border)',
                 borderRadius: 10,
                 padding: '12px 14px',
                 display: 'flex',
@@ -510,18 +510,18 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 gap: 6,
               }}
             >
-              <div style={{ fontSize: 13.5, fontWeight: 900, color: '#0f172a' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 900, color: 'var(--dm-text-strong)' }}>
                 {cleanTeamName}
               </div>
               {busyMissionCode ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Đang tác chiến ca:</span>
+                  <span style={{ color: 'var(--dm-text-muted)', fontWeight: 600 }}>Đang tác chiến ca:</span>
                   <span
                     style={{
                       fontWeight: 900,
-                      color: '#dc2626',
-                      backgroundColor: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      color: 'var(--dm-red-text)',
+                      backgroundColor: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       padding: '1.5px 7px',
                       borderRadius: 4,
                       letterSpacing: '0.2px',
@@ -531,14 +531,14 @@ export const TeamSelectorCard: React.FC<Props> = ({
                   </span>
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: '#64748b' }}>
+                <div style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                   Đội đang trong nhiệm vụ cứu nạn khác ngoài hiện trường.
                 </div>
               )}
             </div>
 
-            <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.55 }}>
-              Theo quy định tác chiến, mỗi đội cứu hộ chỉ được phép phụ trách <strong style={{ color: '#0f172a' }}>01 nhiệm vụ tại một thời điểm</strong> để đảm bảo an toàn tuyệt đối cho người dân và tập trung tối đa nguồn lực tiếp cận.
+            <div style={{ fontSize: 13, color: 'var(--dm-text-secondary)', lineHeight: 1.55 }}>
+              Theo quy định tác chiến, mỗi đội cứu hộ chỉ được phép phụ trách <strong style={{ color: 'var(--dm-text-strong)' }}>01 nhiệm vụ tại một thời điểm</strong> để đảm bảo an toàn tuyệt đối cho người dân và tập trung tối đa nguồn lực tiếp cận.
             </div>
           </div>
 
@@ -546,8 +546,8 @@ export const TeamSelectorCard: React.FC<Props> = ({
           <div
             style={{
               padding: '12px 20px',
-              backgroundColor: '#f8fafc',
-              borderTop: '1px solid #e2e8f0',
+              backgroundColor: 'var(--dm-surface-subtle)',
+              borderTop: '1px solid var(--dm-border)',
               display: 'flex',
               justifyContent: 'flex-end',
             }}

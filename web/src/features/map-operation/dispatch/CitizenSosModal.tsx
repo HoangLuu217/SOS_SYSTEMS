@@ -193,16 +193,16 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
             {/* TRƯỜNG 1: VỊ TRÍ HIỆN TẠI (TỰ ĐỘNG LẤY - BẮT BUỘC) */}
             <div className="form-group" style={{ background: 'var(--sos-surface-subtle)', padding: 12, borderRadius: 8, border: '1px solid var(--sos-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626', fontWeight: 700 }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-red-text)', fontWeight: 700 }}>
                   <MapPin size={15} />
                   <span>1. {lang === 'vi' ? 'Vị trí hiện tại (Tự động GPS - Bắt buộc)' : 'Current Location (Auto GPS - Required)'} *</span>
                 </label>
                 {gpsLoading ? (
-                  <span style={{ fontSize: 11, color: '#2563eb', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--dm-blue-text)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Loader2 size={12} className="animate-spin" /> Đang lấy GPS...
                   </span>
                 ) : (
-                  <span style={{ fontSize: 11, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                  <span style={{ fontSize: 11, color: 'var(--dm-green-text)', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
                     <CheckCircle2 size={12} /> Đã khóa tọa độ GPS
                   </span>
                 )}
@@ -243,7 +243,7 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
               />
 
               {gpsError && (
-                <div style={{ fontSize: 11, color: '#d97706', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--dm-amber-text)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <AlertTriangle size={12} /> {gpsError}
                 </div>
               )}
@@ -272,7 +272,7 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                   }}
                 >
                   <span style={{ fontSize: 20 }}>🚑</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'MEDICAL' ? '#dc2626' : 'var(--sos-text-primary)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'MEDICAL' ? 'var(--dm-red-text)' : 'var(--sos-text-primary)' }}>
                     {lang === 'vi' ? 'Y tế' : 'Medical'}
                   </span>
                   <span style={{ fontSize: 9, color: 'var(--sos-text-muted)' }}>(Mặc định)</span>
@@ -295,7 +295,7 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                   }}
                 >
                   <span style={{ fontSize: 20 }}>🔥</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'FIRE' ? '#ea580c' : 'var(--sos-text-primary)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'FIRE' ? 'var(--dm-orange-text)' : 'var(--sos-text-primary)' }}>
                     {lang === 'vi' ? 'Cháy' : 'Fire'}
                   </span>
                   <span style={{ fontSize: 9, color: 'var(--sos-text-muted)' }}>Hỏa hoạn</span>
@@ -318,7 +318,7 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                   }}
                 >
                   <span style={{ fontSize: 20 }}>🚓</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'POLICE' ? '#2563eb' : 'var(--sos-text-primary)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'POLICE' ? 'var(--dm-blue-text)' : 'var(--sos-text-primary)' }}>
                     {lang === 'vi' ? 'An ninh' : 'Police'}
                   </span>
                   <span style={{ fontSize: 9, color: 'var(--sos-text-muted)' }}>Trật tự</span>
@@ -341,7 +341,7 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                   }}
                 >
                   <span style={{ fontSize: 20 }}>🛟</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'RESCUE' ? '#0284c7' : 'var(--sos-text-primary)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: emergencyType === 'RESCUE' ? 'var(--dm-blue-text)' : 'var(--sos-text-primary)' }}>
                     {lang === 'vi' ? 'Cứu hộ' : 'Rescue'}
                   </span>
                   <span style={{ fontSize: 9, color: 'var(--sos-text-muted)' }}>Thiên tai</span>
@@ -427,8 +427,8 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                       transition: 'all 0.2s',
                     }}
                   >
-                    <Camera size={18} style={{ color: '#2563eb' }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#2563eb' }}>
+                    <Camera size={18} style={{ color: 'var(--dm-blue-text)' }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-blue-text)' }}>
                       {lang === 'vi' ? 'Chụp ảnh / Chọn từ thư viện (Nén Base64 tự động)' : 'Capture / Select Photo (Auto Base64 Compress)'}
                     </span>
                     <input
@@ -449,20 +449,20 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
                   <img
                     src={photoBase64}
                     alt="Uploaded preview"
-                    style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--dm-border-strong)' }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sos-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {photoName || 'anh_hien_truong.jpg'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--dm-green-text)', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <CheckCircle2 size={12} /> Đã nén Base64 sẵn sàng gửi
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleRemovePhoto}
-                    style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 6 }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--dm-red-text)', cursor: 'pointer', padding: 6 }}
                     title="Xóa ảnh"
                   >
                     <Trash2 size={16} />

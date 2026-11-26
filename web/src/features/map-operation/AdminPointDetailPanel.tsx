@@ -146,17 +146,17 @@ interface AdminPointDetailPanelProps {
 }
 
 const SHELTER_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  ACTIVE: { label: 'Đang mở cửa tiếp nhận', color: '#15803d', bg: '#dcfce7', border: '#86efac' },
-  FULL: { label: 'Đã đầy chỗ', color: '#c2410c', bg: '#ffedd5', border: '#fdba74' },
-  MAINTENANCE: { label: 'Đang bảo trì', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
-  INACTIVE: { label: 'Tạm ngưng hoạt động', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+  ACTIVE: { label: 'Đang mở cửa tiếp nhận', color: 'var(--dm-green-text)', bg: 'var(--dm-green-bg)', border: 'var(--dm-green-border)' },
+  FULL: { label: 'Đã đầy chỗ', color: 'var(--dm-orange-text)', bg: 'var(--dm-orange-bg)', border: 'var(--dm-orange-border)' },
+  MAINTENANCE: { label: 'Đang bảo trì', color: 'var(--dm-text-secondary)', bg: 'var(--dm-surface-muted)', border: 'var(--dm-border-strong)' },
+  INACTIVE: { label: 'Tạm ngưng hoạt động', color: 'var(--dm-text-secondary)', bg: 'var(--dm-surface-muted)', border: 'var(--dm-border-strong)' },
 };
 
 const HAZARD_SEVERITY_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  CRITICAL: { label: 'Cực kỳ nguy cấp', color: '#b91c1c', bg: '#fef2f2', border: '#fca5a5' },
-  HIGH: { label: 'Nguy hiểm cao', color: '#c2410c', bg: '#fff7ed', border: '#fdba74' },
-  MEDIUM: { label: 'Trung bình', color: '#b45309', bg: '#fefce8', border: '#fde047' },
-  LOW: { label: 'Mức thấp', color: '#475569', bg: '#f8fafc', border: '#cbd5e1' },
+  CRITICAL: { label: 'Cực kỳ nguy cấp', color: 'var(--dm-red-text)', bg: 'var(--dm-red-bg)', border: 'var(--dm-red-border)' },
+  HIGH: { label: 'Nguy hiểm cao', color: 'var(--dm-orange-text)', bg: 'var(--dm-orange-bg)', border: 'var(--dm-orange-border)' },
+  MEDIUM: { label: 'Trung bình', color: 'var(--dm-amber-text)', bg: 'var(--dm-amber-bg)', border: '#fde047' },
+  LOW: { label: 'Mức thấp', color: 'var(--dm-text-secondary)', bg: 'var(--dm-surface-subtle)', border: 'var(--dm-border-strong)' },
 };
 
 const getCleanImages = (images?: string[]): string[] =>
@@ -201,9 +201,9 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
       shelterMetrics?.isOverloaded
       ? {
           label: `Quá tải (${shelterMetrics.percent}%)`,
-          color: '#991b1b',
-          bg: '#fef2f2',
-          border: '#fca5a5',
+          color: 'var(--dm-red-text)',
+          bg: 'var(--dm-red-bg)',
+          border: 'var(--dm-red-border)',
         }
       : SHELTER_STATUS_META[point.shelter.status] || SHELTER_STATUS_META.ACTIVE
     : null;
@@ -225,8 +225,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: isShelter ? '#ecfdf5' : '#fef2f2',
-        border: `1px solid ${isShelter ? '#a7f3d0' : '#fecaca'}`,
+        background: isShelter ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+        border: `1px solid ${isShelter ? 'var(--dm-green-border)' : 'var(--dm-red-border)'}`,
       }}
     >
       {isShelter ? (
@@ -268,7 +268,7 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderRadius: 14,
-        border: '1px solid #cbd5e1',
+        border: '1px solid var(--dm-border-strong)',
         boxShadow: '0 14px 36px rgba(15, 23, 42, 0.2)',
         display: 'flex',
         flexDirection: 'column',
@@ -279,8 +279,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
       <div
         style={{
           padding: '12px 14px',
-          borderBottom: '1px solid #e2e8f0',
-          background: '#f8fafc',
+          borderBottom: '1px solid var(--dm-border)',
+          background: 'var(--dm-surface-subtle)',
           display: 'flex',
           alignItems: 'flex-start',
           gap: 11,
@@ -307,7 +307,7 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
               boxShadow: '0 2px 8px rgba(15, 23, 42, 0.14)',
               cursor: 'zoom-in',
               flexShrink: 0,
-              background: '#e2e8f0',
+              background: 'var(--dm-surface-hover)',
             }}
           >
             <img
@@ -333,8 +333,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 letterSpacing: '0.2px',
                 padding: '2px 8px',
                 borderRadius: 999,
-                color: isShelter ? '#047857' : '#b91c1c',
-                background: isShelter ? '#d1fae5' : '#fee2e2',
+                color: isShelter ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
+                background: isShelter ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
               }}
             >
               {isShelter ? <Shield size={11} /> : <AlertTriangle size={11} />}
@@ -346,8 +346,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 fontWeight: 700,
                 padding: '2px 8px',
                 borderRadius: 999,
-                background: '#e2e8f0',
-                color: '#334155',
+                background: 'var(--dm-surface-hover)',
+                color: 'var(--dm-text-secondary)',
               }}
             >
               {isShelter ? shelterTypeLabel : hazardTypeLabel}
@@ -359,7 +359,7 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
               margin: 0,
               fontSize: 14.5,
               fontWeight: 800,
-              color: '#0f172a',
+              color: 'var(--dm-text-strong)',
               lineHeight: 1.3,
               wordBreak: 'break-word',
             }}
@@ -377,9 +377,9 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
             width: 28,
             height: 28,
             borderRadius: 8,
-            border: '1px solid #cbd5e1',
-            background: '#ffffff',
-            color: '#475569',
+            border: '1px solid var(--dm-border-strong)',
+            background: 'var(--dm-surface)',
+            color: 'var(--dm-text-secondary)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -411,9 +411,9 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 height: 156,
                 borderRadius: 10,
                 overflow: 'hidden',
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 cursor: 'zoom-in',
-                background: '#f1f5f9',
+                background: 'var(--dm-surface-muted)',
               }}
             >
               <img
@@ -463,10 +463,10 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                       padding: 0,
                       borderRadius: 8,
                       overflow: 'hidden',
-                      border: '1.5px solid #cbd5e1',
+                      border: '1.5px solid var(--dm-border-strong)',
                       cursor: 'zoom-in',
                       flexShrink: 0,
-                      background: '#f8fafc',
+                      background: 'var(--dm-surface-subtle)',
                     }}
                   >
                     <img
@@ -526,8 +526,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
         {/* Địa chỉ & Tọa độ */}
         <div
           style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
+            background: 'var(--dm-surface-subtle)',
+            border: '1px solid var(--dm-border)',
             borderRadius: 10,
             padding: '10px 11px',
             display: 'flex',
@@ -535,7 +535,7 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
             gap: 6,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12.5, color: '#0f172a' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12.5, color: 'var(--dm-text-strong)' }}>
             <MapPin size={15} color={isShelter ? '#059669' : '#dc2626'} style={{ marginTop: 2, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, lineHeight: 1.4 }}>
@@ -545,11 +545,11 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 const area = isShelter ? point.shelter.areaId : point.hazard.areaId;
                 const areaName = typeof area === 'object' && area !== null ? area.name : '';
                 return areaName ? (
-                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>Khu vực: {areaName}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 2 }}>Khu vực: {areaName}</div>
                 ) : null;
               })()}
               {hasValidCoords && (
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                   GPS: {lat.toFixed(5)}, {lng.toFixed(5)}
                 </div>
               )}
@@ -564,8 +564,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
           return (
             <div
               style={{
-                background: isOverloaded ? '#fef2f2' : '#f0fdf4',
-                border: `1px solid ${isOverloaded ? '#fecaca' : '#bbf7d0'}`,
+                background: isOverloaded ? 'var(--dm-red-bg)' : 'var(--dm-green-bg)',
+                border: `1px solid ${isOverloaded ? 'var(--dm-red-border)' : 'var(--dm-green-border)'}`,
                 borderRadius: 10,
                 padding: '10px 12px',
                 display: 'flex',
@@ -573,37 +573,37 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 gap: 8,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: isOverloaded ? '#991b1b' : '#166534' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: isOverloaded ? 'var(--dm-red-text)' : 'var(--dm-green-text)' }}>
                 <Users size={14} />
                 Tình trạng sức chứa hiện tại
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                <div style={{ background: '#ffffff', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? '#fecaca' : '#dcfce7'}`, textAlign: 'center' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{cap}</div>
-                  <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600 }}>Sức chứa</div>
+                <div style={{ background: 'var(--dm-surface)', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? 'var(--dm-red-border)' : '#dcfce7'}`, textAlign: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dm-text-strong)' }}>{cap}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--dm-text-muted)', fontWeight: 600 }}>Sức chứa</div>
                 </div>
-                <div style={{ background: '#ffffff', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? '#fecaca' : '#dcfce7'}`, textAlign: 'center' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: isOverloaded ? '#b91c1c' : '#0284c7' }}>{occ}</div>
-                  <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600 }}>Đang ở</div>
+                <div style={{ background: 'var(--dm-surface)', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? 'var(--dm-red-border)' : '#dcfce7'}`, textAlign: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: isOverloaded ? 'var(--dm-red-text)' : 'var(--dm-blue-text)' }}>{occ}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--dm-text-muted)', fontWeight: 600 }}>Đang ở</div>
                 </div>
-                <div style={{ background: '#ffffff', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? '#fecaca' : '#dcfce7'}`, textAlign: 'center' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: isOverloaded ? '#b91c1c' : remaining > 0 ? '#16a34a' : '#dc2626' }}>
+                <div style={{ background: 'var(--dm-surface)', borderRadius: 8, padding: '6px 8px', border: `1px solid ${isOverloaded ? 'var(--dm-red-border)' : '#dcfce7'}`, textAlign: 'center' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: isOverloaded ? 'var(--dm-red-text)' : remaining > 0 ? 'var(--dm-green-text)' : 'var(--dm-red-text)' }}>
                     {isOverloaded ? `+${overloadCount}` : remaining}
                   </div>
-                  <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                     {isOverloaded ? 'Quá tải thêm' : 'Còn trống'}
                   </div>
                 </div>
               </div>
               {cap > 0 && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569', marginBottom: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--dm-text-secondary)', marginBottom: 3 }}>
                     <span>Tỷ lệ sử dụng</span>
-                    <strong style={{ color: isOverloaded ? '#991b1b' : pct >= 90 ? '#b91c1c' : '#0f172a' }}>
+                    <strong style={{ color: isOverloaded ? 'var(--dm-red-text)' : pct >= 90 ? 'var(--dm-red-text)' : 'var(--dm-text-strong)' }}>
                       {pct}%{isOverloaded ? ' (Quá tải)' : ''}
                     </strong>
                   </div>
-                  <div style={{ width: '100%', height: 6, background: isOverloaded ? '#fee2e2' : '#dcfce7', borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: 6, background: isOverloaded ? 'var(--dm-red-bg)' : 'var(--dm-green-bg)', borderRadius: 999, overflow: 'hidden' }}>
                     <div
                       style={{
                         width: `${barPercent}%`,
@@ -625,16 +625,16 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
             {point.hazard.description && (
               <div
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: 10,
                   padding: '9px 11px',
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
                   Mô tả hiện trường
                 </div>
-                <div style={{ fontSize: 12.5, color: '#1e293b', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                <div style={{ fontSize: 12.5, color: 'var(--dm-text-body)', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
                   {point.hazard.description}
                 </div>
               </div>
@@ -643,12 +643,12 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
             {point.hazard.reviewNote && (
               <div
                 style={{
-                  background: '#fffbeb',
-                  border: '1px solid #fde68a',
+                  background: 'var(--dm-amber-bg)',
+                  border: '1px solid var(--dm-amber-border)',
                   borderRadius: 10,
                   padding: '8px 11px',
                   fontSize: 12,
-                  color: '#92400e',
+                  color: 'var(--dm-amber-text)',
                   lineHeight: 1.4,
                 }}
               >
@@ -665,8 +665,8 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
             flexDirection: 'column',
             gap: 5,
             fontSize: 11.5,
-            color: '#475569',
-            borderTop: '1px dashed #cbd5e1',
+            color: 'var(--dm-text-secondary)',
+            borderTop: '1px dashed var(--dm-border-strong)',
             paddingTop: 9,
           }}
         >
@@ -743,9 +743,9 @@ export const AdminPointDetailPanel: React.FC<AdminPointDetailPanelProps> = ({
                 gap: 6,
                 padding: '7px 10px',
                 borderRadius: 8,
-                border: '1px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#0f172a',
+                border: '1px solid var(--dm-border-strong)',
+                background: 'var(--dm-surface-subtle)',
+                color: 'var(--dm-text-strong)',
                 fontSize: 12,
                 fontWeight: 700,
                 textDecoration: 'none',

@@ -247,9 +247,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     gap: '8px',
     padding: '7px 10px',
     borderRadius: '6px',
-    border: '1px solid #cbd5e1',
-    background: disabled ? '#f8fafc' : '#ffffff',
-    color: isPlaceholder ? '#64748b' : '#0f172a',
+    border: '1px solid var(--dm-border-strong)',
+    background: disabled ? 'var(--dm-surface-subtle)' : 'var(--dm-surface)',
+    color: isPlaceholder ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
     fontSize: '12.5px',
     fontWeight: 500,
     lineHeight: 1.4,
@@ -279,9 +279,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               ...menuStyle,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--dm-surface)',
               borderRadius: '10px',
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--dm-border-strong)',
               boxShadow:
                 '0 14px 36px -6px rgba(15, 23, 42, 0.22), 0 6px 14px -4px rgba(15, 23, 42, 0.08)',
               overflow: 'hidden',
@@ -293,8 +293,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             <div
               style={{
                 padding: '8px',
-                borderBottom: '1px solid #e2e8f0',
-                backgroundColor: '#f8fafc',
+                borderBottom: '1px solid var(--dm-border)',
+                backgroundColor: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
@@ -309,11 +309,11 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   gap: '7px',
                   padding: '6px 10px',
                   borderRadius: '7px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
+                  border: '1px solid var(--dm-border-strong)',
+                  backgroundColor: 'var(--dm-surface)',
                 }}
               >
-                <Search size={14} style={{ color: '#64748b', flexShrink: 0 }} />
+                <Search size={14} style={{ color: 'var(--dm-text-muted)', flexShrink: 0 }} />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -328,7 +328,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     outline: 'none',
                     background: 'transparent',
                     fontSize: '12.5px',
-                    color: '#0f172a',
+                    color: 'var(--dm-text-strong)',
                     padding: 0,
                     fontFamily: 'inherit',
                   }}
@@ -344,7 +344,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     style={{
                       border: 'none',
                       background: 'transparent',
-                      color: '#94a3b8',
+                      color: 'var(--dm-text-muted)',
                       cursor: 'pointer',
                       padding: '1px',
                       display: 'inline-flex',
@@ -372,7 +372,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   style={{
                     padding: '18px 12px',
                     fontSize: '12.5px',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     textAlign: 'center',
                   }}
                 >
@@ -406,15 +406,15 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                         border: 'none',
                         borderRadius: '7px',
                         backgroundColor: isSelected
-                          ? '#eff6ff'
+                          ? 'var(--dm-blue-bg)'
                           : isHighlighted
-                            ? '#f1f5f9'
+                            ? 'var(--dm-surface-muted)'
                             : 'transparent',
                         color: opt.disabled
-                          ? '#94a3b8'
+                          ? 'var(--dm-text-muted)'
                           : isSelected
-                            ? '#0369a1'
-                            : '#0f172a',
+                            ? 'var(--dm-blue-text)'
+                            : 'var(--dm-text-strong)',
                         cursor: opt.disabled ? 'not-allowed' : 'pointer',
                         textAlign: 'left',
                         fontSize: '12.5px',
@@ -437,7 +437,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           <span
                             style={{
                               fontSize: '11px',
-                              color: isSelected ? '#0284c7' : '#64748b',
+                              color: isSelected ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
                               fontWeight: 400,
                               wordBreak: 'break-word',
                             }}
@@ -459,8 +459,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                           <span
                             style={{
                               fontSize: '10.5px',
-                              color: isSelected ? '#0369a1' : '#64748b',
-                              backgroundColor: isSelected ? '#dbeafe' : '#f1f5f9',
+                              color: isSelected ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
+                              backgroundColor: isSelected ? 'var(--dm-blue-bg)' : 'var(--dm-surface-muted)',
                               padding: '1px 6px',
                               borderRadius: '999px',
                               fontWeight: 600,
@@ -469,7 +469,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                             {opt.badgeText}
                           </span>
                         )}
-                        {isSelected && <Check size={14} style={{ color: '#0284c7' }} />}
+                        {isSelected && <Check size={14} style={{ color: 'var(--dm-blue-text)' }} />}
                       </span>
                     </button>
                   );
@@ -481,10 +481,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
               <div
                 style={{
                   padding: '5px 10px',
-                  borderTop: '1px solid #f1f5f9',
-                  backgroundColor: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  backgroundColor: 'var(--dm-surface-subtle)',
                   fontSize: '11px',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -537,7 +537,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
           size={15}
           style={{
             flexShrink: 0,
-            color: '#64748b',
+            color: 'var(--dm-text-muted)',
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.15s ease',
           }}

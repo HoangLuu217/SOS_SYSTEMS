@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   font-family: var(--sos-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-container {
@@ -19,8 +19,8 @@
   height: 100%;
   min-height: 0;
   flex: 1;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
   border-radius: var(--sos-radius-md, 12px);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
@@ -35,8 +35,8 @@
   min-width: 320px;
   max-width: 400px;
   flex-shrink: 0;
-  border-right: 1px solid var(--sos-border, #e2e8f0);
-  background: var(--sos-surface, #ffffff);
+  border-right: 1px solid var(--sos-border, var(--dm-border));
+  background: var(--sos-surface, var(--dm-surface));
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -44,7 +44,7 @@
 
 .sos-chat-sidebar-header {
   padding: 16px 16px 12px 16px;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -54,7 +54,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   letter-spacing: -0.2px;
 }
 
@@ -68,22 +68,22 @@
   box-sizing: border-box;
   padding: 8px 12px 8px 34px;
   border-radius: var(--sos-radius-sm, 8px);
-  background: var(--sos-bg, #f8fafc);
-  border: 1px solid var(--sos-border, #e2e8f0);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-bg, var(--dm-surface-subtle));
+  border: 1px solid var(--sos-border, var(--dm-border));
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-size: 13px;
   outline: none;
   transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .sos-chat-search-input::placeholder {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 .sos-chat-search-input:focus {
   border-color: var(--sos-primary, #0284c7);
   box-shadow: 0 0 0 3px var(--sos-ring, rgba(2, 132, 199, 0.24));
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
 }
 
 .sos-chat-search-icon {
@@ -91,7 +91,7 @@
   left: 11px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   pointer-events: none;
 }
 
@@ -102,8 +102,8 @@
 .sos-chat-filter-select-container {
   position: relative;
   padding: 8px 12px;
-  background: var(--sos-bg, #f8fafc);
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-bg, var(--dm-surface-subtle));
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-filter-select-trigger {
@@ -113,20 +113,20 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-control-border, #cbd5e1);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-control-border, var(--dm-border-strong));
   border-radius: var(--sos-radius-sm, 8px);
   padding: 0 12px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   cursor: pointer;
   transition: all 0.15s ease;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sos-chat-filter-select-trigger:hover {
-  background: var(--sos-surface-muted, #f1f5f9);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
   border-color: var(--sos-text-muted, #64748b);
 }
 
@@ -138,7 +138,7 @@
 }
 
 .sos-chat-filter-trigger-icon {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   flex-shrink: 0;
 }
 
@@ -148,12 +148,12 @@
   text-overflow: ellipsis;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-filter-badge {
-  background: var(--sos-primary-soft, #e0f2fe);
-  color: var(--sos-primary, #0284c7);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
+  color: var(--sos-primary, var(--dm-blue-text));
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
@@ -161,7 +161,7 @@
 }
 
 .sos-chat-filter-chevron {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
@@ -171,8 +171,8 @@
   top: calc(100% - 2px);
   left: 12px;
   right: 12px;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-control-border, #cbd5e1);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-control-border, var(--dm-border-strong));
   border-radius: var(--sos-radius-sm, 8px);
   box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
   padding: 5px;
@@ -194,20 +194,20 @@
   border-radius: var(--sos-radius-xs, 6px);
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
 }
 
 .sos-chat-filter-menu-item:hover {
-  background: var(--sos-surface-muted, #f1f5f9);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-filter-menu-item.active {
-  background: var(--sos-primary-soft, #e0f2fe);
-  color: var(--sos-primary, #0284c7);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
+  color: var(--sos-primary, var(--dm-blue-text));
   font-weight: 700;
 }
 
@@ -226,15 +226,15 @@
 .sos-chat-filter-item-count {
   font-size: 11px;
   font-weight: 700;
-  color: var(--sos-text-muted, #64748b);
-  background: var(--sos-surface-muted, #f1f5f9);
+  color: var(--sos-text-muted, var(--dm-text-muted));
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
   padding: 2px 6px;
   border-radius: var(--sos-radius-pill, 9999px);
 }
 
 .sos-chat-filter-menu-item.active .sos-chat-filter-item-count {
-  background: var(--sos-primary-soft-hover, #bae6fd);
-  color: var(--sos-primary, #0284c7);
+  background: var(--sos-primary-soft-hover, var(--dm-blue-bg-strong));
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 /* ==========================================================================
@@ -252,7 +252,7 @@
 .sos-chat-list-empty {
   padding: 36px 16px;
   text-align: center;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-size: 13px;
 }
 
@@ -262,19 +262,19 @@
   gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   border-left: 3px solid transparent;
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
   transition: background-color 0.15s ease, border-color 0.15s ease;
   position: relative;
 }
 
 .sos-chat-item:hover {
-  background: var(--sos-table-hover, #f0f9ff);
+  background: var(--sos-table-hover, var(--dm-blue-bg));
 }
 
 .sos-chat-item.active {
-  background: var(--sos-primary-soft, #e0f2fe);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
   border-left-color: var(--sos-primary, #0284c7);
 }
 
@@ -338,19 +338,19 @@
 .sos-chat-item-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .sos-chat-item.active .sos-chat-item-name {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 .sos-chat-item-time {
   font-size: 11px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -364,7 +364,7 @@
 
 .sos-chat-item-preview {
   font-size: 12px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -392,7 +392,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
 }
 
 .sos-chat-no-conv {
@@ -401,7 +401,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-size: 13.5px;
   padding: 24px;
   text-align: center;
@@ -411,8 +411,8 @@
 /* Header hội thoại */
 .sos-chat-main-header {
   padding: 12px 20px;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
-  background: var(--sos-surface, #ffffff);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
+  background: var(--sos-surface, var(--dm-surface));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -439,14 +439,14 @@
 }
 
 .sos-chat-partner-name-link:hover {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   text-decoration: underline;
 }
 
 .sos-chat-main-title {
   font-size: 14.5px;
   font-weight: 700;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -457,7 +457,7 @@
 
 .sos-chat-main-subtitle {
   font-size: 12px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   display: flex;
   align-items: center;
   gap: 6px;
@@ -481,8 +481,8 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
   border-radius: var(--sos-radius-sm, 8px);
   box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
   padding: 5px;
@@ -504,7 +504,7 @@
   border-radius: var(--sos-radius-xs, 6px);
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   cursor: pointer;
   transition: all 0.15s ease;
   text-decoration: none;
@@ -512,8 +512,8 @@
 }
 
 .sos-chat-dropdown-item:hover {
-  background: var(--sos-surface-muted, #f1f5f9);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-back-btn {
@@ -529,7 +529,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 20px;
-  background: var(--sos-bg, #f8fafc);
+  background: var(--sos-bg, var(--dm-surface-subtle));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -546,26 +546,26 @@
   width: 52px;
   height: 52px;
   border-radius: var(--sos-radius-md, 12px);
-  background: var(--sos-surface-muted, #f1f5f9);
-  color: var(--sos-text-muted, #64748b);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  color: var(--sos-text-muted, var(--dm-text-muted));
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px auto;
-  border: 1px solid var(--sos-border, #e2e8f0);
+  border: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-empty-title {
   margin: 0 0 6px 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-empty-desc {
   margin: 0;
   font-size: 13px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 /* Message row */
@@ -628,7 +628,7 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 .sos-chat-msg-row.own .sos-chat-msg-meta {
@@ -637,7 +637,7 @@
 
 .sos-chat-msg-sender {
   font-weight: 600;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-msg-sender.clickable {
@@ -645,7 +645,7 @@
 }
 
 .sos-chat-msg-sender.clickable:hover {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   text-decoration: underline;
 }
 
@@ -659,9 +659,9 @@
 
 /* Tin nhắn từ người khác */
 .sos-chat-msg-row:not(.own) .sos-chat-msg-card {
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
+  color: var(--sos-text-primary, var(--dm-text-strong));
   border-top-left-radius: 2px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -694,7 +694,7 @@
 }
 
 .sos-chat-msg-row:not(.own) .sos-chat-msg-time-status {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 /* ==========================================================================
@@ -707,17 +707,17 @@
   gap: 8px;
   min-width: 290px;
   max-width: 380px;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-danger-border, #fca5a5);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-danger-border, var(--dm-red-border));
   border-radius: var(--sos-radius-sm, 8px);
   padding: 10px 12px;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-msg-row.own .sos-chat-sos-card {
-  background: var(--sos-surface, #ffffff);
-  border-color: var(--sos-border, #e2e8f0);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface, var(--dm-surface));
+  border-color: var(--sos-border, var(--dm-border));
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-sos-header {
@@ -726,7 +726,7 @@
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px dashed var(--sos-border, #e2e8f0);
+  border-bottom: 1px dashed var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-sos-badge {
@@ -735,7 +735,7 @@
   gap: 6px;
   font-size: 11px;
   font-weight: 800;
-  color: var(--sos-emergency, #dc2626);
+  color: var(--sos-emergency, var(--dm-red-text));
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
@@ -763,13 +763,13 @@
 .sos-chat-sos-code {
   font-size: 13.5px;
   font-weight: 900;
-  color: var(--sos-emergency, #dc2626);
+  color: var(--sos-emergency, var(--dm-red-text));
   font-family: var(--sos-font-mono, monospace);
 }
 
 .sos-chat-sos-code.cancelled {
   text-decoration: line-through;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 .sos-chat-sos-details-grid {
@@ -787,7 +787,7 @@
 }
 
 .sos-sos-label {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -797,23 +797,23 @@
 }
 
 .sos-sos-val {
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   font-weight: 500;
 }
 
 .sos-sos-val-bold {
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-weight: 700;
 }
 
 .sos-sos-val-mono {
   font-family: var(--sos-font-mono, monospace);
   font-weight: 700;
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 .sos-sos-phone-link {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   font-weight: 700;
   text-decoration: none;
   display: inline-flex;
@@ -825,12 +825,12 @@
 }
 
 .sos-chat-sos-desc-box {
-  background: var(--sos-danger-soft, #fee2e2);
+  background: var(--sos-danger-soft, var(--dm-red-bg));
   border-left: 3px solid var(--sos-emergency, #dc2626);
   padding: 6px 8px;
   border-radius: var(--sos-radius-xs, 6px);
   font-size: 11.5px;
-  color: var(--sos-danger-text, #b91c1c);
+  color: var(--sos-danger-text, var(--dm-red-text));
   margin-top: 3px;
 }
 
@@ -847,7 +847,7 @@
   height: 58px;
   border-radius: var(--sos-radius-xs, 6px);
   overflow: hidden;
-  border: 1px solid var(--sos-danger-border, #fca5a5);
+  border: 1px solid var(--sos-danger-border, var(--dm-red-border));
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -869,7 +869,7 @@
   gap: 8px;
   margin-top: 6px;
   padding-top: 8px;
-  border-top: 1px dashed var(--sos-border, #e2e8f0);
+  border-top: 1px dashed var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-cancelled-banner {
@@ -877,8 +877,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: var(--sos-danger-soft, #fee2e2);
-  color: var(--sos-danger-text, #b91c1c);
+  background: var(--sos-danger-soft, var(--dm-red-bg));
+  color: var(--sos-danger-text, var(--dm-red-text));
   padding: 8px 12px;
   border-radius: var(--sos-radius-xs, 6px);
   font-size: 12px;
@@ -896,16 +896,16 @@
   gap: 5px;
   min-width: 250px;
   max-width: 340px;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-primary-border, #7dd3fc);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-primary-border, var(--dm-blue-border));
   border-radius: var(--sos-radius-sm, 8px);
   padding: 10px 12px;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-msg-row.own .sos-chat-gps-box {
-  background: var(--sos-surface, #ffffff);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface, var(--dm-surface));
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .sos-chat-gps-badge {
@@ -914,7 +914,7 @@
   gap: 6px;
   font-size: 11px;
   font-weight: 800;
-  color: var(--sos-emergency, #dc2626);
+  color: var(--sos-emergency, var(--dm-red-text));
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -922,19 +922,19 @@
 .sos-chat-gps-coords-text {
   font-size: 13px;
   font-weight: 700;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-family: var(--sos-font-mono, monospace);
-  background: var(--sos-surface-muted, #f1f5f9);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
   padding: 4px 8px;
   border-radius: var(--sos-radius-xs, 6px);
   display: inline-block;
   align-self: flex-start;
-  border: 1px solid var(--sos-border, #e2e8f0);
+  border: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-gps-addr-text {
   font-size: 12px;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   line-height: 1.4;
   margin-top: 1px;
 }
@@ -945,7 +945,7 @@
   gap: 8px;
   margin-top: 6px;
   padding-top: 8px;
-  border-top: 1px dashed var(--sos-border, #e2e8f0);
+  border-top: 1px dashed var(--sos-border, var(--dm-border));
 }
 
 /* Hình ảnh trong tin nhắn */
@@ -963,7 +963,7 @@
   border-radius: var(--sos-radius-xs, 6px);
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid var(--sos-border, #e2e8f0);
+  border: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .sos-chat-thumb-img {
@@ -996,8 +996,8 @@
 
 .sos-chat-composer {
   flex-shrink: 0;
-  background: var(--sos-surface, #ffffff);
-  border-top: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border-top: 1px solid var(--sos-border, var(--dm-border));
   display: flex;
   flex-direction: column;
 }
@@ -1007,15 +1007,15 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--sos-surface, #ffffff);
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   flex-wrap: wrap;
 }
 
 .sos-chat-quick-label {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   white-space: nowrap;
 }
 
@@ -1031,7 +1031,7 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
 }
 
 .sos-chat-textarea {
@@ -1041,9 +1041,9 @@
   box-sizing: border-box;
   padding: 9px 12px;
   border-radius: var(--sos-radius-sm, 8px);
-  background: var(--sos-bg, #f8fafc);
-  border: 1px solid var(--sos-control-border, #cbd5e1);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-bg, var(--dm-surface-subtle));
+  border: 1px solid var(--sos-control-border, var(--dm-border-strong));
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-size: 13.5px;
   font-family: inherit;
   line-height: 1.45;
@@ -1053,13 +1053,13 @@
 }
 
 .sos-chat-textarea::placeholder {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 .sos-chat-textarea:focus {
   border-color: var(--sos-primary, #0284c7);
   box-shadow: 0 0 0 3px var(--sos-ring, rgba(2, 132, 199, 0.24));
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
 }
 
 /* ==========================================================================
@@ -1129,7 +1129,7 @@
   max-width: 95vw;
   height: 100vh;
   max-height: 100vh;
-  background: var(--sos-bg, #f8fafc);
+  background: var(--sos-bg, var(--dm-surface-subtle));
   box-shadow: -10px 0 36px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
@@ -1156,8 +1156,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
-  background: var(--sos-surface, #ffffff);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
+  background: var(--sos-surface, var(--dm-surface));
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
   z-index: 10;
@@ -1174,7 +1174,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 800;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   letter-spacing: -0.2px;
   text-transform: uppercase;
 }
@@ -1188,15 +1188,15 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  background: var(--sos-bg, #f8fafc);
+  background: var(--sos-bg, var(--dm-surface-subtle));
 }
 
 .ra-drawer-section {
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
   border-radius: var(--sos-radius-md, 12px);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
@@ -1206,11 +1206,11 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: var(--sos-surface-muted, #f1f5f9);
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   letter-spacing: 0.2px;
   border-top-left-radius: var(--sos-radius-md, 12px);
   border-top-right-radius: var(--sos-radius-md, 12px);
@@ -1228,7 +1228,7 @@
   align-items: center;
   gap: 14px;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .ra-profile-avatar {
@@ -1271,12 +1271,12 @@
   margin: 0;
   font-size: 16px;
   font-weight: 800;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .ra-profile-sub {
   font-size: 12.5px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-weight: 500;
 }
 
@@ -1295,46 +1295,46 @@
 .ra-kv-label {
   font-size: 11px;
   font-weight: 700;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .ra-kv-value {
   font-size: 13.5px;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-weight: 600;
 }
 
 .ra-kv-value.phone {
   font-family: var(--sos-font-mono, monospace);
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 .ra-address-box {
   padding: 10px 12px;
   border-radius: var(--sos-radius-sm, 8px);
-  background: var(--sos-surface-muted, #f1f5f9);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  border: 1px solid var(--sos-border, var(--dm-border));
 }
 
 .ra-address-box.highlight-area {
-  background: var(--sos-primary-soft, #e0f2fe);
-  border-color: var(--sos-primary-border, #7dd3fc);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
+  border-color: var(--sos-primary-border, var(--dm-blue-border));
 }
 
 .ra-address-box.highlight-area .area-text {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   font-weight: 700;
 }
 
 .sos-citizen-empty-hint {
   font-size: 12px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-style: italic;
   padding: 8px 12px;
-  background: var(--sos-surface-muted, #f1f5f9);
-  border: 1px dashed var(--sos-control-border, #cbd5e1);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  border: 1px dashed var(--sos-control-border, var(--dm-border-strong));
   border-radius: var(--sos-radius-xs, 6px);
   display: flex;
   align-items: center;
@@ -1342,8 +1342,8 @@
 
 /* Latest SOS card in drawer */
 .sos-citizen-latest-sos-box {
-  background: var(--sos-danger-soft, #fee2e2);
-  border: 1px solid var(--sos-danger-border, #fca5a5);
+  background: var(--sos-danger-soft, var(--dm-red-bg));
+  border: 1px solid var(--sos-danger-border, var(--dm-red-border));
   border-left: 3px solid var(--sos-emergency, #dc2626);
   border-radius: var(--sos-radius-sm, 8px);
   padding: 10px 12px;
@@ -1361,13 +1361,13 @@
 .sos-citizen-sos-code {
   font-size: 13px;
   font-weight: 800;
-  color: var(--sos-emergency, #dc2626);
+  color: var(--sos-emergency, var(--dm-red-text));
   font-family: var(--sos-font-mono, monospace);
 }
 
 .sos-citizen-sos-desc {
   font-size: 12px;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   line-height: 1.4;
 }
 
@@ -1380,8 +1380,8 @@
 
 .ra-drawer-footer {
   padding: 14px 24px;
-  background: var(--sos-surface, #ffffff);
-  border-top: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border-top: 1px solid var(--sos-border, var(--dm-border));
   box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
   display: flex;

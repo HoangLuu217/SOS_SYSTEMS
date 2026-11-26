@@ -141,7 +141,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     fontSize: 12.5,
     fontWeight: 700,
     lineHeight: 1.3,
-    border: '1px solid #e2e8f0',
+    border: '1px solid var(--dm-border)',
     boxSizing: 'border-box',
   };
 
@@ -150,7 +150,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
       <div
         style={{
           padding: '8px 12px 9px 12px',
-          background: '#ffffff',
+          background: 'var(--dm-surface)',
           display: 'flex',
           flexDirection: 'column',
           gap: 7,
@@ -163,7 +163,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                   <div
                     style={{
                       fontWeight: 800,
-                      color: '#0f172a',
+                      color: 'var(--dm-text-strong)',
                       fontSize: 17,
                       letterSpacing: '-0.2px',
                       lineHeight: 1.3,
@@ -180,9 +180,9 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: '#0369a1',
-                      background: '#e0f2fe',
-                      border: '1px solid #bae6fd',
+                      color: 'var(--dm-blue-text)',
+                      background: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       padding: '2px 9px',
                       borderRadius: 999,
                       lineHeight: 1.35,
@@ -200,13 +200,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     gap: 5,
                     fontSize: 13.5,
                     fontWeight: 600,
-                    color: '#334155',
+                    color: 'var(--dm-text-secondary)',
                     lineHeight: 1.35,
                     minWidth: 0,
                   }}
                   title={cleanLocationName}
                 >
-                  <MapPin size={14} style={{ color: '#0284c7', flexShrink: 0 }} />
+                  <MapPin size={14} style={{ color: 'var(--dm-blue-text)', flexShrink: 0 }} />
                   <span style={{ minWidth: 0 }}>{cleanLocationName}</span>
                 </div>
               </div>
@@ -217,13 +217,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 5,
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 fontWeight: 700,
                 textDecoration: 'none',
-                background: '#f8fafc',
+                background: 'var(--dm-surface-subtle)',
                 padding: '5px 10px',
                 borderRadius: 7,
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 fontSize: 12.5,
                 flexShrink: 0,
                 marginTop: 1,
@@ -231,7 +231,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               }}
               title="Gọi trực tiếp cho người dân"
             >
-              <Phone size={12.5} style={{ color: '#475569' }} />
+              <Phone size={12.5} style={{ color: 'var(--dm-text-secondary)' }} />
               <span>{selectedSos.citizenPhone}</span>
             </a>
           </div>
@@ -246,8 +246,8 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               >
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 7,
                     padding: '5px 10px',
                     display: 'flex',
@@ -260,7 +260,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     style={{
                       fontSize: 10,
                       fontWeight: 800,
-                      color: '#64748b',
+                      color: 'var(--dm-text-muted)',
                       letterSpacing: '0.35px',
                       textTransform: 'uppercase',
                     }}
@@ -274,18 +274,18 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                       gap: 5,
                       fontSize: 12.5,
                       fontWeight: 800,
-                      color: '#0f172a',
+                      color: 'var(--dm-text-strong)',
                     }}
                   >
-                    <Users size={13} style={{ color: '#475569', flexShrink: 0 }} />
+                    <Users size={13} style={{ color: 'var(--dm-text-secondary)', flexShrink: 0 }} />
                     <span>{selectedSos.affectedPeople} người</span>
                   </span>
                 </div>
 
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 7,
                     padding: '5px 10px',
                     display: 'flex',
@@ -299,7 +299,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     style={{
                       fontSize: 10,
                       fontWeight: 800,
-                      color: '#64748b',
+                      color: 'var(--dm-text-muted)',
                       letterSpacing: '0.35px',
                       textTransform: 'uppercase',
                     }}
@@ -310,7 +310,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     style={{
                       fontSize: 12.5,
                       fontWeight: secondaryTagLabel ? 700 : 600,
-                      color: secondaryTagLabel ? '#0f172a' : '#64748b',
+                      color: secondaryTagLabel ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)',
                       lineHeight: 1.3,
                     }}
                   >
@@ -325,9 +325,9 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: '#475569',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
+                    color: 'var(--dm-text-secondary)',
+                    background: 'var(--dm-surface)',
+                    border: '1px solid var(--dm-border-strong)',
                     borderRadius: 6,
                     padding: '5px 9px',
                   }}
@@ -356,15 +356,15 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     }}
                     style={{
                       ...uniformBoxStyle,
-                      background: isDetailExpanded ? '#e2e8f0' : '#ffffff',
-                      border: isDetailExpanded ? '1px solid #94a3b8' : '1px solid #cbd5e1',
+                      background: isDetailExpanded ? 'var(--dm-surface-hover)' : 'var(--dm-surface)',
+                      border: isDetailExpanded ? '1px solid var(--dm-border-strong)' : '1px solid var(--dm-border-strong)',
                       cursor: 'pointer',
-                      color: isDetailExpanded ? '#0f172a' : '#334155',
+                      color: isDetailExpanded ? 'var(--dm-text-strong)' : 'var(--dm-text-secondary)',
                       transition: 'all 0.15s ease',
                     }}
                     title="Nhấn để xem lời nhắn chi tiết từ hiện trường"
                   >
-                    <MessageSquareText size={13} style={{ color: isDetailExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+                    <MessageSquareText size={13} style={{ color: isDetailExpanded ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)', flexShrink: 0 }} />
                     <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
                       {isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}
                     </span>
@@ -380,19 +380,19 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                   }}
                   style={{
                     ...uniformBoxStyle,
-                    background: isSuppliesExpanded ? '#e2e8f0' : '#ffffff',
+                    background: isSuppliesExpanded ? 'var(--dm-surface-hover)' : 'var(--dm-surface)',
                     border: isSuppliesExpanded
-                      ? '1px solid #94a3b8'
+                      ? '1px solid var(--dm-border-strong)'
                       : allocatedCount > 0
                         ? '1px solid #64748b'
-                        : '1px solid #cbd5e1',
+                        : '1px solid var(--dm-border-strong)',
                     cursor: 'pointer',
-                    color: allocatedCount > 0 || isSuppliesExpanded ? '#0f172a' : '#334155',
+                    color: allocatedCount > 0 || isSuppliesExpanded ? 'var(--dm-text-strong)' : 'var(--dm-text-secondary)',
                     transition: 'all 0.15s ease',
                   }}
                   title="Quản lý vật tư và trang thiết bị cấp phát cho ca cứu nạn"
                 >
-                  <Package size={13} style={{ color: allocatedCount > 0 || isSuppliesExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+                  <Package size={13} style={{ color: allocatedCount > 0 || isSuppliesExpanded ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)', flexShrink: 0 }} />
                   <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
                     {isSuppliesExpanded
                       ? 'Đóng kho vật tư'
@@ -418,18 +418,18 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     <div
                       style={{
                         padding: '8px 11px',
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                         borderLeft: '3px solid #64748b',
                         borderRadius: '0 6px 6px 0',
-                        borderTop: '1px solid #e2e8f0',
-                        borderRight: '1px solid #e2e8f0',
-                        borderBottom: '1px solid #e2e8f0',
+                        borderTop: '1px solid var(--dm-border)',
+                        borderRight: '1px solid var(--dm-border)',
+                        borderBottom: '1px solid var(--dm-border)',
                       }}
                     >
                       <div
                         style={{
                           fontStyle: 'italic',
-                          color: '#1e293b',
+                          color: 'var(--dm-text-body)',
                           lineHeight: 1.45,
                           fontSize: 12.5,
                           fontWeight: 600,
@@ -451,7 +451,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                           borderRadius: 6,
                           overflow: 'hidden',
                           cursor: 'pointer',
-                          border: '1.5px solid #cbd5e1',
+                          border: '1.5px solid var(--dm-border-strong)',
                           flexShrink: 0,
                           boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                         }}
@@ -470,7 +470,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                           background: 'none',
                           border: 'none',
                           padding: 0,
-                          color: '#0284c7',
+                          color: 'var(--dm-blue-text)',
                           fontSize: 12,
                           fontWeight: 800,
                           cursor: 'pointer',
@@ -494,26 +494,26 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 6,
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border-strong)',
                     borderRadius: 8,
                     padding: '8px 10px',
                     animation: 'fadeIn 0.2s ease-in-out',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--dm-text-secondary)', textTransform: 'uppercase' }}>
                       Kho vật tư cứu trợ &amp; PCTT:
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
                     {isLoadingSupplies ? (
-                      <div style={{ padding: '14px 0', textAlign: 'center', fontSize: 11.5, color: '#64748b' }}>
+                      <div style={{ padding: '14px 0', textAlign: 'center', fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
                         Đang kiểm tra kho vật tư khu vực...
                       </div>
                     ) : areaSupplies.length === 0 ? (
-                      <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 11.5, color: '#94a3b8', fontStyle: 'italic' }}>
+                      <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 11.5, color: 'var(--dm-text-muted)', fontStyle: 'italic' }}>
                         Kho khu vực hiện chưa có trang thiết bị/vật tư khả dụng.
                       </div>
                     ) : (
@@ -532,8 +532,8 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                               alignItems: isHovered ? 'flex-start' : 'center',
                               justifyContent: 'space-between',
                               gap: 8,
-                              background: isHovered ? (qty > 0 ? '#e0f2fe' : '#f8fafc') : qty > 0 ? '#f0f9ff' : '#ffffff',
-                              border: isHovered ? '1.5px solid #0284c7' : qty > 0 ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                              background: isHovered ? (qty > 0 ? 'var(--dm-blue-bg)' : 'var(--dm-surface-subtle)') : qty > 0 ? 'var(--dm-blue-bg)' : 'var(--dm-surface)',
+                              border: isHovered ? '1.5px solid #0284c7' : qty > 0 ? '1px solid var(--dm-blue-border)' : '1px solid var(--dm-border)',
                               boxShadow: isHovered ? '0 4px 12px rgba(2, 132, 199, 0.12)' : '0 1px 2px rgba(0,0,0,0.03)',
                               padding: '6px 9px',
                               borderRadius: 7,
@@ -546,7 +546,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                                 title={`${supply.name} • Tồn kho: ${supply.quantity} ${supply.unit} (${supply.supplyType === 'CONSUMABLE' ? 'Tiêu hao' : 'Tái sử dụng'})`}
                                 style={{
                                   fontWeight: 700,
-                                  color: isHovered ? '#0284c7' : '#0f172a',
+                                  color: isHovered ? 'var(--dm-blue-text)' : 'var(--dm-text-strong)',
                                   fontSize: 12,
                                   lineHeight: 1.35,
                                   wordBreak: 'break-word',
@@ -559,10 +559,10 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                               >
                                 {supply.name}
                               </div>
-                              <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span>Kho còn: <strong style={{ color: supply.quantity > 0 ? '#0f172a' : '#ef4444' }}>{supply.quantity} {supply.unit}</strong></span>
+                              <div style={{ fontSize: 10.5, color: 'var(--dm-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>Kho còn: <strong style={{ color: supply.quantity > 0 ? 'var(--dm-text-strong)' : '#ef4444' }}>{supply.quantity} {supply.unit}</strong></span>
                                 <span>•</span>
-                                <span style={{ color: supply.supplyType === 'CONSUMABLE' ? '#ea580c' : '#0284c7', fontWeight: 600 }}>
+                                <span style={{ color: supply.supplyType === 'CONSUMABLE' ? 'var(--dm-orange-text)' : 'var(--dm-blue-text)', fontWeight: 600 }}>
                                   {supply.supplyType === 'CONSUMABLE' ? 'Tiêu hao' : 'Tái sử dụng'}
                                 </span>
                               </div>
@@ -578,13 +578,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                                   width: 24,
                                   height: 24,
                                   borderRadius: 4,
-                                  border: '1px solid #cbd5e1',
-                                  background: qty <= 0 ? '#f1f5f9' : '#ffffff',
+                                  border: '1px solid var(--dm-border-strong)',
+                                  background: qty <= 0 ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
                                   cursor: qty <= 0 ? 'not-allowed' : 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  color: qty <= 0 ? '#94a3b8' : '#0f172a',
+                                  color: qty <= 0 ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
                                   transition: 'all 0.15s ease',
                                 }}
                               >
@@ -605,13 +605,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                                   textAlign: 'center',
                                   fontWeight: 800,
                                   fontSize: 12,
-                                  color: qty > 0 ? '#0284c7' : '#64748b',
-                                  background: '#ffffff',
+                                  color: qty > 0 ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
+                                  background: 'var(--dm-surface)',
                                   border: qty >= maxAvailable && maxAvailable > 0
                                     ? '1.5px solid #f59e0b'
                                     : qty > 0
                                       ? '1.5px solid #0284c7'
-                                      : '1px solid #cbd5e1',
+                                      : '1px solid var(--dm-border-strong)',
                                   borderRadius: 4,
                                   outline: 'none',
                                   padding: '0 2px',
@@ -627,13 +627,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                                   width: 24,
                                   height: 24,
                                   borderRadius: 4,
-                                  border: qty >= maxAvailable ? '1px solid #cbd5e1' : '1px solid #0284c7',
-                                  background: qty >= maxAvailable ? '#f1f5f9' : '#0284c7',
+                                  border: qty >= maxAvailable ? '1px solid var(--dm-border-strong)' : '1px solid #0284c7',
+                                  background: qty >= maxAvailable ? 'var(--dm-surface-muted)' : '#0284c7',
                                   cursor: qty >= maxAvailable ? 'not-allowed' : 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  color: qty >= maxAvailable ? '#94a3b8' : '#ffffff',
+                                  color: qty >= maxAvailable ? 'var(--dm-text-muted)' : '#ffffff',
                                   transition: 'all 0.15s ease',
                                 }}
                               >

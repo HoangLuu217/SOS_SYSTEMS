@@ -423,9 +423,9 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
         <div className="sos-view-card-header">
           <div className="sos-view-card-title">
             <History size={20} color="#eab308" />
-            <span>Nhật Ký &amp; Dòng Thời Gian Điều Hành Thực Địa</span>
+            <span>Nhật ký hoạt động</span>
             <span className="sos-badge verified" style={{ fontSize: '11px', marginLeft: '6px' }}>
-              {filteredLogs.length} / {totalCount} sự kiện
+              {filteredLogs.length} / {totalCount}
             </span>
           </div>
 
@@ -478,8 +478,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
 
             <button
               type="button"
-              className="sos-btn-action"
-              style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569' }}
+              className="sos-btn sos-btn--outline sos-btn--sm"
               onClick={loadLogs}
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -540,7 +539,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
             {auditSearchTerm && (
               <button
                 type="button"
-                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--dm-text-muted)', cursor: 'pointer' }}
                 onClick={() => setAuditSearchTerm('')}
               >
                 <X size={14} />
@@ -551,7 +550,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
 
         {/* DANH SÁCH DÒNG THỜI GIAN KẾT NỐI */}
         {filteredLogs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
             <History size={40} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
             <div style={{ fontSize: '15px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
               Không tìm thấy sự kiện tác chiến phù hợp

@@ -395,7 +395,7 @@ export const HazardMiniMap: React.FC<{
         height: '100%',
         minHeight: '260px',
         borderRadius: '10px',
-        border: '1px solid #cbd5e1',
+        border: '1px solid var(--dm-border-strong)',
         overflow: 'hidden',
         position: 'relative',
       }}

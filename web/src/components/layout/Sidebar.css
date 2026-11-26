@@ -1,559 +1,1308 @@
 /* ==========================================================================
-   RESCUESOS SAAS DESIGN SYSTEM - SIDEBAR & NAVIGATION STYLES
+   CHRONICLE (shadcnstore/shadcn-dashboard-landing-template) APP SHELL
+   SidebarInset Frame • Workspace Switcher • Calm NavMain • NavUser Footer
+   • 52px Inset Header • ⌘K Command Palette • Theme Customizer Sheet
+   • Profile / OTP / Cloudinary Modal (Light & Dark OKLCH Native)
    ========================================================================== */
 
-:root {
-  /* --- Kích thước Sidebar --- */
-  --sos-sidebar-width: 284px;
-  --sos-sidebar-collapsed-width: 76px;
-
-  /* --- Màu sắc giao diện SaaS (Light Theme Chuẩn) --- */
-  --sos-sidebar-bg: #ffffff;
-  --sos-sidebar-border: #e2e8f0;
-  --sos-sidebar-shadow: 2px 0 16px rgba(15, 23, 42, 0.04);
-
-  /* --- Tiêu đề & Văn bản --- */
-  --sos-sidebar-title: #0f172a;
-  --sos-sidebar-subtitle: #64748b;
-  --sos-group-title-color: #334155;
-  /* Slate-700 đậm, tương phản cao, phân cấp rõ rệt */
-
-  /* --- Trạng thái Mặc định / Inactive --- */
-  --sos-item-bg-default: transparent;
-  --sos-item-text-default: #334155;
-  /* gray-700 / slate-700 */
-  --sos-item-icon-default: #64748b;
-
-  /* --- Hiệu ứng Hover (Xám nhạt mượt mà) --- */
-  --sos-item-bg-hover: #f1f5f9;
-  /* gray-100 */
-  --sos-item-text-hover: #0f172a;
-  --sos-item-icon-hover: #2563eb;
-
-  /* --- Trạng thái Active (Đang chọn) --- */
-  --sos-item-bg-active: #eff6ff;
-  /* blue-50 */
-  --sos-item-text-active: #2563eb;
-  /* blue-600 */
-  --sos-item-icon-active: #2563eb;
-  /* blue-600 */
-  --sos-item-border-active: #dbeafe;
-  /* viền xanh lam nhạt */
-  --sos-item-radius: 10px;
-  /* 8px - 12px */
-
-  /* --- Badge dạng viên thuốc (Pill Badge) --- */
-  --sos-badge-pill-danger-bg: #fee2e2;
-  /* red-100 */
-  --sos-badge-pill-danger-text: #dc2626;
-  /* red-600 */
-  --sos-badge-pill-danger-border: #fecaca;
-  --sos-badge-pill-info-bg: #e0f2fe;
-  /* sky-100 */
-  --sos-badge-pill-info-text: #0284c7;
-  /* sky-700 */
-  --sos-badge-pill-info-border: #bae6fd;
-  --sos-badge-pill-warning-bg: #fef3c7;
-  /* amber-100 */
-  --sos-badge-pill-warning-text: #b45309;
-  /* amber-700 */
-  --sos-badge-pill-warning-border: #fde68a;
-
-  /* --- Footer & User Profile --- */
-  --sos-footer-bg: #ffffff;
-  --sos-footer-border: #e2e8f0;
-  --sos-user-profile-bg: #f8fafc;
-  --sos-user-profile-border: #e2e8f0;
-  --sos-avatar-authority-bg: linear-gradient(135deg, #2563eb, #1d4ed8);
-  --sos-avatar-admin-bg: linear-gradient(135deg, #dc2626, #b91c1c);
-  --sos-logout-color: #64748b;
-  --sos-logout-hover-bg: #fee2e2;
-  --sos-logout-hover-color: #dc2626;
-}
-
-/* Hỗ trợ chế độ tối Dark Theme nếu được cấu hình */
-[data-theme="dark"] {
-  --sos-sidebar-bg: #0f172a;
-  --sos-sidebar-border: #1e293b;
-  --sos-sidebar-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
-  --sos-sidebar-title: #f8fafc;
-  --sos-sidebar-subtitle: #94a3b8;
-  --sos-group-title-color: #e2e8f0;
-  --sos-item-bg-default: transparent;
-  --sos-item-text-default: #cbd5e1;
-  --sos-item-icon-default: #94a3b8;
-  --sos-item-bg-hover: #1e293b;
-  --sos-item-text-hover: #ffffff;
-  --sos-item-icon-hover: #60a5fa;
-  --sos-item-bg-active: rgba(37, 99, 235, 0.16);
-  --sos-item-text-active: #60a5fa;
-  --sos-item-icon-active: #60a5fa;
-  --sos-item-border-active: rgba(37, 99, 235, 0.35);
-  --sos-footer-bg: #0b1120;
-  --sos-footer-border: #1e293b;
-  --sos-user-profile-bg: #1e293b;
-  --sos-user-profile-border: #334155;
-  --sos-logout-color: #94a3b8;
-  --sos-logout-hover-bg: rgba(220, 38, 38, 0.2);
-  --sos-logout-hover-color: #f87171;
-}
-
-/* ==========================================================================
-   CONTAINER CHÍNH CỦA DASHBOARD
-   ========================================================================== */
-.sos-dashboard-container {
-  display: flex;
-  min-height: 100vh;
-  width: 100%;
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-  overflow-x: hidden;
-}
-
-/* ==========================================================================
-   SIDEBAR WRAPPER (THANH ĐIỀU HƯỚNG BÊN TRÁI)
-   ========================================================================== */
-.sos-sidebar {
-  width: var(--sos-sidebar-width);
-  min-width: var(--sos-sidebar-width);
+/* 1. OUTER APP SHELL & SIDEBAR INSET PANEL */
+.ch-app-shell {
+  width: 100vw;
   height: 100vh;
-  background: var(--sos-sidebar-bg);
-  border-right: 1px solid var(--sos-sidebar-border);
-  box-shadow: var(--sos-sidebar-shadow);
+  display: flex;
+  background: var(--sidebar);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ch-sidebar-inset {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  margin: 8px 8px 8px 0;
+  border-radius: calc(var(--radius) * 1.4);
+  box-shadow: var(--surface-shadow);
+  overflow: hidden;
+  transition: margin 0.2s ease, border-radius 0.2s ease;
+}
+
+.ch-app-shell[data-sidebar-variant="sidebar"] .ch-sidebar-inset {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  border-left: 1px solid var(--sidebar-border);
+}
+
+/* Chronicle Floating Sidebar Variant */
+.ch-app-shell[data-sidebar-variant="floating"] {
+  background: var(--background);
+}
+
+.ch-app-shell[data-sidebar-variant="floating"] .ch-sidebar {
+  margin: 8px;
+  height: calc(100% - 16px);
+  border-radius: calc(var(--radius) * 1.4);
+  border: 1px solid var(--sidebar-border);
+  box-shadow: var(--surface-shadow-raised);
+}
+
+.ch-app-shell[data-sidebar-variant="floating"] .ch-sidebar-inset {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Chronicle Offcanvas Collapse Mode (completely hides rail when collapsed) */
+.ch-app-shell[data-sidebar-collapsible="offcanvas"] .ch-sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  margin: 0;
+  border-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ch-app-shell[data-sidebar-collapsible="offcanvas"] .ch-sidebar.collapsed + .ch-sidebar-inset {
+  margin-left: 8px;
+}
+
+.ch-app-shell[data-sidebar-variant="sidebar"][data-sidebar-collapsible="offcanvas"]
+  .ch-sidebar.collapsed
+  + .ch-sidebar-inset,
+.ch-app-shell[data-sidebar-variant="floating"][data-sidebar-collapsible="offcanvas"]
+  .ch-sidebar.collapsed
+  + .ch-sidebar-inset {
+  margin-left: 0;
+  border-left: none;
+}
+
+/* Top-Bar Layout: keep Sidebar mounted for Socket.IO counters & Profile Modal while hiding visual rail */
+.ch-sidebar.hidden-rail {
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* ==========================================================================
+   2. CHRONICLE LEFT SIDEBAR
+   ========================================================================== */
+.ch-sidebar {
+  width: var(--sos-sidebar-width, 248px);
+  min-width: var(--sos-sidebar-width, 248px);
+  height: 100%;
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 50;
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
+  z-index: 45;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+  user-select: none;
 }
 
-/* Khi thu gọn Sidebar (Collapsed) */
-.sos-sidebar.collapsed {
-  width: var(--sos-sidebar-collapsed-width);
-  min-width: var(--sos-sidebar-collapsed-width);
+.ch-sidebar.collapsed {
+  width: var(--sos-sidebar-collapsed, 58px);
+  min-width: var(--sos-sidebar-collapsed, 58px);
 }
 
-/* ==========================================================================
-   KHỐI 1: HEADER / LOGO (GIỮ NGUYÊN LOGO SOS SYSTEMS)
-   ========================================================================== */
-.sos-sidebar-header {
-  padding: 16px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--sos-sidebar-border);
-  background: var(--sos-sidebar-bg);
-  flex-shrink: 0;
-  gap: 8px;
-}
-
-.sos-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  overflow: hidden;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.sos-brand-logo-wrap {
+/* Workspace Switcher Header */
+.ch-sidebar-header {
+  padding: 10px 10px 6px;
   position: relative;
-  width: 36px;
-  height: 36px;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.sos-brand-logo {
+.ch-workspace-btn {
+  width: 100%;
+  height: 48px;
+  padding: 6px 8px;
+  border-radius: calc(var(--radius) * 0.9);
+  border: none;
+  background: transparent;
+  color: var(--sidebar-foreground);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.14s ease;
+}
+
+.ch-workspace-btn:hover,
+.ch-workspace-btn.open {
+  background: var(--sidebar-accent);
+}
+
+.ch-sidebar.collapsed .ch-workspace-btn {
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.ch-workspace-mark {
   width: 34px;
   height: 34px;
-  object-fit: contain;
+  border-radius: calc(var(--radius) * 0.85);
+  background: #ffffff;
+  border: 1px solid color-mix(in oklch, var(--foreground) 12%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
   flex-shrink: 0;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  filter: drop-shadow(0 2px 6px rgba(220, 38, 38, 0.3));
-  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
-.sos-brand:hover .sos-brand-logo {
-  transform: scale(1.05);
+.ch-workspace-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.sos-brand-info {
+.ch-workspace-copy {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   line-height: 1.25;
+}
+
+.ch-workspace-copy strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--sidebar-foreground);
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
-.sos-brand-title {
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: var(--sos-sidebar-title);
+.ch-workspace-copy span {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.sos-brand-subtitle {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--sos-sidebar-subtitle);
-}
-
-/* Nút Thu gọn / Mở rộng Sidebar */
-.sos-collapse-toggle {
-  background: #f1f5f9;
-  border: 1px solid var(--sos-sidebar-border);
-  color: #64748b;
-  border-radius: 8px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.ch-workspace-chev {
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 
-.sos-collapse-toggle:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+/* Sidebar Popover Card (Workspace + NavUser) */
+.ch-sidebar-popover {
+  position: absolute;
+  left: 10px;
+  width: 244px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.1);
+  box-shadow: var(--surface-shadow-raised);
+  z-index: 200;
+  overflow: hidden;
+  animation: chPopIn 0.14s ease-out;
 }
 
-.sos-sidebar.collapsed .sos-sidebar-header {
-  padding: 14px 8px;
+.ch-sidebar.collapsed .ch-sidebar-popover {
+  left: 62px;
+}
+
+@keyframes chPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ch-workspace-popover {
+  top: 62px;
+}
+
+.ch-ws-pop-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.ch-ws-pop-head > span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.ch-ws-pop-role {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.ch-ws-pop-role svg {
+  color: var(--primary);
+}
+
+.ch-ws-pop-head small {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.ch-ws-pop-actions,
+.ch-navuser-pop-items {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-ws-pop-actions button,
+.ch-navuser-pop-items button {
+  border: none;
+  background: transparent;
+  padding: 7px 10px;
+  border-radius: calc(var(--radius) * 0.7);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--popover-foreground);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.ch-ws-pop-actions button svg,
+.ch-navuser-pop-items button svg {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.ch-ws-pop-actions button:hover,
+.ch-navuser-pop-items button:hover {
+  background: var(--muted);
+}
+
+.ch-ws-pop-foot {
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+/* Calm NavMain */
+.ch-sidebar-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ch-sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.ch-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ch-sidebar-nav::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 26%, transparent);
+  border-radius: 4px;
+}
+
+.ch-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Calm Sentence-Case Group Labels (Exact Chronicle Style) */
+.ch-nav-group-label {
+  padding: 4px 10px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  letter-spacing: 0.005em;
+  line-height: 1.3;
+}
+
+.ch-nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-nav-item {
+  position: relative;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: calc(var(--radius) * 0.8);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: color-mix(in oklch, var(--sidebar-foreground) 78%, transparent);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.ch-nav-icon {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: color 0.12s ease;
+}
+
+.ch-nav-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-nav-item:hover {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.ch-nav-item:hover .ch-nav-icon {
+  color: var(--sidebar-accent-foreground);
+}
+
+.ch-nav-item.active {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+  font-weight: 600;
+}
+
+.ch-nav-item.active .ch-nav-icon {
+  color: var(--sidebar-primary);
+}
+
+.ch-nav-caret {
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Plain Tabular Numeric Counter (No loud pill boxes) */
+.ch-nav-counter {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.ch-nav-counter.danger {
+  color: var(--sos-danger-text);
+  background: var(--sos-danger-soft);
+}
+
+.ch-nav-counter.warning {
+  color: var(--sos-warning-text);
+  background: var(--sos-warning-soft);
+}
+
+/* Hairline Submenu Tree */
+.ch-nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 17px;
+  padding-left: 10px;
+  border-left: 1px solid var(--sidebar-border);
+}
+
+.ch-nav-subitem {
+  border: none;
+  background: transparent;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: calc(var(--radius) * 0.7);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.ch-nav-subitem:hover {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+.ch-nav-subitem.active {
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+  font-weight: 600;
+}
+
+.ch-sidebar.collapsed .ch-nav-item {
+  width: 38px;
+  height: 36px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+}
+
+.ch-collapsed-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--destructive);
+  border: 1.5px solid var(--sidebar);
+}
+
+/* NavUser Footer */
+.ch-sidebar-footer {
+  padding: 8px 10px 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ch-navuser-btn {
+  width: 100%;
+  height: 48px;
+  padding: 6px 8px;
+  border-radius: calc(var(--radius) * 0.9);
+  border: none;
+  background: transparent;
+  color: var(--sidebar-foreground);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.14s ease;
+}
+
+.ch-navuser-btn:hover,
+.ch-navuser-btn.open {
+  background: var(--sidebar-accent);
+}
+
+.ch-sidebar.collapsed .ch-navuser-btn {
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.ch-navuser-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ch-navuser-avatar.admin {
+  background: var(--destructive);
+  color: #ffffff;
+}
+
+.ch-navuser-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ch-navuser-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.ch-navuser-meta strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sidebar-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-navuser-meta span {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-navuser-popover {
+  bottom: 64px;
+}
+
+.ch-navuser-pop-head {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.sos-sidebar.collapsed .sos-brand {
-  justify-content: center;
-  width: 100%;
+.ch-navuser-pop-foot {
+  padding: 6px;
+  border-top: 1px solid var(--border);
 }
 
-/* Role Banner Mini Pill */
-.sos-role-pill-badge {
-  margin: 10px 14px 2px;
-  padding: 6px 10px;
-  border-radius: 8px;
+.ch-navuser-logout {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 7px 10px;
+  border-radius: calc(var(--radius) * 0.7);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sos-danger-text);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.ch-navuser-logout:hover {
+  background: var(--sos-danger-soft);
+}
+
+/* ==========================================================================
+   3. CHRONICLE 52PX INSET TOP HEADER
+   ========================================================================== */
+.ch-inset-header {
+  height: 56px;
+  min-height: 56px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  border: 1px solid var(--sos-sidebar-border);
+  gap: 14px;
+  flex-shrink: 0;
+  z-index: 40;
+}
+
+.ch-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ch-header-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
   flex-shrink: 0;
 }
 
-.sos-role-pill-badge.authority {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #15803d;
-}
-
-.sos-role-pill-badge.admin {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #dc2626;
-}
-
-.sos-role-badge-left {
+.ch-header-breadcrumb {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 13px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
-.sos-role-status-dot {
-  width: 7px;
-  height: 7px;
+.ch-bc-root {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+
+.ch-bc-root:hover {
+  color: var(--foreground);
+}
+
+.ch-bc-chevron {
+  color: var(--muted-foreground);
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.ch-bc-group {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.ch-bc-page {
+  color: var(--foreground);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ch-cmd-trigger {
+  width: 224px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: calc(var(--radius) * 0.8);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 3%, transparent);
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.ch-cmd-trigger:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.ch-cmd-trigger-text {
+  flex: 1;
+  text-align: left;
+}
+
+.ch-cmd-kbd {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.ch-header-icon-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius) * 0.75);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.13s ease, color 0.13s ease, border-color 0.13s ease;
+}
+
+.ch-header-icon-btn:hover,
+.ch-header-icon-btn.active {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.ch-notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--destructive);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ch-popover-anchor {
+  position: relative;
+}
+
+.ch-popover-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.1);
+  box-shadow: var(--surface-shadow-raised);
+  z-index: 250;
+  overflow: hidden;
+  animation: chPopIn 0.14s ease-out;
+}
+
+.ch-popover-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.ch-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--sos-success-soft);
+  color: var(--sos-success-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ch-live-chip-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 6px #22c55e;
+  background: var(--success);
+}
+
+.ch-notif-items {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-notif-item {
+  border: none;
+  background: transparent;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: calc(var(--radius) * 0.75);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.ch-notif-item:hover {
+  background: var(--muted);
+}
+
+.ch-notif-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: calc(var(--radius) * 0.7);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ch-notif-ico.danger {
+  background: var(--sos-danger-soft);
+  color: var(--sos-danger-text);
+}
+.ch-notif-ico.warning {
+  background: var(--sos-warning-soft);
+  color: var(--sos-warning-text);
+}
+.ch-notif-ico.primary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.ch-notif-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ch-notif-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.ch-notif-text span {
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 /* ==========================================================================
-   KHỐI 2: MENU ĐIỀU HƯỚNG (4 NHÓM CHÍNH VÀ CÁC ITEM)
+   4. COMMAND PALETTE MODAL (⌘K)
    ========================================================================== */
-.sos-sidebar-nav {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 14px 10px;
+.ch-cmd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 960;
+  background: rgba(12, 17, 29, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 16px 24px;
+}
+
+.ch-cmd-dialog {
+  width: 100%;
+  max-width: 560px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.25);
+  box-shadow: 0 24px 60px -16px rgba(10, 15, 29, 0.42);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  /* Khoảng cách giữa các nhóm RỘNG HƠN khoảng cách giữa các item */
+  animation: chPopIn 0.14s ease-out;
 }
 
-/* Scrollbar mượt mà */
-.sos-sidebar-nav::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sos-sidebar-nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sos-sidebar-nav::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.sos-sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Khối từng nhóm danh mục */
-.sos-nav-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.sos-nav-group:not(:first-child) {
-  padding-top: 10px;
-  border-top: 1px solid #f1f5f9;
-}
-
-[data-theme="dark"] .sos-nav-group:not(:first-child) {
-  border-top-color: #1e293b;
-}
-
-/* Tiêu đề nhóm: Phân cấp rõ rệt, tương phản cao, nổi bật mục chính */
-.sos-nav-group-title {
+.ch-cmd-input-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 11.5px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--sos-group-title-color);
-  padding: 6px 12px 8px;
-  user-select: none;
-  line-height: 1.3;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* Thanh chỉ báo màu xanh biểu thị khối điều hướng chính */
-.sos-nav-group-title::before {
-  content: '';
-  display: inline-block;
-  width: 3.5px;
-  height: 11px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
+.ch-cmd-search-ico {
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 
-/* Danh sách các item trong nhóm: Khoảng cách nhỏ gọn */
-.sos-nav-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  /* Khoảng cách giữa các item trong cùng một nhóm */
+.ch-cmd-input-row input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 14px;
 }
 
-/* Item điều hướng */
-.sos-nav-item {
+.ch-cmd-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-cmd-group-label {
+  padding: 6px 10px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.ch-cmd-item {
+  border: none;
+  background: transparent;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) * 0.75);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9.5px 14px;
-  /* Căn lề padding-left đồng đều */
-  border-radius: var(--sos-item-radius);
-  /* 8px - 12px */
-  background: var(--sos-item-bg-default);
-  /* Default: Trong suốt */
-  color: var(--sos-item-text-default);
-  /* Default: Xám đậm (gray-700/slate-700) */
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--foreground);
+  transition: background-color 0.1s ease;
+}
+
+.ch-cmd-item:hover,
+.ch-cmd-item.focused {
+  background: var(--muted);
+}
+
+.ch-cmd-item.current .ch-cmd-item-ico {
+  color: var(--primary);
+}
+
+.ch-cmd-item.danger {
+  color: var(--sos-danger-text);
+}
+
+.ch-cmd-item-ico {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.ch-cmd-item-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ch-cmd-item-copy strong {
   font-size: 13.5px;
   font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-  position: relative;
-  text-decoration: none;
 }
 
-/* Icon điều hướng */
-.sos-nav-icon {
-  flex-shrink: 0;
-  color: var(--sos-item-icon-default);
-  transition: color 0.2s ease, transform 0.2s ease;
+.ch-cmd-item-copy span {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
 }
 
-.sos-nav-label {
+.ch-cmd-enter {
+  color: var(--muted-foreground);
+  opacity: 0;
+}
+
+.ch-cmd-item.focused .ch-cmd-enter,
+.ch-cmd-item:hover .ch-cmd-enter {
+  opacity: 0.75;
+}
+
+.ch-cmd-empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.ch-cmd-foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* ==========================================================================
+   5. CHRONICLE THEME CUSTOMIZER SHEET
+   ========================================================================== */
+.ch-cust-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(12, 17, 29, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ch-cust-sheet {
+  width: 344px;
+  max-width: 92vw;
+  height: 100vh;
+  background: var(--card);
+  color: var(--foreground);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 44px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+}
+
+.ch-cust-head {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ch-cust-head h3 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+}
+
+.ch-cust-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.ch-cust-body {
   flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ch-cust-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ch-cust-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.ch-cust-seg {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: calc(var(--radius) * 0.9);
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.ch-cust-seg.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ch-cust-seg button {
+  height: 31px;
+  border: none;
+  border-radius: calc(var(--radius) * 0.65);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ch-cust-seg button.active {
+  background: var(--card);
+  color: var(--foreground);
+  font-weight: 600;
+  box-shadow: var(--surface-shadow);
+}
+
+.ch-preset-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ch-preset-btn {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: calc(var(--radius) * 0.85);
+  border: 1px solid var(--border);
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.ch-preset-btn:hover {
+  background: var(--muted);
+}
+
+.ch-preset-btn.active {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+
+.ch-preset-swatches {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.ch-preset-swatches span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.ch-preset-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ch-preset-info strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.ch-preset-info span {
+  font-size: 11px;
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: 0.1px;
 }
 
-/* --- Hiệu ứng Hover: Chuyển sang màu xám nhạt (gray-100) mượt mà --- */
-.sos-nav-item:hover {
-  background: var(--sos-item-bg-hover);
-  /* gray-100 (#f1f5f9) */
-  color: var(--sos-item-text-hover);
+.ch-preset-tick {
+  color: var(--primary);
+  flex-shrink: 0;
 }
 
-.sos-nav-item:hover .sos-nav-icon {
-  color: var(--sos-item-icon-hover);
-  transform: none !important;
-}
-
-/* --- Trạng thái Active (Đang chọn): Background blue-50, Text & Icon blue-600, bo góc 10px --- */
-.sos-nav-item.active {
-  background: var(--sos-item-bg-active) !important;
-  /* blue-50 (#eff6ff) */
-  color: var(--sos-item-text-active) !important;
-  /* blue-600 (#2563eb) */
+.ch-cust-reset {
+  width: 100%;
+  height: 36px;
+  border-radius: calc(var(--radius) * 0.85);
+  border: 1px dashed var(--border);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
-  border-color: transparent !important;
-}
-
-.sos-nav-item.active .sos-nav-icon {
-  color: var(--sos-item-icon-active) !important;
-  /* blue-600 */
-}
-
-/* --- Badge dạng viên thuốc (Pill Shape) --- */
-.sos-nav-badge-pill {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 3.5px 8.5px;
-  border-radius: 9999px;
-  /* Dạng hình viên thuốc (Pill) */
-  white-space: nowrap;
-  letter-spacing: 0.2px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: transform 0.15s ease;
-}
-
-/* Badge màu đỏ nhạt (red-100) chữ đỏ đậm (red-600) tạo sự chú ý khẩn cấp */
-.sos-nav-badge-pill.danger {
-  background: var(--sos-badge-pill-danger-bg);
-  /* red-100 (#fee2e2) */
-  color: var(--sos-badge-pill-danger-text);
-  /* red-600 (#dc2626) */
-  border: 1px solid var(--sos-badge-pill-danger-border);
-  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.12);
-}
-
-.sos-nav-badge-pill.info {
-  background: var(--sos-badge-pill-info-bg);
-  color: var(--sos-badge-pill-info-text);
-  border: 1px solid var(--sos-badge-pill-info-border);
-}
-
-.sos-nav-badge-pill.warning {
-  background: var(--sos-badge-pill-warning-bg);
-  color: var(--sos-badge-pill-warning-text);
-  border: 1px solid var(--sos-badge-pill-warning-border);
-}
-
-/* --- Chấm Đỏ Tối Giản Báo Tin Nhắn Mới (Minimalist Notification Dot) --- */
-.sos-nav-badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  margin-left: auto;
-  box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.25);
-  display: inline-block;
-  flex-shrink: 0;
-  position: relative;
-}
-
-.sos-nav-badge-dot::after {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: 50%;
-  background: rgba(239, 68, 68, 0.4);
-  animation: sos-pulse-dot 2.2s infinite ease-in-out;
-}
-
-@keyframes sos-pulse-dot {
-
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-
-  50% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-
-.sos-nav-collapsed-badge-dot {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  border: 1.5px solid #ffffff;
-  box-shadow: 0 0 5px rgba(239, 68, 68, 0.7);
-  animation: sos-pulse-dot 2.2s infinite ease-in-out;
-}
-
-/* Trạng thái khi thu gọn Sidebar */
-.sos-sidebar.collapsed .sos-nav-item {
   justify-content: center;
-  padding: 10px 0;
-  width: 44px;
-  margin: 0 auto;
+  gap: 7px;
+  cursor: pointer;
 }
 
-.sos-nav-collapsed-active-dot {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--sos-item-text-active);
+.ch-cust-reset:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 /* ==========================================================================
-   MENU NỔI (FLYOUT POPOVER) KHI HOVER VÀO PHƯƠNG TIỆN & VẬT TƯ (TỐI GIẢN, KHÔNG ANIMATION, KHÔNG VIỀN XANH)
+   6. MAIN CONTENT HEADING & BODY
+   ========================================================================== */
+.ch-inset-main {
+  background: var(--background);
+}
+
+.ch-page-heading {
+  padding: 20px 24px 4px;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.ch-page-heading-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sos-page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 0;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.sos-page-desc {
+  font-size: 13.5px;
+  color: var(--muted-foreground);
+  margin: 0;
+  font-weight: 400;
+}
+
+.ch-page-body {
+  padding: 16px 24px 24px;
+}
+
+/* ==========================================================================
+   7. COLLAPSED FLYOUT POPOVER FOR PHƯƠNG TIỆN & VẬT TƯ
    ========================================================================== */
 .sos-nav-flyout-popover {
   position: fixed;
   z-index: 999999;
-  min-width: 250px;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
+  min-width: 248px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-radius: calc(var(--radius) * 1.1);
+  border: 1px solid var(--border);
+  box-shadow: var(--surface-shadow-raised);
   padding: 6px;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
 }
 
-/* Cầu nối vô hình giúp chuột di chuyển từ sidebar vào popover không bị mất hover */
 .sos-nav-flyout-popover::before {
   content: '';
   position: absolute;
@@ -561,7 +1310,6 @@
   bottom: 0;
   left: -18px;
   width: 20px;
-  background: transparent;
 }
 
 .sos-nav-flyout-menu {
@@ -573,675 +1321,147 @@
 .sos-nav-flyout-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: 11px;
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) * 0.75);
   cursor: pointer;
-  border: none !important;
-  outline: none !important;
-  user-select: none;
-  background: transparent;
   transition: background-color 0.12s ease;
 }
 
-.sos-nav-flyout-item-icon {
-  flex-shrink: 0;
-  color: #475569;
-}
-
-.sos-nav-flyout-item:hover {
-  background: #f1f5f9;
-  border: none !important;
-  outline: none !important;
-  transform: none !important;
-}
-
+.sos-nav-flyout-item:hover,
 .sos-nav-flyout-item.active {
-  background: #f1f5f9;
-  border: none !important;
-  outline: none !important;
-  transform: none !important;
+  background: var(--muted);
 }
 
-.sos-nav-flyout-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+.sos-nav-flyout-item-icon {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.sos-nav-flyout-item.active .sos-nav-flyout-item-icon {
+  color: var(--primary);
 }
 
 .sos-nav-flyout-title {
   font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.25;
-}
-
-.sos-nav-flyout-item.active .sos-nav-flyout-title {
-  color: #0f172a;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .sos-nav-flyout-desc {
-  font-size: 11px;
-  color: #64748b;
-  margin-top: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Hỗ trợ Dark Mode */
-[data-theme="dark"] .sos-nav-flyout-popover {
-  background: #0f172a;
-  border-color: #1e293b;
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6);
-}
-
-[data-theme="dark"] .sos-nav-flyout-title {
-  color: #f1f5f9;
-}
-
-[data-theme="dark"] .sos-nav-flyout-item-icon {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .sos-nav-flyout-desc {
-  color: #94a3b8;
-}
-
-[data-theme="dark"] .sos-nav-flyout-item:hover,
-[data-theme="dark"] .sos-nav-flyout-item.active {
-  background: #1e293b;
-  border: none !important;
-  outline: none !important;
-  transform: none !important;
-}
-
-/* ==========================================================================
-   KHỐI 3: BOTTOM / FOOTER CỦA SIDEBAR (GHIM CỐ ĐỊNH Ở DƯỚI CÙNG)
-   ========================================================================== */
-.sos-sidebar-footer {
-  margin-top: auto;
-  /* Ghim cố định ở dưới cùng */
-  position: sticky;
-  bottom: 0;
-  background: var(--sos-footer-bg);
-  border-top: 1px solid var(--sos-footer-border);
-  padding: 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 20;
-  flex-shrink: 0;
-}
-
-/* Mục Cài đặt hệ thống (Icon: Settings/Gear) */
-.sos-settings-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 14px;
-  /* Padding đồng đều với các nav items */
-  border-radius: var(--sos-item-radius);
-  background: var(--sos-item-bg-default);
-  color: var(--sos-item-text-default);
-  font-size: 13.5px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-}
-
-.sos-settings-item:hover {
-  background: var(--sos-item-bg-hover);
-  color: var(--sos-item-text-hover);
-}
-
-.sos-settings-item:hover .sos-nav-icon {
-  color: var(--sos-item-icon-hover);
-}
-
-.sos-settings-item.active {
-  background: var(--sos-item-bg-active);
-  color: var(--sos-item-text-active);
-  font-weight: 600;
-  border-color: transparent !important;
-}
-
-.sos-settings-item.active .sos-nav-icon {
-  color: var(--sos-item-icon-active);
-}
-
-.sos-settings-label {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sos-sidebar.collapsed .sos-settings-item {
-  justify-content: center;
-  padding: 10px 0;
-  width: 44px;
-  margin: 0 auto;
-}
-
-/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) - Premium Oceanic Executive Styling */
-.sos-user-profile-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px -1px rgba(2, 132, 199, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.sos-user-profile-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 3px;
-  height: 100%;
-  background: linear-gradient(180deg, #0284c7 0%, #38bdf8 100%);
-  opacity: 0.9;
-  border-radius: 12px 0 0 12px;
-}
-
-.sos-user-profile-card:hover {
-  border-color: #bae6fd;
-  box-shadow: 0 4px 16px -2px rgba(2, 132, 199, 0.14), 0 2px 5px rgba(0, 0, 0, 0.04);
-}
-
-.sos-user-profile-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 0%;
-  overflow: hidden;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 0;
-  transition: opacity 0.15s ease;
-}
-
-.sos-user-profile-left:hover {
-  opacity: 0.9;
-}
-
-.sos-user-avatar-wrap {
-  position: relative;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-}
-
-.sos-user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3);
-  user-select: none;
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  border: 1.5px solid #ffffff;
-  letter-spacing: 0.2px;
-  transition: transform 0.2s ease;
-  overflow: hidden;
-  position: relative;
-}
-
-.sos-user-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 8.5px;
-  display: block;
-}
-
-.sos-user-profile-card:hover .sos-user-avatar {
-  transform: scale(1.05);
-}
-
-.sos-user-avatar.admin {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.3);
-}
-
-.sos-user-avatar.authority {
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-}
-
-.sos-user-online-dot {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #10b981;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 0 6px #10b981;
-}
-
-.sos-user-meta {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  flex: 1 1 0%;
-  gap: 3px;
-  line-height: 1.25;
-  overflow: hidden;
-}
-
-.sos-user-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.1px;
-  display: block;
-  max-width: 100%;
-}
-
-.sos-user-role {
   font-size: 11.5px;
-  font-weight: 500;
-  color: #64748b;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
-  max-width: 100%;
-}
-
-.sos-user-profile-card .sos-user-role-badge,
-.sos-user-role-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #0284c7;
-  background: #e0f2fe;
-  border: 1px solid #bae6fd;
-  padding: 1.5px 6px;
-  border-radius: 6px;
-  width: fit-content;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  letter-spacing: 0;
-  text-transform: none;
-  margin-bottom: 0;
-  box-sizing: border-box;
-}
-
-.sos-user-profile-card .sos-user-role-badge span,
-.sos-user-role-badge span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.sos-user-role-badge span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.sos-user-profile-card .sos-user-role-badge.admin,
-.sos-user-role-badge.admin {
-  color: #dc2626;
-  background: #fee2e2;
-  border-color: #fecaca;
-}
-
-/* Nút Đăng xuất */
-.sos-btn-logout-icon {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  flex-shrink: 0;
-  margin-left: auto;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  margin-left: auto;
-  z-index: 2;
-}
-
-.sos-btn-logout-icon:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.18);
-}
-
-.sos-sidebar.collapsed .sos-user-profile-card {
-  flex-direction: column;
-  padding: 8px 4px;
-  gap: 8px;
-}
-
-.sos-sidebar.collapsed .sos-user-profile-left {
-  justify-content: center;
+  color: var(--muted-foreground);
 }
 
 /* ==========================================================================
-   MAIN DASHBOARD CONTENT (GIỮ NGUYÊN LAYOUT TỔNG THỂ)
+   8. PROFILE MODAL, CLOUDINARY AVATAR, PHONE OTP & OFFICE MAP PICKER
+   (Harmonized to Chronicle Light & Dark OKLCH Variables)
    ========================================================================== */
-.sos-main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow-y: auto;
-  background-color: #f8fafc;
-}
-
-.sos-main-header {
-  padding: 16px 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 40;
-}
-
-.sos-page-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sos-page-title {
-  font-size: 17px;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: 0.3px;
-}
-
-.sos-page-desc {
-  font-size: 12px;
-  color: #64748b;
-  margin: 2px 0 0;
-}
-
-.sos-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sos-live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 14px;
-  background: rgba(34, 197, 94, 0.12);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #16a34a;
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.sos-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 8px #22c55e;
-  animation: pulseLive 1.8s infinite;
-}
-
-@keyframes pulseLive {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.7;
-  }
-
-  50% {
-    transform: scale(1.3);
-    opacity: 1;
-  }
-
-  100% {
-    transform: scale(0.95);
-    opacity: 0.7;
-  }
-}
-
-.sos-page-body {
-  padding: 20px 24px;
-  flex: 1;
-}
-
-.sos-hotline-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: #ffffff;
-  border: none;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
-}
-
-.sos-hotline-btn:hover {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  transform: translateY(-1px);
-}
-
-/* ==========================================================================
-   PROFILE MODAL & EDIT CÁN BỘ ĐỊA PHƯƠNG
-   ========================================================================== */
-.sos-user-profile-left.clickable {
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.sos-user-profile-left.clickable:hover {
-  background: rgba(37, 99, 235, 0.08);
-}
-
-.sos-user-profile-left.clickable:hover .sos-user-avatar {
-  transform: scale(1.05);
-}
-
-/* Toast thông báo lưu thành công */
 .sos-profile-toast-success {
   position: fixed;
   bottom: 24px;
-  left: 280px;
+  right: 24px;
   z-index: 1000000 !important;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  background: #059669;
+  padding: 10px 16px;
+  background: var(--success);
   color: #ffffff;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.35);
-  animation: slideToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--surface-shadow-raised);
 }
 
-@keyframes slideToastIn {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-/* Modal Overlay Toàn Cục - Luôn nổi lên trên bản đồ, thanh điều phối và mọi layer khác */
 .sos-modal-overlay {
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background: rgba(15, 23, 42, 0.65) !important;
-  backdrop-filter: blur(4px) !important;
+  background: rgba(12, 17, 29, 0.6) !important;
+  backdrop-filter: blur(5px) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   z-index: 999999 !important;
-  animation: fadeInOverlay 0.15s ease-out;
   padding: 16px;
   box-sizing: border-box;
 }
 
-@keyframes fadeInOverlay {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-/* Modal Card - Compact no-scroll view, nổi trên overlay */
 .sos-profile-modal-card {
   position: relative;
   z-index: 1000000;
   width: min(720px, calc(100vw - 32px));
-  max-width: 720px;
   max-height: 92dvh;
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  color: var(--foreground);
+  border-radius: calc(var(--radius) * 1.4);
+  border: 1px solid var(--border);
+  box-shadow: 0 28px 60px -16px rgba(10, 15, 29, 0.45);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalScaleIn {
-  from {
-    transform: scale(0.96);
-    opacity: 0;
-  }
-
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
 }
 
 .sos-profile-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 18px;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .sos-profile-modal-title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
 }
 
 .sos-profile-modal-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: #eff6ff;
+  width: 36px;
+  height: 36px;
+  border-radius: calc(var(--radius) * 0.85);
+  background: var(--accent);
+  color: var(--accent-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #2563eb;
-  font-size: 18px;
+  font-size: 17px;
   flex-shrink: 0;
 }
 
 .sos-profile-modal-title h3 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: #142235;
-  line-height: 1.25;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .sos-profile-modal-title p {
-  margin: 1px 0 0;
-  font-size: 11.5px;
-  color: #718096;
-  line-height: 1.3;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 .sos-profile-modal-close {
   background: transparent;
-  border: none;
-  color: #64748b;
-  font-size: 16px;
+  border: 1px solid transparent;
+  color: var(--muted-foreground);
   cursor: pointer;
-  padding: 5px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: calc(var(--radius) * 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
 }
 
 .sos-profile-modal-close:hover {
-  background: #f1f5f9;
-  color: #142235;
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 .sos-profile-form {
@@ -1256,21 +1476,20 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 18px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
-/* Khối tóm tắt hồ sơ gọn nhẹ & Đổi avatar Cloudinary */
 .sos-profile-avatar-preview {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  padding: 12px 14px;
+  background: var(--muted);
+  border-radius: calc(var(--radius) * 1.1);
+  border: 1px solid var(--border);
 }
 
 .sos-profile-avatar-action-wrap {
@@ -1279,49 +1498,39 @@
 }
 
 .sos-profile-big-avatar {
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--primary-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
   font-weight: 700;
-  flex-shrink: 0;
   position: relative;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
-  border: 2px solid #ffffff;
-  transition: all 0.2s ease;
-}
-
-.sos-profile-big-avatar:hover {
-  transform: scale(1.04);
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+  border: 2px solid var(--card);
 }
 
 .sos-profile-avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
   display: block;
 }
 
 .sos-avatar-camera-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(12, 17, 29, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
   opacity: 0;
-  transition: opacity 0.2s ease;
-  border-radius: 50%;
+  transition: opacity 0.16s ease;
 }
 
 .sos-profile-big-avatar:hover .sos-avatar-camera-overlay {
@@ -1334,132 +1543,70 @@
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: #ffffff;
   border-radius: 50%;
-  animation: spinAvatar 0.8s linear infinite;
-}
-
-@keyframes spinAvatar {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: sosSpin 0.7s linear infinite;
 }
 
 .sos-profile-preview-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
   min-width: 0;
 }
 
-.sos-profile-preview-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.sos-profile-preview-header-row strong {
-  font-size: 14.5px;
-  font-weight: 700;
-  color: #142235;
-  line-height: 1.25;
-}
-
-.sos-btn-upload-avatar-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #0284c7;
-  background: #e0f2fe;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.sos-btn-upload-avatar-link:hover:not(:disabled) {
-  background: #0284c7;
-  color: #ffffff;
-  border-color: #0284c7;
-}
-
-.sos-btn-upload-avatar-link:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.sos-avatar-error-inline {
-  font-size: 11px;
-  color: #dc2626;
-  margin-top: 2px;
-  font-weight: 500;
-}
-
-.sos-avatar-uploading-inline {
-  font-size: 11px;
-  color: #0284c7;
-  font-weight: 600;
-  margin-top: 2px;
-}
-
 .sos-profile-preview-text strong {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.3;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .sos-profile-preview-text span {
   font-size: 12px;
   font-weight: 600;
-  color: #2563eb;
-  line-height: 1.25;
+  color: var(--primary);
 }
 
 .sos-profile-preview-text small {
-  font-size: 11px;
-  font-weight: 400;
-  color: #718096;
-  line-height: 1.2;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
 }
 
-/* Bố cục 2 cột độc lập */
+.sos-avatar-uploading-inline {
+  font-size: 11.5px;
+  color: var(--primary);
+}
+
+.sos-avatar-error-inline {
+  font-size: 11.5px;
+  color: var(--sos-danger-text);
+}
+
 .sos-profile-columns-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
 .sos-profile-col {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sos-profile-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
-.sos-profile-field label {
+.sos-profile-field label,
+.sos-profile-section-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #142235;
-  margin: 0;
-}
-
-.sos-profile-field label i {
   font-size: 12.5px;
-  color: #142235;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .sos-profile-field input,
@@ -1467,61 +1614,251 @@
 .sos-profile-area-section input,
 .sos-profile-area-section select {
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 12.5px;
-  color: #142235;
-  background: #ffffff;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) * 0.8);
+  font-size: 13px;
+  background: var(--background);
+  color: var(--foreground);
   box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.sos-profile-field select {
-  cursor: pointer;
 }
 
 .sos-profile-field input:focus,
 .sos-profile-field select:focus,
-.sos-profile-area-section input:focus,
-.sos-profile-area-section select:focus {
+.sos-profile-area-section input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--sos-ring);
 }
 
-.sos-profile-field select:disabled,
-.sos-profile-area-section select:disabled,
 .sos-profile-area-section input:disabled,
 .sos-profile-area-section input[readonly] {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--muted);
+  color: var(--muted-foreground);
   cursor: not-allowed;
-  border-color: #e2e8f0;
 }
 
-.sos-profile-area-locked-badge {
-  margin-left: auto;
-  display: inline-flex;
+.ch-profile-scope-banner {
+  margin-top: 6px;
+  padding: 13px 15px;
+  border-radius: calc(var(--radius) * 0.9);
+  background: var(--accent);
+  border: 1px solid var(--sos-primary-border);
+  color: var(--accent-foreground);
+  font-size: 13px;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #64748b;
-  background: #f1f5f9;
+  gap: 12px;
+}
+
+.ch-profile-scope-banner i {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.ch-profile-scope-banner strong {
+  display: block;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+  color: var(--foreground);
+}
+
+.ch-profile-pwd-box {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.0);
+  background: var(--muted);
+  padding: 12px 14px;
+}
+
+.ch-profile-pwd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ch-profile-pwd-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.ch-profile-pwd-title i {
+  color: var(--primary);
+}
+
+.ch-profile-pwd-toggle {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  border-radius: calc(var(--radius) * 0.75);
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ch-profile-pwd-toggle:hover {
+  background: var(--background);
+}
+
+.sos-phone-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sos-phone-badge {
+  font-size: 10.5px;
+  font-weight: 600;
   padding: 2px 8px;
   border-radius: 9999px;
-  border: 1px solid #e2e8f0;
 }
 
-/* Google Maps link & Map Picker cho trụ sở Ủy ban */
+.sos-phone-badge-unverified {
+  background: var(--sos-warning-soft);
+  color: var(--sos-warning-text);
+  border: 1px solid var(--sos-warning-border);
+}
+
+.sos-phone-badge-verified {
+  background: var(--sos-success-soft);
+  color: var(--sos-success-text);
+  border: 1px solid var(--sos-success-border);
+}
+
+.sos-phone-auth-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sos-phone-input-row,
+.sos-otp-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sos-phone-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sos-btn-send-otp {
+  height: 36px;
+  min-width: 92px;
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.sos-btn-send-otp:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sos-otp-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--primary);
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--background);
+  padding: 0 9px;
+}
+
+.sos-otp-icon {
+  color: var(--primary);
+  margin-right: 6px;
+}
+
+.sos-otp-input {
+  flex: 1;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  color: var(--foreground) !important;
+  font-family: var(--font-mono);
+  font-size: 13px !important;
+}
+
+.sos-btn-verify-otp {
+  height: 36px;
+  min-width: 92px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: none;
+  border-radius: calc(var(--radius) * 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sos-otp-note {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.sos-field-error,
+.sos-profile-form-error {
+  font-size: 12px;
+  color: var(--sos-danger-text);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sos-profile-form-error {
+  padding: 8px 11px;
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--sos-danger-soft);
+  border: 1px solid var(--sos-danger-border);
+}
+
+.sos-field-success {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sos-success-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sos-profile-area-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sos-profile-sublabel {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.sos-profile-managed-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Office Map Picker inside Profile Modal */
 .sos-office-map-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: 4px;
-  flex-shrink: 0;
 }
 
 .sos-office-map-url-row {
@@ -1532,28 +1869,15 @@
 
 .sos-office-map-url-row input {
   flex: 1;
-  height: 36px;
-  padding: 0 11px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: #142235;
-  background: #ffffff;
-}
-
-.sos-office-map-url-row input:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
 .sos-office-open-maps-btn {
   height: 36px;
   padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #2563eb;
+  border-radius: calc(var(--radius) * 0.8);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--primary);
   font-size: 12.5px;
   font-weight: 600;
   display: inline-flex;
@@ -1561,459 +1885,148 @@
   gap: 5px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.sos-office-open-maps-btn:hover {
-  background: #eff6ff;
-  border-color: #93c5fd;
 }
 
 .sos-office-map-card {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.9);
   overflow: hidden;
-  background: #ffffff;
-  flex-shrink: 0;
+  background: var(--card);
 }
 
 .sos-office-map-canvas {
   width: 100%;
-  height: 195px;
-  min-height: 195px;
-  background: #e2e8f0;
+  height: 190px;
+  min-height: 190px;
+  background: var(--muted);
   z-index: 1;
-  flex-shrink: 0;
 }
 
 .sos-office-map-footer {
   padding: 9px 12px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  background: var(--muted);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
 }
 
-.sos-office-map-coords-row {
+.sos-office-map-coords-row,
+.sos-office-map-hint-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.sos-office-map-coords-label {
-  color: #64748b;
-  font-weight: 500;
+.sos-office-map-coords-label,
+.sos-office-map-hint-text {
+  color: var(--muted-foreground);
 }
 
 .sos-office-map-coords-value {
-  color: #0f172a;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-weight: 600;
 }
 
 .sos-office-map-address-row {
   display: flex;
   align-items: flex-start;
   gap: 5px;
-  color: #334155;
-  line-height: 1.35;
-}
-
-.sos-office-map-hint-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.sos-office-map-hint-text {
-  color: #64748b;
-  font-size: 11.5px;
+  color: var(--foreground);
 }
 
 .sos-office-map-link {
-  color: #2563eb;
+  color: var(--primary);
   font-weight: 600;
-  font-size: 11.5px;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
 }
 
-.sos-office-map-link:hover {
-  text-decoration: underline;
-}
-
-/* Khối xác thực số điện thoại */
-.sos-phone-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.sos-phone-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 9999px;
-  white-space: nowrap;
-  line-height: 1.35;
-}
-
-.sos-phone-badge-unverified {
-  background: #fffbeb;
-  color: #d97706;
-  border: 1px solid #fde68a;
-}
-
-.sos-phone-badge-verified {
-  background: #f0fdf4;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
-}
-
-.sos-phone-auth-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.sos-phone-input-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  height: 34px;
-}
-
-.sos-phone-input-row input {
-  flex: 1;
-  height: 34px;
-  min-width: 0;
-}
-
-.sos-phone-input-row input.phone-verified {
-  border-color: #86efac;
-  background: #f0fdf4;
-}
-
-.sos-btn-send-otp {
-  height: 34px;
-  width: 96px;
-  min-width: 96px;
-  max-width: 96px;
-  background: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0 4px;
-  transition: all 0.15s ease;
-}
-
-.sos-btn-send-otp:hover:not(:disabled) {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.sos-btn-send-otp:disabled {
-  background: #f8fafc;
-  color: #94a3b8;
-  border-color: #e2e8f0;
-  cursor: not-allowed;
-}
-
-/* Hàng nhập OTP */
-.sos-otp-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  height: 34px;
-  animation: slideToastIn 0.2s ease;
-}
-
-.sos-otp-input-wrap {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  height: 34px;
-  border: 1.5px solid #0284c7;
-  border-radius: 6px;
-  background: #ffffff;
-  padding: 0 8px;
-  box-sizing: border-box;
-  min-width: 0;
-  transition: all 0.15s ease;
-}
-
-.sos-otp-input-wrap:focus-within {
-  border-color: #0284c7;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
-}
-
-.sos-otp-icon {
-  color: #0284c7;
-  font-size: 14px;
-  margin-right: 6px;
-  flex-shrink: 0;
-}
-
-.sos-otp-input {
-  flex: 1;
-  border: none !important;
-  outline: none !important;
-  font-size: 12.5px !important;
-  font-weight: 600 !important;
-  color: #142235 !important;
-  background: transparent !important;
-  padding: 0 !important;
-  height: 100% !important;
-  min-width: 0;
-  box-shadow: none !important;
-}
-
-.sos-otp-input::placeholder {
-  font-size: 12px;
-  font-weight: 400;
-  color: #94a3b8;
-}
-
-.sos-btn-verify-otp {
-  height: 34px;
-  width: 96px;
-  min-width: 96px;
-  max-width: 96px;
-  background: #2563eb;
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  transition: all 0.15s ease;
-}
-
-.sos-btn-verify-otp:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-.sos-btn-verify-otp:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  background: #94a3b8;
-}
-
-.sos-otp-note {
-  font-size: 11px;
-  color: #718096;
-  margin-top: 1px;
-}
-
-.sos-field-error {
-  font-size: 11.5px;
-  color: #dc2626;
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.sos-field-success {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #16a34a;
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Phần địa bàn phụ trách quản lý */
-.sos-profile-area-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 0;
-}
-
-.sos-profile-section-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #142235;
-  margin: 0;
-}
-
-.sos-profile-area-dropdowns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.sos-profile-area-col {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sos-profile-sublabel {
-  font-size: 11px;
-  font-weight: 500;
-  color: #718096;
-}
-
-.sos-profile-managed-area {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sos-profile-form-error {
-  color: #dc2626;
-  font-size: 11.5px;
-  padding: 6px 10px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* Modal Actions Footer */
 .sos-profile-modal-actions {
   flex-shrink: 0;
-  padding: 10px 18px;
-  border-top: 1px solid #e2e8f0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
-  align-items: center;
   gap: 10px;
-  background: #ffffff;
+  background: var(--card);
 }
 
 .sos-profile-btn-cancel {
-  height: 34px;
-  padding: 0 16px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #334155;
-  font-size: 12.5px;
-  font-weight: 600;
+  height: 36px;
+  padding: 0 15px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .sos-profile-btn-cancel:hover:not(:disabled) {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--muted);
 }
 
 .sos-profile-btn-save {
-  height: 34px;
-  padding: 0 18px;
+  height: 36px;
+  padding: 0 16px;
   border: none;
-  border-radius: 6px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 12.5px;
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s ease;
 }
 
 .sos-profile-btn-save:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--primary-hover);
 }
 
 .sos-profile-btn-save:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-/* Responsive layout (< 640px): 1 column with exact specified order */
+@media (max-width: 900px) {
+  .ch-bc-root,
+  .ch-bc-group,
+  .ch-bc-chevron {
+    display: none;
+  }
+
+  .ch-cmd-trigger {
+    width: auto;
+    padding: 0 10px;
+  }
+
+  .ch-cmd-trigger-text,
+  .ch-cmd-kbd {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
-  .sos-profile-modal-card {
-    width: calc(100vw - 20px);
-    max-height: 94dvh;
-    border-radius: 10px;
-  }
-
-  .sos-profile-modal-header {
-    padding: 10px 14px;
-  }
-
-  .sos-profile-modal-body {
-    padding: 12px 14px;
-    gap: 10px;
-  }
-
-  .sos-profile-modal-actions {
-    padding: 10px 14px;
+  .ch-sidebar-inset {
+    margin: 0;
+    border-radius: 0;
   }
 
   .sos-profile-columns-grid {
-    display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
   }
 
-  .sos-profile-col {
-    display: contents;
+  .ch-page-heading {
+    padding: 16px 16px 4px;
   }
 
-  .sos-field-fullname {
-    order: 1;
-  }
-
-  .sos-field-position {
-    order: 2;
-  }
-
-  .sos-field-organization {
-    order: 3;
-  }
-
-  .sos-field-email {
-    order: 4;
-  }
-
-  .sos-field-phone {
-    order: 5;
-  }
-
-  .sos-profile-area-section {
-    order: 6;
-  }
-
-  .sos-profile-area-dropdowns {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .ch-page-body {
+    padding: 12px 16px 18px;
   }
 }

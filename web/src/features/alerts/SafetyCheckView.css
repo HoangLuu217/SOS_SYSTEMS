@@ -11,7 +11,7 @@
   min-height: 0;
   gap: 12px;
   padding: 16px 20px;
-  background-color: #f8fafc;
+  background-color: var(--dm-surface-subtle);
   box-sizing: border-box;
 }
 
@@ -22,8 +22,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 14px 20px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   flex-wrap: wrap;
@@ -44,9 +44,9 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
+  color: var(--dm-text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -54,23 +54,23 @@
 }
 
 .sos-scope-tab:hover {
-  background: #f0f9ff;
-  color: #0284c7;
-  border-color: #7dd3fc;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
 }
 
 .sos-scope-tab.active {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #7dd3fc;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
   font-weight: 700;
 }
 
 .sos-scope-badge {
   padding: 2px 8px;
   border-radius: 12px;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-secondary);
   font-size: 11.5px;
   font-weight: 700;
 }
@@ -82,8 +82,8 @@
 
 /* 3. Toolbar: Status Tabs, Filters & Search */
 .sos-clean-toolbar {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
   border-radius: 8px;
   padding: 10px 16px;
   display: flex;
@@ -106,8 +106,8 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-secondary);
   border: 1px solid transparent;
   cursor: pointer;
   display: inline-flex;
@@ -117,8 +117,8 @@
 }
 
 .sos-clean-tab:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--dm-surface-hover);
+  color: var(--dm-text-strong);
 }
 
 .sos-clean-tab.active {
@@ -145,9 +145,9 @@
   font-size: 12.5px;
   font-weight: 500;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background-color: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--dm-border-strong);
+  background-color: var(--dm-surface);
+  color: var(--dm-text-strong);
   cursor: pointer;
   outline: none;
   transition: all 0.15s ease;
@@ -155,7 +155,7 @@
 }
 
 .sos-clean-sort-select:hover {
-  border-color: #94a3b8;
+  border-color: var(--dm-border-strong);
 }
 
 .sos-clean-sort-select:focus {
@@ -168,8 +168,8 @@
   display: flex;
   align-items: center;
   min-width: 280px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
   border-radius: 6px;
   padding: 0 10px;
   height: 34px;
@@ -182,18 +182,18 @@
   background: transparent;
   width: 100%;
   font-size: 12.5px;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   padding-left: 6px;
 }
 
 .sos-clean-search input::placeholder {
-  color: #94a3b8;
+  color: var(--dm-text-muted);
 }
 
 /* 4. Table Container & Table (Đồng bộ chuẩn RescuerApprovalView) */
 .sos-clean-table-container {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
@@ -211,23 +211,23 @@
 .sos-clean-table thead {
   position: sticky;
   top: 0;
-  background: #f1f5f9;
+  background: var(--dm-surface-muted);
   z-index: 5;
   box-shadow: 0 1px 0 #cbd5e1;
 }
 
 .sos-clean-table th {
-  background: #f1f5f9;
+  background: var(--dm-surface-muted);
   padding: 11px 14px;
   font-size: 11.5px;
   font-weight: 800;
-  color: #334155;
+  color: var(--dm-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   border-top: none;
   border-left: none;
-  border-bottom: 2px solid #cbd5e1;
-  border-right: 1px solid #e2e8f0;
+  border-bottom: 2px solid var(--dm-border-strong);
+  border-right: 1px solid var(--dm-border);
   white-space: nowrap;
   position: sticky;
   top: 0;
@@ -245,13 +245,13 @@
 }
 
 .sos-clean-table th.sortable:hover {
-  background-color: #e2e8f0;
-  color: #0284c7;
+  background-color: var(--dm-surface-hover);
+  color: var(--dm-blue-text);
 }
 
 .sos-clean-table th.sortable.sorted {
-  color: #0284c7;
-  background-color: #e0f2fe;
+  color: var(--dm-blue-text);
+  background-color: var(--dm-blue-bg);
   border-bottom: 2px solid #0284c7;
 }
 
@@ -259,9 +259,9 @@
   padding: 12px 14px;
   border-top: none;
   border-left: none;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #f1f5f9;
-  color: #1e293b;
+  border-bottom: 1px solid var(--dm-border);
+  border-right: 1px solid var(--dm-border);
+  color: var(--dm-text-body);
   vertical-align: middle;
   font-size: 13px;
   transition: background-color 0.15s ease;
@@ -271,30 +271,21 @@
   border-right: none;
 }
 
-/* Xen kẽ từng dòng (Zebra striping) giống RescuerApprovalView */
-.sos-clean-table tbody tr:nth-child(odd) td {
-  background-color: #ffffff;
-}
-
+.sos-clean-table tbody tr:nth-child(odd) td,
 .sos-clean-table tbody tr:nth-child(even) td {
-  background-color: #f1f5f9;
+  background-color: transparent;
 }
 
-/* Hover tương tác mượt mà */
+/* Hover trung tính dịu mắt */
 .sos-clean-table tbody tr:hover td,
 .sos-clean-table tbody tr.ra-clickable-row:hover td {
-  background-color: #e0f2fe !important;
+  background-color: var(--sos-table-hover) !important;
 }
 
 /* Dòng đang được chọn */
 .sos-clean-table tbody tr.row-selected td,
 .sos-clean-table tbody tr.ra-clickable-row.row-selected td {
-  background-color: #bae6fd !important;
-}
-
-.sos-clean-table tbody tr.row-selected td:first-child,
-.sos-clean-table tbody tr.ra-clickable-row.row-selected td:first-child {
-  border-left: 4px solid #0284c7;
+  background-color: var(--sos-table-hover) !important;
 }
 
 /* 5. Flat Action Buttons */
@@ -304,9 +295,9 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -315,9 +306,9 @@
 }
 
 .sos-btn-flat:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-strong);
+  border-color: var(--dm-border-strong);
 }
 
 .sos-btn-flat.primary {
@@ -332,35 +323,35 @@
 }
 
 .sos-btn-flat.danger {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #ffffff;
+  color: var(--dm-red-text);
+  border-color: var(--dm-red-border);
+  background: var(--dm-surface);
 }
 
 .sos-btn-flat.danger:hover {
-  background: #fee2e2;
-  border-color: #f87171;
+  background: var(--dm-red-bg);
+  border-color: var(--dm-red-border);
 }
 
 .sos-btn-flat.success {
-  color: #15803d;
-  border-color: #86efac;
-  background: #ffffff;
+  color: var(--dm-green-text);
+  border-color: var(--dm-green-border);
+  background: var(--dm-surface);
 }
 
 .sos-btn-flat.success:hover {
-  background: #dcfce7;
+  background: var(--dm-green-bg);
 }
 
 .sos-btn-flat.warning {
-  color: #b45309;
-  border-color: #fde68a;
-  background: #ffffff;
+  color: var(--dm-amber-text);
+  border-color: var(--dm-amber-border);
+  background: var(--dm-surface);
 }
 
 .sos-btn-flat.warning:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--dm-amber-bg);
+  border-color: var(--dm-amber-border);
 }
 
 /* 6. Pagination Bar (Đồng bộ RescuerApprovalView) */
@@ -369,17 +360,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  background: #fafbfd;
-  border-top: 1px solid #e2e8f0;
+  background: var(--dm-surface-subtle);
+  border-top: 1px solid var(--dm-border);
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--dm-text-muted);
 }
 
 .sos-pagination-info {
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--dm-text-muted);
   font-weight: 500;
 }
 
@@ -396,9 +387,9 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-secondary);
   transition: all 0.15s ease;
   min-width: 28px;
   text-align: center;
@@ -408,9 +399,9 @@
 }
 
 .sos-pagination-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-strong);
+  border-color: var(--dm-border-strong);
 }
 
 .sos-pagination-btn.active {
@@ -423,8 +414,8 @@
 .sos-pagination-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  border-color: #e2e8f0;
-  color: #94a3b8;
+  border-color: var(--dm-border);
+  color: var(--dm-text-muted);
 }
 
 .sos-pagination-jump {
@@ -433,7 +424,7 @@
   gap: 6px;
   margin-left: 8px;
   padding-left: 10px;
-  border-left: 1px solid #cbd5e1;
+  border-left: 1px solid var(--dm-border-strong);
 }
 
 .sos-pagination-jump-input {
@@ -442,9 +433,9 @@
   font-size: 12.5px;
   text-align: center;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-strong);
   outline: none;
   font-weight: 600;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -471,8 +462,8 @@
   max-width: 94%;
   height: 100%;
   max-height: 100vh;
-  background: #ffffff;
-  border-left: 1px solid #cbd5e1;
+  background: var(--dm-surface);
+  border-left: 1px solid var(--dm-border-strong);
   box-shadow: -8px 0 30px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
@@ -491,8 +482,8 @@
 
 .sc-drawer-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #cbd5e1;
-  background: #ffffff;
+  border-bottom: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -507,13 +498,13 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: #f8fafc;
+  background: var(--dm-surface-subtle);
 }
 
 .sc-drawer-footer {
   padding: 12px 20px;
-  border-top: 1px solid #cbd5e1;
-  background: #ffffff;
+  border-top: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -533,7 +524,7 @@
 }
 
 .sc-modal-card {
-  background-color: #ffffff;
+  background-color: var(--dm-surface);
   border-radius: 12px;
   width: 100%;
   max-width: 640px;
@@ -542,23 +533,23 @@
   flex-direction: column;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--dm-border-strong);
 }
 
 .sc-modal-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--dm-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
+  background: var(--dm-surface-subtle);
 }
 
 .sc-modal-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -568,7 +559,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--dm-text-muted);
   padding: 4px;
   display: flex;
   align-items: center;
@@ -577,8 +568,8 @@
 }
 
 .sc-modal-close:hover {
-  background-color: #e2e8f0;
-  color: #0f172a;
+  background-color: var(--dm-surface-hover);
+  color: var(--dm-text-strong);
 }
 
 .sc-modal-body {
@@ -589,11 +580,11 @@
 
 .sc-modal-footer {
   padding: 12px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--dm-border);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  background-color: #f8fafc;
+  background-color: var(--dm-surface-subtle);
 }
 
 /* Form Styles */
@@ -605,7 +596,7 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--dm-text-secondary);
   margin-bottom: 6px;
 }
 
@@ -613,10 +604,10 @@
   width: 100%;
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--dm-border-strong);
   font-size: 13px;
-  color: #0f172a;
-  background-color: #ffffff;
+  color: var(--dm-text-strong);
+  background-color: var(--dm-surface);
   outline: none;
   box-sizing: border-box;
 }
@@ -628,7 +619,7 @@
 
 .sc-form-hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--dm-text-muted);
   margin-top: 5px;
   line-height: 1.4;
 }

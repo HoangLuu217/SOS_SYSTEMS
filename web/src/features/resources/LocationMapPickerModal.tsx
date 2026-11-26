@@ -45,9 +45,9 @@ export const VehicleTerrainSelector: React.FC<{
 }> = ({ value, onChange }) => (
   <div className="executive-modal-field">
     <label className="executive-modal-label">Địa hình phương tiện đã được xác nhận</label>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 7 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 14px', padding: '8px 10px', border: '1px solid var(--dm-border-strong)', borderRadius: 7 }}>
       {VEHICLE_TERRAIN_OPTIONS.map((option) => (
-        <label key={option.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#334155' }}>
+        <label key={option.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--dm-text-secondary)' }}>
           <input
             type="checkbox"
             checked={value.includes(option.value)}
@@ -61,7 +61,7 @@ export const VehicleTerrainSelector: React.FC<{
         </label>
       ))}
     </div>
-    <span style={{ color: '#64748b', fontSize: 11 }}>Chỉ chọn năng lực đã được xác minh. Để trống nếu chưa rõ.</span>
+    <span style={{ color: 'var(--dm-text-muted)', fontSize: 11 }}>Chỉ chọn năng lực đã được xác minh. Để trống nếu chưa rõ.</span>
   </div>
 );
 
@@ -198,13 +198,13 @@ export const LocationMapPickerModal: React.FC<{
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 720, width: '92vw', padding: 0, overflow: 'hidden' }}
       >
-        <div className="executive-modal-header" style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0' }}>
+        <div className="executive-modal-header" style={{ padding: '14px 18px', borderBottom: '1px solid var(--dm-border)' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <MapPin size={18} color="#0284c7" />
               <span>Ghim vị trí điểm tiếp tế / vùng ngập lụt</span>
             </h3>
-            <p style={{ margin: '3px 0 0', fontSize: 11.5, color: '#64748b' }}>
+            <p style={{ margin: '3px 0 0', fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
               Click chuột trực tiếp lên bản đồ để đánh dấu tọa độ GPS chính xác cho Đội cứu hộ
             </p>
           </div>
@@ -236,22 +236,22 @@ export const LocationMapPickerModal: React.FC<{
           )}
         </div>
 
-        <div style={{ padding: '12px 18px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ padding: '12px 18px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             {picked ? (
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: '#16a34a' }}>●</span>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'var(--dm-green-text)' }}>●</span>
                   <span>Tọa độ GPS: [{picked[1].toFixed(5)}, {picked[0].toFixed(5)}]</span>
                 </div>
                 {(isGeocoding || addressPreview) && (
-                  <div style={{ fontSize: 11.5, color: '#475569', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--dm-text-secondary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {isGeocoding ? 'Đang tìm tên địa điểm...' : addressPreview}
                   </div>
                 )}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>
+              <div style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                 Chưa có điểm nào được ghim trên bản đồ
               </div>
             )}
@@ -270,9 +270,9 @@ export const LocationMapPickerModal: React.FC<{
                   padding: '7px 12px',
                   fontSize: 12.5,
                   borderRadius: 8,
-                  color: '#dc2626',
-                  borderColor: '#fca5a5',
-                  background: '#fef2f2',
+                  color: 'var(--dm-red-text)',
+                  borderColor: 'var(--dm-red-border)',
+                  background: 'var(--dm-red-bg)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
@@ -481,9 +481,9 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
           height: inputHeight,
           minHeight: inputHeight,
           maxHeight: inputHeight,
-          background: '#ffffff',
+          background: 'var(--dm-surface)',
           borderRadius: 8,
-          border: isOpen ? '1px solid #0284c7' : '1px solid #cbd5e1',
+          border: isOpen ? '1px solid #0284c7' : '1px solid var(--dm-border-strong)',
           boxShadow: isOpen ? '0 0 0 3px rgba(2, 132, 199, 0.12)' : 'none',
           padding: '0 6px 0 10px',
           boxSizing: 'border-box',
@@ -519,7 +519,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
             background: 'transparent',
             padding: 0,
             fontSize: 12.5,
-            color: '#0f172a',
+            color: 'var(--dm-text-strong)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -539,7 +539,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
             style={{
               flexShrink: 0,
               border: 'none',
-              background: '#f1f5f9',
+              background: 'var(--dm-surface-muted)',
               borderRadius: '50%',
               width: 18,
               height: 18,
@@ -547,7 +547,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              color: '#64748b',
+              color: 'var(--dm-text-muted)',
             }}
             title="Xóa địa điểm"
           >
@@ -563,8 +563,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
             }}
             style={{
               flexShrink: 0,
-              border: coordinates ? '1px solid #7dd3fc' : '1px solid #bae6fd',
-              background: coordinates ? '#e0f2fe' : '#f0f9ff',
+              border: coordinates ? '1px solid var(--dm-blue-border)' : '1px solid var(--dm-blue-border)',
+              background: coordinates ? 'var(--dm-blue-bg)' : 'var(--dm-blue-bg)',
               borderRadius: 6,
               height: 26,
               padding: '0 7px',
@@ -574,7 +574,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
               cursor: 'pointer',
               fontSize: 11,
               fontWeight: 600,
-              color: coordinates ? '#0284c7' : '#0369a1',
+              color: coordinates ? 'var(--dm-blue-text)' : 'var(--dm-blue-text)',
               whiteSpace: 'nowrap',
               transition: 'all 0.15s ease',
             }}
@@ -594,8 +594,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
             left: 0,
             right: 0,
             zIndex: 60,
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
+            background: 'var(--dm-surface)',
+            border: '1px solid var(--dm-border-strong)',
             borderRadius: 10,
             boxShadow: '0 10px 25px rgba(15, 23, 42, 0.14)',
             maxHeight: 260,
@@ -609,7 +609,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                 padding: '4px 8px',
                 fontSize: 10.5,
                 fontWeight: 700,
-                color: '#0369a1',
+                color: 'var(--dm-blue-text)',
                 letterSpacing: '0.02em',
                 display: 'flex',
                 alignItems: 'center',
@@ -621,10 +621,10 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
               {filteredSafeLocations.map((loc: any) => {
                 const statusBadge =
                   loc.status === 'ACTIVE'
-                    ? { text: 'Hoạt động', bg: '#dcfce7', color: '#15803d' }
+                    ? { text: 'Hoạt động', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)' }
                     : loc.status === 'FULL'
-                      ? { text: 'Đã đầy', bg: '#fef3c7', color: '#b45309' }
-                      : { text: loc.status || 'Tạm dừng', bg: '#f1f5f9', color: '#475569' };
+                      ? { text: 'Đã đầy', bg: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)' }
+                      : { text: loc.status || 'Tạm dừng', bg: 'var(--dm-surface-muted)', color: 'var(--dm-text-secondary)' };
                 const coords: [number, number] | null =
                   Array.isArray(loc.location?.coordinates) && loc.location.coordinates.length === 2
                     ? [Number(loc.location.coordinates[0]), Number(loc.location.coordinates[1])]
@@ -664,11 +664,11 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, minWidth: 0 }}>
                       <span style={{ fontSize: 13, lineHeight: '18px' }}>{getSafeLocationIcon(loc.type)}</span>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {loc.name}
                         </div>
                         {loc.address && (
-                          <div style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {loc.address}
                           </div>
                         )}
@@ -697,8 +697,8 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                 padding: '4px 8px',
                 fontSize: 10.5,
                 fontWeight: 700,
-                color: '#475569',
-                borderTop: filteredSafeLocations.length > 0 ? '1px solid #e2e8f0' : 'none',
+                color: 'var(--dm-text-secondary)',
+                borderTop: filteredSafeLocations.length > 0 ? '1px solid var(--dm-border)' : 'none',
                 paddingTop: filteredSafeLocations.length > 0 ? 6 : 4,
                 display: 'flex',
                 alignItems: 'center',
@@ -710,13 +710,13 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                   <span>GỢI Ý ĐỊA ĐIỂM TRÊN BẢN ĐỒ</span>
                 </span>
                 {hasSerpApiResult && (
-                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: 999 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--dm-blue-text)', background: 'var(--dm-blue-bg)', padding: '1px 6px', borderRadius: 999 }}>
                     Google Maps
                   </span>
                 )}
               </div>
               {isSearchingPlaces && (
-                <div style={{ padding: '8px 10px', fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ padding: '8px 10px', fontSize: 11.5, color: 'var(--dm-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Loader2 size={13} className="animate-spin" />
                   <span>Đang tìm địa điểm Google Maps...</span>
                 </div>
@@ -753,10 +753,10 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
                   >
                     <MapPin size={13} color="#0284c7" style={{ marginTop: 2, flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {primaryName}
                       </div>
-                      <div style={{ fontSize: 10.5, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--dm-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {secondaryText}
                       </div>
                     </div>
@@ -767,7 +767,7 @@ export const DestinationAutocompleteInput: React.FC<DestinationAutocompleteInput
           )}
 
           {!isSearchingPlaces && filteredSafeLocations.length === 0 && placeResults.length === 0 && (
-            <div style={{ padding: '8px 10px', fontSize: 11.5, color: '#64748b' }}>
+            <div style={{ padding: '8px 10px', fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
               Không tìm thấy gợi ý phù hợp — bạn vẫn có thể giữ địa chỉ tự nhập hoặc bấm <strong>Ghim bản đồ</strong>.
             </div>
           )}

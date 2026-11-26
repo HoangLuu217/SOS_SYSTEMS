@@ -107,15 +107,15 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--dm-surface)',
+          border: '1px solid var(--dm-border)',
         }}
       >
         {/* HEADER MODAL */}
         <div
           style={{
-            background: '#ffffff',
-            borderBottom: '1px solid #e2e8f0',
+            background: 'var(--dm-surface)',
+            borderBottom: '1px solid var(--dm-border)',
             padding: '14px 20px',
             display: 'flex',
             alignItems: 'center',
@@ -128,22 +128,22 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                 width: 34,
                 height: 34,
                 borderRadius: 8,
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'var(--dm-surface-subtle)',
+                border: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 flexShrink: 0,
               }}
             >
               <AlertTriangle size={18} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.2px' }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--dm-text-strong)', letterSpacing: '-0.2px' }}>
                 XÁC NHẬN PHÂN CÔNG ĐIỀU ĐỘNG CỨU HỘ
               </h3>
-              <div style={{ fontSize: 11.5, color: '#1e293b', marginTop: 2, fontWeight: 400 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--dm-text-body)', marginTop: 2, fontWeight: 400 }}>
                 Kiểm tra thông tin hiện trường và lực lượng xuất kích trước khi phát lệnh
               </div>
             </div>
@@ -157,10 +157,10 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border)',
               borderRadius: 6,
-              color: '#0f172a',
+              color: 'var(--dm-text-strong)',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}
@@ -178,14 +178,14 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
-            background: '#f8fafc',
+            background: 'var(--dm-surface-subtle)',
           }}
         >
           {/* KHUNG 1: THÔNG TIN SỰ CỐ & HIỆN TRƯỜNG */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border)',
               borderRadius: 10,
               padding: '12px 14px',
               boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
@@ -195,9 +195,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             }}
           >
             {/* Header khung 1 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                <AlertCircle size={13.5} style={{ color: '#0f172a' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed var(--dm-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--dm-text-strong)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                <AlertCircle size={13.5} style={{ color: 'var(--dm-text-strong)' }} />
                 <span>Thông tin sự cố &amp; Hiện trường</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -205,9 +205,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                   style={{
                     fontSize: 12,
                     fontWeight: 800,
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    color: 'var(--dm-text-strong)',
+                    border: '1px solid var(--dm-border)',
                     padding: '2px 8px',
                     borderRadius: 5,
                     letterSpacing: '0.2px',
@@ -219,9 +219,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    color: 'var(--dm-text-strong)',
+                    border: '1px solid var(--dm-border)',
                     padding: '2px 7px',
                     borderRadius: 5,
                   }}
@@ -234,7 +234,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             {/* Thông tin nạn nhân & số điện thoại */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a' }}>
+                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                   {selectedSos.citizenName || 'Người dân gặp nạn'}
                 </span>
                 {selectedSos.affectedPeople && (
@@ -242,17 +242,17 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                     style={{
                       fontSize: 11.5,
                       fontWeight: 700,
-                      color: '#0f172a',
-                      background: '#f8fafc',
+                      color: 'var(--dm-text-strong)',
+                      background: 'var(--dm-surface-subtle)',
                       padding: '2px 8px',
                       borderRadius: 5,
-                      border: '1px solid #e2e8f0',
+                      border: '1px solid var(--dm-border)',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4,
                     }}
                   >
-                    <Users size={11.5} style={{ color: '#0f172a' }} />
+                    <Users size={11.5} style={{ color: 'var(--dm-text-strong)' }} />
                     <span>{selectedSos.affectedPeople} người gặp nạn</span>
                   </span>
                 )}
@@ -267,23 +267,23 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                     gap: 4,
                     fontSize: 12,
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: 'var(--dm-text-strong)',
                     textDecoration: 'none',
-                    background: '#f8fafc',
+                    background: 'var(--dm-surface-subtle)',
                     padding: '2.5px 8px',
                     borderRadius: 5,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid var(--dm-border)',
                   }}
                 >
-                  <Phone size={11.5} style={{ color: '#0f172a' }} />
+                  <Phone size={11.5} style={{ color: 'var(--dm-text-strong)' }} />
                   <span>{selectedSos.citizenPhone}</span>
                 </a>
               )}
             </div>
 
             {/* Vị trí hiện trường */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: '#0f172a', lineHeight: 1.4 }}>
-              <MapPin size={14} style={{ color: '#0f172a', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12.5, color: 'var(--dm-text-strong)', lineHeight: 1.4 }}>
+              <MapPin size={14} style={{ color: 'var(--dm-text-strong)', flexShrink: 0, marginTop: 2 }} />
               <span style={{ fontWeight: 600 }}>{selectedSos.locationName}</span>
             </div>
           </div>
@@ -291,8 +291,8 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
           {/* KHUNG 2: ĐỘI CỨU HỘ ĐƯỢC PHÂN CÔNG */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border)',
               borderRadius: 10,
               padding: '12px 14px',
               boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
@@ -302,9 +302,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             }}
           >
             {/* Header khung 2 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                <Shield size={13.5} style={{ color: '#0f172a' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed var(--dm-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--dm-text-strong)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                <Shield size={13.5} style={{ color: 'var(--dm-text-strong)' }} />
                 <span>Lực lượng điều động ({selectedTeams.length} đội)</span>
               </div>
               <div
@@ -314,14 +314,14 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                   gap: 4,
                   fontSize: 11.5,
                   fontWeight: 500,
-                  color: '#0f172a',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  color: 'var(--dm-text-strong)',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   padding: '2px 8px',
                   borderRadius: 5,
                 }}
               >
-                <Clock size={11} style={{ color: '#0f172a' }} />
+                <Clock size={11} style={{ color: 'var(--dm-text-strong)' }} />
                 <span>
                   Dự kiến tiếp cận (ETA): <strong style={{ fontWeight: 800 }}>{estimatedEtaText}</strong>
                 </span>
@@ -360,34 +360,34 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                   <div
                     key={team.id}
                     style={{
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1px solid var(--dm-border)',
                       borderRadius: 8,
                       padding: '8px 12px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                      <span style={{ color: '#0f172a', fontWeight: 800, fontSize: 13 }}>
+                      <span style={{ color: 'var(--dm-text-strong)', fontWeight: 800, fontSize: 13 }}>
                         {selectedTeams.length > 1 ? `${idx + 1}. ` : ''}{team.name}
                       </span>
                       {team.code && (
-                        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '1px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--dm-text-strong)', background: 'var(--dm-surface)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--dm-border)' }}>
                           {team.code}
                         </span>
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 4, fontSize: 12, color: '#0f172a', fontWeight: 400 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 4, fontSize: 12, color: 'var(--dm-text-strong)', fontWeight: 400 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Users size={12} style={{ color: '#0f172a' }} />
+                        <Users size={12} style={{ color: 'var(--dm-text-strong)' }} />
                         <span>
-                          Chỉ huy: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({memberCount} chiến sĩ)
+                          Chỉ huy: <strong style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>{lead?.name || 'Trưởng đội'}</strong> ({memberCount} chiến sĩ)
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Truck size={12} style={{ color: '#0f172a' }} />
+                        <Truck size={12} style={{ color: 'var(--dm-text-strong)' }} />
                         <span>
-                          Phương tiện: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{vehName}</strong>
+                          Phương tiện: <strong style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>{vehName}</strong>
                         </span>
                       </div>
                     </div>
@@ -400,8 +400,8 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
           {/* KHUNG 3: VẬT TƯ & HÀNG TIẾP TẾ CẤP PHÁT */}
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border)',
               borderRadius: 10,
               padding: '12px 14px',
               boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
@@ -411,18 +411,18 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             }}
           >
             {/* Header khung 3 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                <Package size={13.5} style={{ color: '#0f172a' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px dashed var(--dm-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--dm-text-strong)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                <Package size={13.5} style={{ color: 'var(--dm-text-strong)' }} />
                 <span>Vật tư &amp; Trang thiết bị cấp phát</span>
               </div>
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#0f172a',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  color: 'var(--dm-text-strong)',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   padding: '1.5px 7px',
                   borderRadius: 4,
                 }}
@@ -448,21 +448,21 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 5,
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
+                        background: 'var(--dm-surface-subtle)',
+                        border: '1px solid var(--dm-border)',
                         padding: '4px 9px',
                         borderRadius: 6,
                         fontSize: 12,
-                        color: '#0f172a',
+                        color: 'var(--dm-text-strong)',
                         fontWeight: 600,
                       }}
                     >
                       <span>{name}</span>
                       <span
                         style={{
-                          background: '#ffffff',
-                          border: '1px solid #e2e8f0',
-                          color: '#0f172a',
+                          background: 'var(--dm-surface)',
+                          border: '1px solid var(--dm-border)',
+                          color: 'var(--dm-text-strong)',
                           fontWeight: 800,
                           fontSize: 11,
                           padding: '1px 5px',
@@ -476,7 +476,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                 })}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 400, fontStyle: 'italic' }}>
+              <div style={{ fontSize: 12, color: 'var(--dm-text-strong)', fontWeight: 400, fontStyle: 'italic' }}>
                 Chưa chọn cấp thêm vật tư từ kho (Đội xuất kích mang theo trang thiết bị cứu hộ tiêu chuẩn trên phương tiện).
               </div>
             )}
@@ -487,8 +487,8 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
         <div
           style={{
             padding: '12px 20px',
-            background: '#ffffff',
-            borderTop: '1px solid #e2e8f0',
+            background: 'var(--dm-surface)',
+            borderTop: '1px solid var(--dm-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -500,7 +500,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
           <div
             style={{
               fontSize: 11.5,
-              color: '#0f172a',
+              color: 'var(--dm-text-strong)',
               fontWeight: 400,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -518,13 +518,13 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
               onClick={onClose}
               style={{
                 padding: '8px 16px',
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
+                background: 'var(--dm-surface)',
+                border: '1px solid var(--dm-border-strong)',
                 borderRadius: 8,
                 cursor: 'pointer',
                 fontWeight: 700,
                 fontSize: 12.5,
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 transition: 'all 0.15s ease',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,

@@ -17,7 +17,7 @@
   cursor: pointer;
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
+  color: var(--dm-text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -100,14 +100,14 @@
 .sos-hazard-page-title-group h2 {
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   margin: 0 0 4px 0;
   letter-spacing: -0.01em;
 }
 
 .sos-hazard-page-title-group p {
   font-size: 13px;
-  color: #64748b;
+  color: var(--dm-text-muted);
   margin: 0;
   line-height: 1.4;
 }
@@ -118,8 +118,8 @@
   justify-content: space-between;
   gap: 14px;
   padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--dm-surface-subtle);
+  border: 1px solid var(--dm-border);
   border-radius: 8px;
   flex-wrap: wrap;
 }
@@ -148,11 +148,11 @@
   gap: 8px;
   flex-wrap: wrap;
   font-size: 13.5px;
-  color: #334155;
+  color: var(--dm-text-secondary);
 }
 
 .sos-fixed-jur-title strong {
-  color: #0f172a;
+  color: var(--dm-text-strong);
   font-size: 14.5px;
   font-weight: 700;
 }
@@ -161,8 +161,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--dm-surface-hover);
+  color: var(--dm-text-secondary);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
@@ -170,7 +170,7 @@
 
 .sos-fixed-jur-sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--dm-text-muted);
   margin-top: 2px;
 }
 
@@ -182,8 +182,8 @@
 }
 
 .sos-flat-stat-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border);
   border-radius: 8px;
   padding: 14px 18px;
   display: flex;
@@ -198,7 +198,7 @@
   justify-content: space-between;
   font-size: 12.5px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--dm-text-muted);
 }
 
 .sos-flat-stat-dot {
@@ -214,13 +214,13 @@
 .sos-flat-stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   line-height: 1.2;
 }
 
 .sos-flat-stat-desc {
   font-size: 11.5px;
-  color: #94a3b8;
+  color: var(--dm-text-muted);
 }
 
 /* 3. Clean Filter Tabs & Search Bar */
@@ -236,10 +236,10 @@
 .sos-clean-tabs {
   display: flex;
   gap: 6px;
-  background: #f1f5f9;
+  background: var(--dm-surface-muted);
   padding: 4px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--dm-border);
 }
 
 .sos-clean-tab {
@@ -247,7 +247,7 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--dm-text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -258,12 +258,12 @@
 }
 
 .sos-clean-tab:hover {
-  color: #0f172a;
+  color: var(--dm-text-strong);
 }
 
 .sos-clean-tab.active {
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--dm-surface);
+  color: var(--dm-text-strong);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -271,8 +271,8 @@
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 12px;
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--dm-surface-hover);
+  color: var(--dm-text-secondary);
 }
 .sos-clean-tab.active .sos-clean-tab-count {
   background: #0f172a;
@@ -283,8 +283,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
   border-radius: 8px;
   padding: 8px 14px;
   min-width: 340px;
@@ -295,7 +295,7 @@
   outline: none;
   background: transparent;
   font-size: 13.5px;
-  color: #0f172a;
+  color: var(--dm-text-strong);
   width: 100%;
 }
 
@@ -313,9 +313,9 @@
   gap: 14px;
   padding: 14px 18px;
   border-radius: 12px;
-  border: 1.5px solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
+  border: 1.5px solid var(--dm-border);
+  background: var(--dm-surface);
+  color: var(--dm-text-body);
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
@@ -323,8 +323,8 @@
 }
 
 .sos-hazard-type-card:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
+  border-color: var(--dm-border-strong);
+  background: var(--dm-surface-subtle);
 }
 
 .sos-hazard-type-card.selected {
@@ -348,8 +348,8 @@
 
 /* 5. Minimal Data Table - Đồng bộ chuẩn RescuerApprovalView */
 .sos-clean-table-container {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
@@ -365,23 +365,23 @@
 .sos-clean-table thead {
   position: sticky;
   top: 0;
-  background: #f1f5f9;
+  background: var(--dm-surface-muted);
   z-index: 5;
   box-shadow: 0 1px 0 #cbd5e1;
 }
 
 .sos-clean-table th {
-  background: #f1f5f9;
+  background: var(--dm-surface-muted);
   padding: 11px 14px;
   font-size: 11.5px;
   font-weight: 800;
-  color: #334155;
+  color: var(--dm-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   border-top: none;
   border-left: none;
-  border-bottom: 2px solid #cbd5e1;
-  border-right: 1px solid #e2e8f0;
+  border-bottom: 2px solid var(--dm-border-strong);
+  border-right: 1px solid var(--dm-border);
   white-space: nowrap;
   position: sticky;
   top: 0;
@@ -396,9 +396,9 @@
   padding: 12px 14px;
   border-top: none;
   border-left: none;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #f1f5f9;
-  color: #1e293b;
+  border-bottom: 1px solid var(--dm-border);
+  border-right: 1px solid var(--dm-border);
+  color: var(--dm-text-body);
   vertical-align: middle;
   font-size: 13px;
   transition: background-color 0.15s ease;
@@ -408,27 +408,19 @@
   border-right: none;
 }
 
-.sos-clean-table tbody tr:nth-child(odd) td {
-  background-color: #ffffff;
-}
-
+.sos-clean-table tbody tr:nth-child(odd) td,
 .sos-clean-table tbody tr:nth-child(even) td {
-  background-color: #f1f5f9;
+  background-color: transparent;
 }
 
 .sos-clean-table tbody tr:hover td,
 .sos-clean-table tbody tr.ra-clickable-row:hover td {
-  background-color: #e0f2fe !important;
+  background-color: var(--sos-table-hover) !important;
 }
 
 .sos-clean-table tbody tr.row-selected td,
 .sos-clean-table tbody tr.ra-clickable-row.row-selected td {
-  background-color: #bae6fd !important;
-}
-
-.sos-clean-table tbody tr.row-selected td:first-child,
-.sos-clean-table tbody tr.ra-clickable-row.row-selected td:first-child {
-  border-left: 4px solid #0284c7;
+  background-color: var(--sos-table-hover) !important;
 }
 
 /* Minimal Action Buttons */
@@ -438,9 +430,9 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -449,49 +441,49 @@
 }
 
 .sos-btn-flat:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-strong);
+  border-color: var(--dm-border-strong);
 }
 
 .sos-btn-flat.primary {
-  background: #e0f2fe; /* Xanh nhạt như màu sidebar */
-  color: #0369a1;
-  border-color: #7dd3fc;
+  background: var(--dm-blue-bg); /* Xanh nhạt như màu sidebar */
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
 }
 .sos-btn-flat.primary:hover {
-  background: #bae6fd;
-  color: #0284c7;
+  background: var(--dm-blue-bg-strong);
+  color: var(--dm-blue-text);
   border-color: #38bdf8;
 }
 
 .sos-btn-flat.danger {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #ffffff;
+  color: var(--dm-red-text);
+  border-color: var(--dm-red-border);
+  background: var(--dm-surface);
 }
 .sos-btn-flat.danger:hover {
-  background: #fee2e2;
-  border-color: #f87171;
+  background: var(--dm-red-bg);
+  border-color: var(--dm-red-border);
 }
 
 .sos-btn-flat.success {
-  color: #15803d;
-  border-color: #86efac;
-  background: #ffffff;
+  color: var(--dm-green-text);
+  border-color: var(--dm-green-border);
+  background: var(--dm-surface);
 }
 .sos-btn-flat.success:hover {
-  background: #dcfce7;
+  background: var(--dm-green-bg);
 }
 
 .sos-btn-flat.warning {
-  color: #b45309;
-  border-color: #fde68a;
-  background: #ffffff;
+  color: var(--dm-amber-text);
+  border-color: var(--dm-amber-border);
+  background: var(--dm-surface);
 }
 .sos-btn-flat.warning:hover {
-  background: #fef3c7;
-  border-color: #fcd34d;
+  background: var(--dm-amber-bg);
+  border-color: var(--dm-amber-border);
 }
 
 /* Scope switch tabs (Local vs City) */
@@ -507,9 +499,9 @@
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  background: var(--dm-surface);
+  border: 1px solid var(--dm-border-strong);
+  color: var(--dm-text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -517,15 +509,15 @@
 }
 
 .sos-scope-tab:hover {
-  background: #f0f9ff;
-  color: #0284c7;
-  border-color: #7dd3fc;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
 }
 
 .sos-scope-tab.active {
-  background: #e0f2fe; /* Xanh nhạt như màu sidebar */
-  color: #0369a1;
-  border-color: #7dd3fc;
+  background: var(--dm-blue-bg); /* Xanh nhạt như màu sidebar */
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
   font-weight: 700;
 }
 
@@ -537,8 +529,8 @@
 .sos-scope-badge {
   padding: 2px 8px;
   border-radius: 12px;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -549,17 +541,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  background: #fafbfd;
-  border-top: 1px solid #e2e8f0;
+  background: var(--dm-surface-subtle);
+  border-top: 1px solid var(--dm-border);
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--dm-text-muted);
 }
 
 .sos-pagination-info {
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--dm-text-muted);
   font-weight: 500;
 }
 
@@ -576,9 +568,9 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-secondary);
   transition: all 0.15s ease;
   min-width: 28px;
   text-align: center;
@@ -588,9 +580,9 @@
 }
 
 .sos-pagination-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
+  background: var(--dm-surface-muted);
+  color: var(--dm-text-strong);
+  border-color: var(--dm-border-strong);
 }
 
 .sos-pagination-btn.active {
@@ -603,8 +595,8 @@
 .sos-pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  border-color: #e2e8f0;
-  color: #94a3b8;
+  border-color: var(--dm-border);
+  color: var(--dm-text-muted);
 }
 
 /* 7. Table Header Sorting Styles */
@@ -615,13 +607,13 @@
 }
 
 .sos-clean-table th.sortable:hover {
-  background-color: #e2e8f0;
-  color: #0284c7;
+  background-color: var(--dm-surface-hover);
+  color: var(--dm-blue-text);
 }
 
 .sos-clean-table th.sortable.sorted {
-  color: #0284c7;
-  background-color: #e0f2fe;
+  color: var(--dm-blue-text);
+  background-color: var(--dm-blue-bg);
   border-bottom: 2px solid #0284c7;
 }
 
@@ -631,9 +623,9 @@
   font-size: 12.5px;
   font-weight: 500;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background-color: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--dm-border-strong);
+  background-color: var(--dm-surface);
+  color: var(--dm-text-strong);
   cursor: pointer;
   outline: none;
   transition: all 0.15s ease;
@@ -641,7 +633,7 @@
 }
 
 .sos-clean-sort-select:hover {
-  border-color: #94a3b8;
+  border-color: var(--dm-border-strong);
 }
 
 .sos-clean-sort-select:focus {
@@ -656,7 +648,7 @@
   gap: 6px;
   margin-left: 8px;
   padding-left: 10px;
-  border-left: 1px solid #cbd5e1;
+  border-left: 1px solid var(--dm-border-strong);
 }
 
 .sos-pagination-jump-input {
@@ -665,9 +657,9 @@
   font-size: 12.5px;
   text-align: center;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--dm-border-strong);
+  background: var(--dm-surface);
+  color: var(--dm-text-strong);
   outline: none;
   font-weight: 600;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;

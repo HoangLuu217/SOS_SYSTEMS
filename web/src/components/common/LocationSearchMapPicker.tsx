@@ -294,7 +294,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
           style={{
             fontSize: 13.5,
             fontWeight: 700,
-            color: '#0f172a',
+            color: 'var(--dm-text-strong)',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
@@ -307,13 +307,13 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
           type="button"
           onClick={handleLocateCurrent}
           style={{
-            background: '#f1f5f9',
-            border: '1px solid #cbd5e1',
+            background: 'var(--dm-surface-muted)',
+            border: '1px solid var(--dm-border-strong)',
             borderRadius: 6,
             padding: '4px 8px',
             fontSize: 11.5,
             fontWeight: 600,
-            color: '#334155',
+            color: 'var(--dm-text-secondary)',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
@@ -336,8 +336,8 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
+              background: 'var(--dm-surface-subtle)',
+              border: '1px solid var(--dm-border-strong)',
               borderRadius: 8,
               padding: '6px 10px',
             }}
@@ -373,7 +373,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
                 background: 'transparent',
                 width: '100%',
                 fontSize: 12.5,
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
               }}
             />
             {searchQuery && (
@@ -390,7 +390,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
                   cursor: 'pointer',
                   padding: 0,
                   display: 'flex',
-                  color: '#94a3b8',
+                  color: 'var(--dm-text-muted)',
                 }}
                 title="Xóa tìm kiếm"
               >
@@ -431,7 +431,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
           <div
             style={{
               fontSize: 11.5,
-              color: searchFeedback.type === 'success' ? '#16a34a' : '#d97706',
+              color: searchFeedback.type === 'success' ? 'var(--dm-green-text)' : 'var(--dm-amber-text)',
               marginTop: 4,
               fontWeight: 500,
             }}
@@ -448,9 +448,9 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
               top: 'calc(100% + 4px)',
               left: 0,
               right: 0,
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 8,
-              border: '1px solid #cbd5e1',
+              border: '1px solid var(--dm-border-strong)',
               boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
               zIndex: 9999,
               maxHeight: 220,
@@ -464,12 +464,12 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
                 style={{
                   padding: '9px 12px',
                   fontSize: 12,
-                  borderBottom: '1px solid #f1f5f9',
+                  borderBottom: '1px solid var(--dm-border)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 8,
-                  color: '#0f172a',
+                  color: 'var(--dm-text-strong)',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
@@ -489,9 +489,9 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
           width: '100%',
           height: mapHeight,
           borderRadius: 10,
-          border: error ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+          border: error ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
           overflow: 'hidden',
-          background: '#f1f5f9',
+          background: 'var(--dm-surface-muted)',
         }}
       />
 
@@ -501,7 +501,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            color: '#dc2626',
+            color: 'var(--dm-red-text)',
             fontSize: 11.5,
             fontWeight: 500,
           }}
@@ -514,8 +514,8 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
       {/* Tóm tắt tọa độ đã chọn */}
       <div
         style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
+          background: 'var(--dm-surface-subtle)',
+          border: '1px solid var(--dm-border)',
           borderRadius: 8,
           padding: '8px 10px',
           fontSize: 12,
@@ -525,20 +525,20 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ color: '#64748b', fontWeight: 600 }}>Tọa độ chọn:</span>
-          <span style={{ color: '#0f172a', fontWeight: 700 }}>
+          <span style={{ color: 'var(--dm-text-muted)', fontWeight: 600 }}>Tọa độ chọn:</span>
+          <span style={{ color: 'var(--dm-text-strong)', fontWeight: 700 }}>
             {currentCoords.lat.toFixed(6)}, {currentCoords.lng.toFixed(6)}
           </span>
         </div>
 
         {reverseAddress && (
-          <div style={{ color: '#475569', fontSize: 11.5, lineHeight: 1.35 }}>
+          <div style={{ color: 'var(--dm-text-secondary)', fontSize: 11.5, lineHeight: 1.35 }}>
             📍 <span style={{ fontWeight: 500 }}>{reverseAddress}</span>
           </div>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-          <span style={{ fontSize: 11, color: '#64748b' }}>
+          <span style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
             💡 Bấm hoặc kéo ghim trên bản đồ để chọn chính xác.
           </span>
           <a
@@ -547,7 +547,7 @@ export const LocationSearchMapPicker: React.FC<LocationSearchMapPickerProps> = (
             rel="noreferrer"
             style={{
               fontSize: 11.5,
-              color: '#2563eb',
+              color: 'var(--dm-blue-text)',
               fontWeight: 600,
               textDecoration: 'none',
               display: 'inline-flex',

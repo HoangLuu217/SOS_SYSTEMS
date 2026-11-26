@@ -50,21 +50,21 @@ export const AdminOverviewView: React.FC = () => {
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           {adminStats?.sosByStatus?.map((st: { status: string; count: number }) => (
             <div key={st.status} style={{ padding: '12px 18px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
-              <div style={{ fontSize: '11px', color: '#94a3b8' }}>{st.status}</div>
+              <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>{st.status}</div>
               <div style={{ fontSize: '20px', fontWeight: 800, color: '#f8fafc' }}>{st.count}</div>
             </div>
           )) || (
             <>
               <div style={{ padding: '12px 18px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>PENDING</div>
+                <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>PENDING</div>
                 <div style={{ fontSize: '20px', fontWeight: 800, color: '#fbbf24' }}>1</div>
               </div>
               <div style={{ padding: '12px 18px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>VERIFIED</div>
+                <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>VERIFIED</div>
                 <div style={{ fontSize: '20px', fontWeight: 800, color: '#38bdf8' }}>3</div>
               </div>
               <div style={{ padding: '12px 18px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>COMPLETED</div>
+                <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>COMPLETED</div>
                 <div style={{ fontSize: '20px', fontWeight: 800, color: '#4ade80' }}>2</div>
               </div>
             </>

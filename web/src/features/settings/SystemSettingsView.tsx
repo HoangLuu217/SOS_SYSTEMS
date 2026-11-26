@@ -60,7 +60,7 @@ export const SystemSettingsView: React.FC = () => {
                 <span>Lưu Cấu Hình Cài Đặt</span>
               </button>
             </div>
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--dm-text-muted)' }}>
               Thiết lập các tham số điều hành tự động, ngưỡng cảnh báo âm thanh, bán kính phân bổ lực lượng và hạ tầng bản đồ GIS trên địa bàn.
             </p>
 
@@ -133,7 +133,7 @@ export const SystemSettingsView: React.FC = () => {
                   <div className="sos-settings-row">
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <label>Bán kính quét đội cứu hộ gần nhất:</label>
-                      <strong style={{ color: '#0284c7' }}>{systemSettings.scanRadiusKm} km</strong>
+                      <strong style={{ color: 'var(--dm-blue-text)' }}>{systemSettings.scanRadiusKm} km</strong>
                     </div>
                     <input
                       type="range"
@@ -144,7 +144,7 @@ export const SystemSettingsView: React.FC = () => {
                       onChange={(e) => setSystemSettings({ ...systemSettings, scanRadiusKm: Number(e.target.value) })}
                       style={{ width: '100%', cursor: 'pointer' }}
                     />
-                    <small style={{ color: '#94a3b8' }}>Tự động dò tìm các đội ca-nô và lực lượng cứu hộ trong bán kính cài đặt.</small>
+                    <small style={{ color: 'var(--dm-text-muted)' }}>Tự động dò tìm các đội ca-nô và lực lượng cứu hộ trong bán kính cài đặt.</small>
                   </div>
 
                   <div className="sos-settings-row">
@@ -161,7 +161,7 @@ export const SystemSettingsView: React.FC = () => {
                       onChange={(e) => setSystemSettings({ ...systemSettings, autoEscalateMinutes: Number(e.target.value) })}
                       style={{ width: '100%', cursor: 'pointer' }}
                     />
-                    <small style={{ color: '#94a3b8' }}>Nếu ca SOS chưa có đội cứu hộ nhận sau khoảng thời gian này, hệ thống sẽ báo động đỏ.</small>
+                    <small style={{ color: 'var(--dm-text-muted)' }}>Nếu ca SOS chưa có đội cứu hộ nhận sau khoảng thời gian này, hệ thống sẽ báo động đỏ.</small>
                   </div>
 
                   <div className="sos-settings-toggle-row">
@@ -288,20 +288,20 @@ export const SystemSettingsView: React.FC = () => {
                         30 Giây (Tiết kiệm)
                       </button>
                     </div>
-                    <small style={{ color: '#94a3b8', marginTop: '6px', display: 'block' }}>
+                    <small style={{ color: 'var(--dm-text-muted)', marginTop: '6px', display: 'block' }}>
                       Tần suất càng nhanh giúp cập nhật tọa độ ca-nô và trạng thái SOS tức thì.
                     </small>
                   </div>
 
-                  <div style={{ marginTop: '16px', padding: '12px 14px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ marginTop: '16px', padding: '12px 14px', background: 'var(--dm-green-bg)', borderRadius: '8px', border: '1px solid var(--dm-green-border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#059669', animation: 'pulseLive 1.5s infinite' }} />
-                    <div style={{ fontSize: '12.5px', color: '#065f46' }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--dm-green-text)' }}>
                       <strong>Realtime WebSocket:</strong> Kết nối trực tiếp máy chủ cứu hộ TP Đà Nẵng hoạt động 99.9%
                     </div>
                   </div>
 
                   {systemSettings.lastUpdated && (
-                    <div style={{ marginTop: '10px', fontSize: '11.5px', color: '#94a3b8', textAlign: 'right' }}>
+                    <div style={{ marginTop: '10px', fontSize: '11.5px', color: 'var(--dm-text-muted)', textAlign: 'right' }}>
                       Cập nhật lần cuối: {new Date(systemSettings.lastUpdated).toLocaleString('vi-VN')}
                     </div>
                   )}
@@ -314,7 +314,7 @@ export const SystemSettingsView: React.FC = () => {
                 type="button"
                 onClick={() => setSystemSettings(DEFAULT_SYSTEM_SETTINGS)}
                 className="sos-btn-action"
-                style={{ padding: '10px 18px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}
+                style={{ padding: '10px 18px', background: 'var(--dm-surface-muted)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}
               >
                 Khôi phục mặc định
               </button>

@@ -1,9 +1,12 @@
 import React from 'react';
 import { Sidebar, type NavItemKey } from './Sidebar';
-import { MapPin } from 'lucide-react';
+import { PhoenixTopbar } from './PhoenixTopbar';
 import { AuthorPortal, AdminPortal } from '@/features/map-operation';
 import { NAV_TITLES } from '@/constants/navConfig';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useCustomizer } from '@/kit/customizer/CustomizerProvider';
+import { PageHeader } from '@/kit/ui-patterns';
+import { cn } from '@/lib/utils';
 import type { User } from '@/types/auth';
 
 export interface DashboardLayoutProps {
@@ -16,6 +19,44 @@ export interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
+const NAV_CATEGORY_LABELS: Partial<Record<NavItemKey, string>> = {
+  map: 'Điều hành',
+  sos_requests: 'Điều hành',
+  coordination: 'Điều hành',
+  chat: 'Tác chiến',
+  rescuers_approval: 'Lực lượng & Hậu cần',
+  rescuers: 'Lực lượng & Hậu cần',
+  resources: 'Lực lượng & Hậu cần',
+  notifications: 'Cảnh báo & Cộng đồng',
+  alerts: 'Cảnh báo & Cộng đồng',
+  safety_checks: 'Cảnh báo & Cộng đồng',
+  blood_donations: 'Cảnh báo & Cộng đồng',
+  weather: 'Cảnh báo & Cộng đồng',
+  shelters: 'Cảnh báo & Cộng đồng',
+  hazard_reports: 'Cảnh báo & Cộng đồng',
+  reports: 'Báo cáo & Giám sát',
+  operation_logs: 'Báo cáo & Giám sát',
+  audit_logs: 'Báo cáo & Giám sát',
+  citizens: 'Quản trị hệ thống',
+  rescuers_admin: 'Quản trị hệ thống',
+  authorities: 'Quản trị hệ thống',
+  areas: 'Quản trị hệ thống',
+  rbac: 'Quản trị hệ thống',
+  settings: 'Cấu hình hệ thống',
+};
+
+const toCleanHeading = (title: string): string => {
+  if (title === title.toUpperCase() && title.length > 6) {
+    return title
+      .toLowerCase()
+      .replace(/(^|\s|&|-|\/)\S/g, (ch) => ch.toUpperCase())
+      .replace(/\bSos\b/g, 'SOS')
+      .replace(/\bRbac\b/g, 'RBAC')
+      .replace(/\bGis\b/g, 'GIS');
+  }
+  return title;
+};
+
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   user,
   activeNavKey,
@@ -25,21 +66,109 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onLogout,
   children,
 }) => {
+  const { settings } = useCustomizer();
+  const isTopLayout = settings.layout === 'top';
+  const isContained = settings.contentWidth === 'contained';
+
   const currentMeta = NAV_TITLES[activeNavKey] || NAV_TITLES.map;
+  const categoryLabel = NAV_CATEGORY_LABELS[activeNavKey] || 'Điều hành';
+  const cleanPageTitle = toCleanHeading(currentMeta.title);
+
   const isAuthority =
     (Boolean(user.authority) ||
       Boolean(user.roles?.includes('LOCAL_AUTHORITY')) ||
       Boolean(user.roles?.includes('AUTHORITY'))) &&
     !user.roles?.includes('ADMIN');
 
-  const userAreaName =
-    user.authority?.areaName ||
-    (user.authority as any)?.jurisdictionAreaName ||
-    '';
+  const isLockedViewportPage =
+    activeNavKey === 'map' ||
+    activeNavKey === 'coordination' ||
+    activeNavKey === 'hazard_reports' ||
+    activeNavKey === 'shelters' ||
+    activeNavKey === 'notifications' ||
+    activeNavKey === 'alerts' ||
+    activeNavKey === 'chat';
+
+  const isInnerScrollLocked =
+    activeNavKey === 'hazard_reports' ||
+    activeNavKey === 'shelters' ||
+    activeNavKey === 'notifications' ||
+    activeNavKey === 'alerts' ||
+    activeNavKey === 'chat';
+
+  const renderMainContent = () => (
+    <main
+      className="sos-main-content ch-inset-main"
+      style={{
+        overflow: isLockedViewportPage ? 'hidden' : 'auto',
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {activeNavKey === 'map' ? (
+        isAuthority ? (
+          <AuthorPortal user={user} embedded={true} onLogout={onLogout} />
+        ) : (
+          <AdminPortal embedded={true} onLogout={onLogout} />
+        )
+      ) : (
+        <div
+          className={cn(
+            'flex min-h-0 w-full flex-1 flex-col',
+            isContained && 'mx-auto max-w-7xl'
+          )}
+        >
+          {/* Chronicle PageHeader (kit/ui-patterns) */}
+          <header className="sos-main-header ch-page-heading">
+            <PageHeader
+              title={cleanPageTitle}
+              description={currentMeta.desc}
+              className="w-full"
+            />
+          </header>
+
+          <div
+            className="sos-page-body ch-page-body"
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              overflow: isInnerScrollLocked ? 'hidden' : 'auto',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+              }}
+            >
+              <ErrorBoundary
+                fallbackTitle={`Đã xảy ra sự cố khi tải dữ liệu ${cleanPageTitle}`}
+              >
+                {children}
+              </ErrorBoundary>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
 
   return (
-    <div className="sos-dashboard-container">
-      {/* 1. THANH SIDEBAR BÊN TRÁI PHÂN BIỆT THEO ROLE */}
+    <div
+      className="ch-app-shell sos-phoenix-shell"
+      data-layout={settings.layout}
+      data-sidebar-variant={settings.sidebarVariant}
+      data-sidebar-collapsible={settings.sidebarCollapsible}
+      data-content-width={settings.contentWidth}
+    >
+      {/* Keep Sidebar mounted in top-bar mode with hiddenRail so live Socket.IO counters & Profile/OTP Modal stay active */}
       <Sidebar
         user={user}
         activeKey={activeNavKey}
@@ -47,120 +176,38 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onLogout={onLogout}
         collapsed={sidebarCollapsed}
         onToggleCollapse={onToggleSidebarCollapse}
+        hiddenRail={isTopLayout}
       />
 
-      {/* 2. KHÔNG GIAN NỘI DUNG CHÍNH (MAIN DASHBOARD CONTENT) */}
-      <main
-        className="sos-main-content"
-        style={{
-          overflow:
-            activeNavKey === 'map' ||
-            activeNavKey === 'coordination' ||
-            activeNavKey === 'hazard_reports' ||
-            activeNavKey === 'shelters' ||
-            activeNavKey === 'notifications' ||
-            activeNavKey === 'alerts' ||
-            activeNavKey === 'chat'
-              ? 'hidden'
-              : 'auto',
-          height: '100vh',
-          maxHeight: '100vh',
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {activeNavKey === 'map' ? (
-          /* Cán bộ địa phương dùng AuthorPortal (Khóa khu vực), Admin dùng AdminPortal (Toàn TP Đà Nẵng) */
-          isAuthority ? (
-            <AuthorPortal
-              user={user}
-              embedded={true}
-              onLogout={onLogout}
-            />
-          ) : (
-            <AdminPortal
-              embedded={true}
-              onLogout={onLogout}
-            />
-          )
-        ) : (
-          /* Các màn hình quản trị nghiệp vụ khác */
-          <>
-            <header className="sos-main-header">
-              <div className="sos-page-title-wrap">
-                <div>
-                  <h1 className="sos-page-title">{currentMeta.title}</h1>
-                  {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
-                {isAuthority && (
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      background: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderRadius: 8,
-                      padding: '6px 14px',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#1d4ed8',
-                      boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
-                    }}
-                    title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
-                  >
-                    <MapPin size={14} style={{ color: '#2563eb' }} />
-                    <span>
-                      Khu vực:{' '}
-                      {userAreaName
-                        ? userAreaName.includes('Đà Nẵng') || userAreaName.includes('Hà Nội') || userAreaName.includes('Hồ Chí Minh')
-                          ? userAreaName
-                          : `${userAreaName}, Thành phố Đà Nẵng`
-                        : 'Xã Xuân Phú, Thành phố Đà Nẵng'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </header>
-
-            <div
-              className="sos-page-body"
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: 0,
-                overflow:
-                  activeNavKey === 'hazard_reports' ||
-                  activeNavKey === 'shelters' ||
-                  activeNavKey === 'notifications' ||
-                  activeNavKey === 'alerts' ||
-                  activeNavKey === 'chat'
-                    ? 'hidden'
-                    : 'auto',
-                padding:
-                  activeNavKey === 'hazard_reports' ||
-                  activeNavKey === 'shelters' ||
-                  activeNavKey === 'notifications' ||
-                  activeNavKey === 'alerts'
-                    ? '14px 20px 16px'
-                    : '12px 18px 14px',
-              }}
-            >
-              <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <ErrorBoundary fallbackTitle={`Đã xảy ra sự cố khi tải dữ liệu ${currentMeta.title}`}>
-                  {children}
-                </ErrorBoundary>
-              </div>
-            </div>
-          </>
-        )}
-      </main>
+      {isTopLayout ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+          <PhoenixTopbar
+            user={user}
+            activeNavKey={activeNavKey}
+            categoryLabel={categoryLabel}
+            pageTitle={cleanPageTitle}
+            sidebarCollapsed={sidebarCollapsed}
+            onSelectNavKey={onSelectNavKey}
+            onToggleSidebarCollapse={onToggleSidebarCollapse}
+            onLogout={onLogout}
+          />
+          {renderMainContent()}
+        </div>
+      ) : (
+        <div className="ch-sidebar-inset">
+          <PhoenixTopbar
+            user={user}
+            activeNavKey={activeNavKey}
+            categoryLabel={categoryLabel}
+            pageTitle={cleanPageTitle}
+            sidebarCollapsed={sidebarCollapsed}
+            onSelectNavKey={onSelectNavKey}
+            onToggleSidebarCollapse={onToggleSidebarCollapse}
+            onLogout={onLogout}
+          />
+          {renderMainContent()}
+        </div>
+      )}
     </div>
   );
 };

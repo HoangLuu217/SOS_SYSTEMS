@@ -959,8 +959,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <section className="rpt-box">
           <header className="rpt-box-head">
             <div>
-              <h3 className="rpt-box-title">Hoạt động tiếp nhận & điều phối SOS</h3>
-              <p className="rpt-box-desc">Biểu đồ yêu cầu phát sinh, hoàn thành và phân loại sự cố</p>
+              <h3 className="rpt-box-title">Hoạt động SOS</h3>
+              <p className="rpt-box-desc">Biểu đồ tiếp nhận, hoàn thành và phân loại sự cố</p>
             </div>
             <button type="button" className="rpt-tab-link" onClick={() => jumpTo('sos_requests')}>
               Mở tab SOS <ArrowUpRight size={13} />
@@ -1020,8 +1020,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <section className="rpt-box">
           <header className="rpt-box-head">
             <div>
-              <h3 className="rpt-box-title">Tình hình an toàn, trú ẩn & nguồn lực</h3>
-              <p className="rpt-box-desc">Tỷ lệ thực tế từ cơ sở dữ liệu theo từng nghiệp vụ</p>
+              <h3 className="rpt-box-title">An toàn, trú ẩn &amp; nguồn lực</h3>
+              <p className="rpt-box-desc">Tỷ lệ thực tế theo từng nghiệp vụ</p>
             </div>
           </header>
 
@@ -1123,19 +1123,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       <section className="rpt-box">
         <header className="rpt-box-head rpt-sidebar-head">
           <div>
-            <h3 className="rpt-box-title">Tổng hợp theo từng mục Sidebar</h3>
-            <p className="rpt-box-desc">
-              Chọn nhóm nghiệp vụ để xem đầy đủ số liệu và mở nhanh từng trang quản lý
-            </p>
+            <h3 className="rpt-box-title">Tổng hợp theo phân hệ</h3>
+            <p className="rpt-box-desc">Chọn nhóm để xem số liệu và mở nhanh</p>
           </div>
           <div className="rpt-tabs">
             {[
               { id: 'ALL' as const, label: 'Tất cả' },
-              { id: 'OPS' as const, label: 'Điều hành & Tác chiến' },
-              { id: 'FORCES' as const, label: 'Lực lượng & Nguồn lực' },
-              { id: 'COMMUNITY' as const, label: 'Thông báo & Cộng đồng' },
-              { id: 'MONITOR' as const, label: 'Báo cáo & Giám sát' },
-              ...(isAdmin ? [{ id: 'ADMIN' as const, label: 'Quản trị hệ thống' }] : []),
+              { id: 'OPS' as const, label: 'Điều hành' },
+              { id: 'FORCES' as const, label: 'Lực lượng' },
+              { id: 'COMMUNITY' as const, label: 'Cộng đồng' },
+              { id: 'MONITOR' as const, label: 'Báo cáo' },
+              ...(isAdmin ? [{ id: 'ADMIN' as const, label: 'Quản trị' }] : []),
             ].map((tab) => (
               <button
                 key={tab.id}

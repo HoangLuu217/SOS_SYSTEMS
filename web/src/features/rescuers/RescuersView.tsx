@@ -1771,7 +1771,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           {/* Cột 1: Tên đội & Chuyên môn */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13.5 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--dm-text-strong)', fontSize: 13.5 }}>
                                 {team.name}
                               </span>
                               <div>
@@ -1785,7 +1785,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           {/* Cột 2: Chỉ huy đội */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--dm-text-strong)', fontSize: 13 }}>
                                 {team.leaderName || 'Chưa phân công'}
                               </span>
                               {team.leaderPhone ? (
@@ -1798,8 +1798,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     fontSize: 11.5,
-                                    color: '#0284c7',
-                                    background: '#f0f9ff',
+                                    color: 'var(--dm-blue-text)',
+                                    background: 'var(--dm-blue-bg)',
                                     padding: '2px 6px',
                                     borderRadius: 4,
                                     width: 'fit-content',
@@ -1810,7 +1810,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                   <span>SĐT: {team.leaderPhone}</span>
                                 </a>
                               ) : (
-                                <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Chưa có SĐT</span>
+                                <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>Chưa có SĐT</span>
                               )}
                             </div>
                           </td>
@@ -1818,11 +1818,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           {/* Cột 3: Phân vùng phụ trách */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                                 <MapPin size={13} color="#0284c7" style={{ flexShrink: 0 }} />
                                 <span>{team.assignedSector || team.areaName || 'Địa bàn phụ trách'}</span>
                               </div>
-                              <span style={{ fontSize: 11, color: '#64748b', paddingLeft: 18, fontWeight: 500 }}>
+                              <span style={{ fontSize: 11, color: 'var(--dm-text-muted)', paddingLeft: 18, fontWeight: 500 }}>
                                 Trực thuộc địa bàn quản lý
                               </span>
                             </div>
@@ -1831,11 +1831,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           {/* Cột 4: Nhân lực */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: '#0284c7' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: 'var(--dm-blue-text)' }}>
                                 <Users size={14} />
                                 <span>{team.totalMembersCount} cán bộ</span>
                               </div>
-                              <span style={{ fontSize: 11.5, fontWeight: 600, color: team.availableMembersCount > 0 ? '#15803d' : '#dc2626' }}>
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: team.availableMembersCount > 0 ? 'var(--dm-green-text)' : 'var(--dm-red-text)' }}>
                                 ({team.availableMembersCount} sẵn sàng)
                               </span>
                               {team.pendingMembersCount > 0 && (
@@ -1848,9 +1848,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                   }}
                                   title="Bấm để xem danh sách cứu hộ viên xin gia nhập đội"
                                   style={{
-                                    background: '#fef3c7',
+                                    background: 'var(--dm-amber-bg)',
                                     border: '1px solid #f59e0b',
-                                    color: '#b45309',
+                                    color: 'var(--dm-amber-text)',
                                     borderRadius: 4,
                                     padding: '2px 6px',
                                     fontSize: 11,
@@ -1868,11 +1868,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           {/* Cột 5: Phương tiện */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#0284c7' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--dm-blue-text)' }}>
                                 <Truck size={14} color="#0284c7" />
                                 <span>{team.totalVehiclesCount} phương tiện</span>
                               </div>
-                              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                              <span style={{ fontSize: 11, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                                 {team.vehicleTypeBreakdown}
                               </span>
                             </div>
@@ -1977,10 +1977,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <FileCheck size={18} color="#0284C7" />
-                <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
+                <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--dm-text-strong)' }}>
                   HỒ SƠ ĐĂNG KÝ CỨU HỘ VIÊN
                 </span>
-                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                   ({rescuers.length} hồ sơ)
                 </span>
               </div>
@@ -2022,12 +2022,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   >
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 700, color: '#0F172A' }}>{r.fullName}</span>
-                        <span style={{ fontSize: 12, color: '#64748B' }}>{r.phone}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>{r.fullName}</span>
+                        <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>{r.phone}</span>
                       </div>
                     </td>
                     <td>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--dm-text-secondary)' }}>
                         {r.rescuer?.idNumber || 'Chưa cập nhật'}
                       </span>
                     </td>
@@ -2035,7 +2035,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       <span>{r.rescuer?.areaName || r.address || 'Chưa cập nhật'}</span>
                     </td>
                     <td>
-                      <span style={{ fontSize: 12, color: '#0284C7', fontWeight: 600 }}>
+                      <span style={{ fontSize: 12, color: 'var(--dm-blue-text)', fontWeight: 600 }}>
                         {(r.rescuer?.skills || []).join(', ') || 'Chưa cập nhật'}
                       </span>
                     </td>
@@ -2085,7 +2085,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0F172A' }}>
+                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                       {selectedTeamDetail.name}
                     </h3>
                     {renderSpecializationBadge(selectedTeamDetail.specialization)}
@@ -2183,8 +2183,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '12px 16px',
-                        background: '#FFFBEB',
-                        border: '1px solid #FCD34D',
+                        background: 'var(--dm-amber-bg)',
+                        border: '1px solid var(--dm-amber-border)',
                         borderRadius: 10,
                         marginBottom: 16,
                       }}
@@ -2192,10 +2192,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <Clock size={18} color="#D97706" />
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-amber-text)' }}>
                             Đội có {selectedTeamDetail.pendingMembersCount} yêu cầu xin gia nhập đang chờ địa phương phê duyệt
                           </div>
-                          <div style={{ fontSize: 12, color: '#B45309' }}>
+                          <div style={{ fontSize: 12, color: 'var(--dm-amber-text)' }}>
                             Chuyển qua tab "Thành viên" để xem hồ sơ và phê duyệt hoặc từ chối kết nạp.
                           </div>
                         </div>
@@ -2228,7 +2228,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     <div className="drawer-stat-card" style={{ cursor: 'pointer' }} onClick={() => setDetailActiveTab('equipment')}>
                       <span className="drawer-stat-label">Trang thiết bị</span>
                       <span className="drawer-stat-val">{selectedTeamDetail.detailedEquipments?.length || 0} danh mục</span>
-                      <span className="drawer-stat-hint" style={{ color: '#0284C7' }}>
+                      <span className="drawer-stat-hint" style={{ color: 'var(--dm-blue-text)' }}>
                         {selectedTeamDetail.totalEquipmentCount || 0} đơn vị sẵn sàng ↗
                       </span>
                     </div>
@@ -2253,29 +2253,27 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                             fontWeight: 700,
                             borderRadius: 6,
                             border: `1px solid ${selectedTeamDetail.operationalStatus === 'READY'
-                              ? '#BBF7D0'
+                              ? 'var(--dm-green-border)'
                               : selectedTeamDetail.operationalStatus === 'ON_MISSION'
-                                ? '#FED7AA'
+                                ? 'var(--dm-orange-border)'
                                 : selectedTeamDetail.operationalStatus === 'LIMITED'
-                                  ? '#FECACA'
-                                  : '#E2E8F0'
+                                  ? 'var(--dm-red-border)'
+                                  : 'var(--dm-border)'
                               }`,
-                            background:
-                              selectedTeamDetail.operationalStatus === 'READY'
-                                ? '#F0FDF4'
+                            background: selectedTeamDetail.operationalStatus === 'READY'
+                                ? 'var(--dm-green-bg)'
                                 : selectedTeamDetail.operationalStatus === 'ON_MISSION'
-                                  ? '#FFF7ED'
+                                  ? 'var(--dm-orange-bg)'
                                   : selectedTeamDetail.operationalStatus === 'LIMITED'
-                                    ? '#FEF2F2'
-                                    : '#F8FAFC',
-                            color:
-                              selectedTeamDetail.operationalStatus === 'READY'
-                                ? '#166534'
+                                    ? 'var(--dm-red-bg)'
+                                    : 'var(--dm-surface-subtle)',
+                            color: selectedTeamDetail.operationalStatus === 'READY'
+                                ? 'var(--dm-green-text)'
                                 : selectedTeamDetail.operationalStatus === 'ON_MISSION'
-                                  ? '#C2410C'
+                                  ? 'var(--dm-orange-text)'
                                   : selectedTeamDetail.operationalStatus === 'LIMITED'
-                                    ? '#B91C1C'
-                                    : '#64748B',
+                                    ? 'var(--dm-red-text)'
+                                    : 'var(--dm-text-muted)',
                             cursor: 'pointer',
                             outline: 'none',
                           }}
@@ -2287,7 +2285,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           <option value="INACTIVE">⚪ Tạm dừng hoạt động</option>
                         </select>
                       </div>
-                      <span className="drawer-stat-hint" style={{ marginTop: 2, fontSize: 11, color: '#64748B' }}>
+                      <span className="drawer-stat-hint" style={{ marginTop: 2, fontSize: 11, color: 'var(--dm-text-muted)' }}>
                         Bấm để đổi nhanh
                       </span>
                     </div>
@@ -2306,7 +2304,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#0284C7',
+                          color: 'var(--dm-blue-text)',
                           fontSize: 12,
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -2330,7 +2328,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       <span className="dossier-item-label">Số điện thoại khẩn cấp</span>
                       <span className="dossier-item-value">
                         {selectedTeamDetail.leaderPhone ? (
-                          <a href={`tel:${selectedTeamDetail.leaderPhone}`} style={{ color: '#0284C7', textDecoration: 'none' }}>
+                          <a href={`tel:${selectedTeamDetail.leaderPhone}`} style={{ color: 'var(--dm-blue-text)', textDecoration: 'none' }}>
                             {selectedTeamDetail.leaderPhone}
                           </a>
                         ) : (
@@ -2356,7 +2354,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     </div>
                     <div className="dossier-item">
                       <span className="dossier-item-label">Trang thiết bị chuyên dụng</span>
-                      <span className="dossier-item-value" style={{ color: '#0F172A', fontWeight: 600 }}>
+                      <span className="dossier-item-value" style={{ color: 'var(--dm-text-strong)', fontWeight: 600 }}>
                         {selectedTeamDetail.detailedEquipments?.map((eq) => `${eq.name} (${eq.quantity} ${eq.unit})`).slice(0, 3).join(', ')}
                         {(selectedTeamDetail.detailedEquipments?.length || 0) > 3 ? `, +${(selectedTeamDetail.detailedEquipments?.length || 0) - 3} trang bị khác...` : ''}
                       </span>
@@ -2372,16 +2370,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                             <Radio size={12} className="animate-pulse" />
                             <span>{selectedTeamDetail.activeMissions[0].sosCode}</span>
                           </span>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                             {selectedTeamDetail.activeMissions[0].missionType}
                           </span>
                         </div>
                         <span className="operational-status-pill on_mission">Đang thực địa</span>
                       </div>
-                      <p style={{ margin: 0, fontSize: 13, color: '#475569' }}>
+                      <p style={{ margin: 0, fontSize: 13, color: 'var(--dm-text-secondary)' }}>
                         {selectedTeamDetail.activeMissions[0].description}
                       </p>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#64748B' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--dm-text-muted)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <MapPin size={13} color="#0284C7" />
                           <span>{selectedTeamDetail.activeMissions[0].location}</span>
@@ -2397,7 +2395,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div style={{ padding: '14px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, color: '#64748B' }}>
+                    <div style={{ padding: '14px 16px', background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border)', borderRadius: 8, fontSize: 13, color: 'var(--dm-text-muted)' }}>
                       🛡️ Hiện tại đội chưa tiếp nhận nhiệm vụ mới. Đội sẵn sàng nhận lệnh điều phối cứu nạn khi có yêu cầu khẩn cấp.
                     </div>
                   )}
@@ -2422,7 +2420,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                               flexShrink: 0,
                             }}
                           />
-                          <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dm-text-secondary)' }}>
                             Chờ phê duyệt gia nhập (
                             {selectedTeamDetail.detailedMembers.filter((m) => m.status === 'PENDING').length}
                             )
@@ -2442,16 +2440,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     width: 40,
                                     height: 40,
                                     fontSize: 14,
-                                    background: '#F1F5F9',
-                                    color: '#475569',
-                                    border: '1px solid #E2E8F0',
+                                    background: 'var(--dm-surface-muted)',
+                                    color: 'var(--dm-text-secondary)',
+                                    border: '1px solid var(--dm-border)',
                                   }}
                                 >
                                   {member.fullName[0]?.toUpperCase() || 'U'}
                                 </div>
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
+                                    <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--dm-text-strong)' }}>
                                       {member.fullName}
                                     </span>
                                     <span className="member-role-badge pending">
@@ -2459,21 +2457,21 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>SĐT:</span>
-                                    <a href={`tel:${member.phone}`} style={{ fontSize: 12.5, color: '#0284C7', textDecoration: 'none', fontWeight: 700 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600 }}>SĐT:</span>
+                                    <a href={`tel:${member.phone}`} style={{ fontSize: 12.5, color: 'var(--dm-blue-text)', textDecoration: 'none', fontWeight: 700 }}>
                                       {member.phone || 'Chưa có SĐT'}
                                     </a>
                                     {member.joinedAt && (
-                                      <span style={{ fontSize: 11.5, color: '#94A3B8', marginLeft: 4 }}>
+                                      <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginLeft: 4 }}>
                                         • Ngày nộp: {member.joinedAt}
                                       </span>
                                     )}
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', whiteSpace: 'nowrap' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-muted)', whiteSpace: 'nowrap' }}>
                                       Kỹ năng:
                                     </span>
-                                    <span style={{ fontSize: 12, color: '#334155', fontWeight: 500, lineHeight: 1.5 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--dm-text-secondary)', fontWeight: 500, lineHeight: 1.5 }}>
                                       {member.skills && member.skills.length > 0 ? member.skills.join(', ') : 'Chưa cập nhật'}
                                     </span>
                                   </div>
@@ -2511,7 +2509,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   {/* DANH SÁCH THÀNH VIÊN CHÍNH THỨC */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                         Thành viên chính thức ({selectedTeamDetail.detailedMembers.filter((m) => m.status !== 'PENDING').length})
                       </span>
                       <button
@@ -2550,7 +2548,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                 </div>
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
+                                    <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--dm-text-strong)' }}>
                                       {member.fullName}
                                     </span>
                                     <span className={`member-role-badge ${member.role.toLowerCase()}`}>
@@ -2558,16 +2556,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>SĐT:</span>
-                                    <a href={`tel:${member.phone}`} style={{ fontSize: 12.5, color: '#0284C7', textDecoration: 'none', fontWeight: 700 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600 }}>SĐT:</span>
+                                    <a href={`tel:${member.phone}`} style={{ fontSize: 12.5, color: 'var(--dm-blue-text)', textDecoration: 'none', fontWeight: 700 }}>
                                       {member.phone}
                                     </a>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', whiteSpace: 'nowrap' }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-muted)', whiteSpace: 'nowrap' }}>
                                       Kỹ năng:
                                     </span>
-                                    <span style={{ fontSize: 12, color: '#334155', fontWeight: 500, lineHeight: 1.5 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--dm-text-secondary)', fontWeight: 500, lineHeight: 1.5 }}>
                                       {member.skills && member.skills.length > 0 ? member.skills.join(', ') : 'Chưa cập nhật'}
                                     </span>
                                   </div>
@@ -2606,9 +2604,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                       style={{
                                         fontSize: 11.5,
                                         padding: '4px 8px',
-                                        color: '#B45309',
-                                        borderColor: '#FDE68A',
-                                        background: '#FFFBEB',
+                                        color: 'var(--dm-amber-text)',
+                                        borderColor: 'var(--dm-amber-border)',
+                                        background: 'var(--dm-amber-bg)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 4,
@@ -2636,9 +2634,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     style={{
                                       fontSize: 11.5,
                                       padding: '4px 8px',
-                                      color: '#DC2626',
-                                      borderColor: '#FECACA',
-                                      background: '#FEF2F2',
+                                      color: 'var(--dm-red-text)',
+                                      borderColor: 'var(--dm-red-border)',
+                                      background: 'var(--dm-red-bg)',
                                       display: 'flex',
                                       alignItems: 'center',
                                       gap: 4,
@@ -2668,18 +2666,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '12px 16px',
-                      background: '#F0FDF4',
-                      border: '1px solid #BBF7D0',
+                      background: 'var(--dm-green-bg)',
+                      border: '1px solid var(--dm-green-border)',
                       borderRadius: 10,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <CheckCircle2 size={18} color="#16A34A" />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-green-text)' }}>
                           Biên chế đầy đủ {selectedTeamDetail.detailedEquipments?.length || 0} danh mục trang thiết bị chuyên dụng
                         </div>
-                        <div style={{ fontSize: 12, color: '#15803D' }}>
+                        <div style={{ fontSize: 12, color: 'var(--dm-green-text)' }}>
                           Tổng cộng {selectedTeamDetail.totalEquipmentCount || 0} đơn vị trang bị đạt chuẩn sẵn sàng tác chiến bão lũ PCTT.
                         </div>
                       </div>
@@ -2695,9 +2693,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         gap: 6,
                         fontSize: 12,
                         padding: '6px 12px',
-                        background: '#FFFFFF',
-                        borderColor: '#86EFAC',
-                        color: '#15803D',
+                        background: 'var(--dm-surface)',
+                        borderColor: 'var(--dm-green-border)',
+                        color: 'var(--dm-green-text)',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                         borderRadius: 6,
@@ -2712,12 +2710,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                   {/* List of Equipments */}
                   {(selectedTeamDetail.detailedEquipments?.length || 0) === 0 ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 10 }}>
+                    <div style={{ padding: '40px 20px', textAlign: 'center', background: 'var(--dm-surface-subtle)', border: '1px dashed var(--dm-border-strong)', borderRadius: 10 }}>
                       <Package size={36} color="#94A3B8" style={{ margin: '0 auto 10px', display: 'block' }} />
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                         Đội hiện chưa được cấp phát trang thiết bị từ Kho dự trữ địa phương
                       </div>
-                      <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4 }}>
+                      <div style={{ fontSize: 12.5, color: 'var(--dm-text-muted)', marginTop: 4 }}>
                         Trang thiết bị cấp phát từ module Phương tiện &amp; Vật tư sẽ tự động hiển thị tại đây theo dữ liệu thực từ MongoDB.
                       </div>
                       <button
@@ -2745,8 +2743,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                               alignItems: 'center',
                               justifyContent: 'space-between',
                               padding: '12px 16px',
-                              background: '#FFFFFF',
-                              border: '1px solid #E2E8F0',
+                              background: 'var(--dm-surface)',
+                              border: '1px solid var(--dm-border)',
                               borderRadius: 10,
                               boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                             }}
@@ -2757,8 +2755,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                   width: 40,
                                   height: 40,
                                   borderRadius: 10,
-                                  background: isSafety ? '#EFF6FF' : isMedical ? '#FEF2F2' : isComms ? '#F0FDF4' : '#F8FAFC',
-                                  color: isSafety ? '#0284C7' : isMedical ? '#DC2626' : isComms ? '#16A34A' : '#64748B',
+                                  background: isSafety ? 'var(--dm-blue-bg)' : isMedical ? 'var(--dm-red-bg)' : isComms ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                                  color: isSafety ? 'var(--dm-blue-text)' : isMedical ? 'var(--dm-red-text)' : isComms ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -2773,7 +2771,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                                     {eq.name}
                                   </span>
                                   <span
@@ -2781,15 +2779,15 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                       fontSize: 11,
                                       padding: '2px 8px',
                                       borderRadius: 4,
-                                      background: '#F1F5F9',
-                                      color: '#475569',
+                                      background: 'var(--dm-surface-muted)',
+                                      color: 'var(--dm-text-secondary)',
                                       fontWeight: 600,
                                     }}
                                   >
                                     {eq.categoryLabel}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
+                                <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 3 }}>
                                   Quy cách: {eq.condition}
                                 </div>
                               </div>
@@ -2797,10 +2795,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                               <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontSize: 15, fontWeight: 800, color: '#0284C7' }}>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--dm-blue-text)' }}>
                                   {eq.quantity}
                                 </span>
-                                <span style={{ fontSize: 12, color: '#64748B', marginLeft: 4 }}>
+                                <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginLeft: 4 }}>
                                   {eq.unit}
                                 </span>
                               </div>
@@ -2809,12 +2807,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                 const eqStatus = String(eq.status || 'AVAILABLE').toUpperCase();
                                 const statusStyle =
                                   eqStatus === 'AVAILABLE'
-                                    ? { bg: '#DCFCE7', color: '#166534', border: '#BBF7D0', dot: '#16A34A', label: 'Sẵn sàng' }
+                                    ? { bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#16A34A', label: 'Sẵn sàng' }
                                     : eqStatus === 'IN_USE' || eqStatus === 'BORROWED'
-                                      ? { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A', dot: '#D97706', label: 'Đang sử dụng' }
+                                      ? { bg: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: 'var(--dm-amber-border)', dot: '#D97706', label: 'Đang sử dụng' }
                                       : eqStatus === 'MAINTENANCE'
-                                        ? { bg: '#FFEDD5', color: '#9A3412', border: '#FED7AA', dot: '#EA580C', label: 'Đang bảo trì' }
-                                        : { bg: '#FEE2E2', color: '#991B1B', border: '#FECACA', dot: '#DC2626', label: eqStatus === 'LOST' ? 'Thất lạc' : eqStatus === 'EXPIRED' ? 'Hết hạn' : 'Hư hỏng' };
+                                        ? { bg: 'var(--dm-orange-bg)', color: 'var(--dm-orange-text)', border: 'var(--dm-orange-border)', dot: '#EA580C', label: 'Đang bảo trì' }
+                                        : { bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)', dot: '#DC2626', label: eqStatus === 'LOST' ? 'Thất lạc' : eqStatus === 'EXPIRED' ? 'Hết hạn' : 'Hư hỏng' };
                                 return (
                                   <span
                                     style={{
@@ -2854,8 +2852,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '12px 16px',
-                      background: '#F0F9FF',
-                      border: '1px solid #BAE6FD',
+                      background: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       borderRadius: 10,
                       gap: 12,
                     }}
@@ -2866,8 +2864,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           width: 38,
                           height: 38,
                           borderRadius: 8,
-                          background: '#E0F2FE',
-                          color: '#0284C7',
+                          background: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2877,10 +2875,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         <Truck size={20} />
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0369A1' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-blue-text)' }}>
                           Biên chế phương tiện ({selectedTeamDetail.detailedVehicles.length} phương tiện)
                         </div>
-                        <div style={{ fontSize: 12, color: '#0284C7' }}>
+                        <div style={{ fontSize: 12, color: 'var(--dm-blue-text)' }}>
                           Quản lý, điều động và bảo dưỡng phương tiện của đội
                         </div>
                       </div>
@@ -2913,12 +2911,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   {selectedTeamDetail.detailedVehicles.length === 0 ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 10 }}>
+                    <div style={{ padding: '40px 20px', textAlign: 'center', background: 'var(--dm-surface-subtle)', border: '1px dashed var(--dm-border-strong)', borderRadius: 10 }}>
                       <Truck size={36} color="#94A3B8" style={{ margin: '0 auto 10px', display: 'block' }} />
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                         Đội hiện chưa được biên chế phương tiện
                       </div>
-                      <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4 }}>
+                      <div style={{ fontSize: 12.5, color: 'var(--dm-text-muted)', marginTop: 4 }}>
                         Bạn có thể chuyển sang module Phương tiện &amp; Vật tư để cấp phát xe hoặc ca-nô cho đội này.
                       </div>
                       <button
@@ -3038,7 +3036,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {/* Thanh tiêu đề gọn + nút điều phối */}
                     <div className="mission-tab-toolbar">
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                         {activeList.length > 0
                           ? `${activeList.length} đang tác chiến • ${historyList.length} lịch sử`
                           : `Tổng cộng ${allList.length} nhiệm vụ đã tiếp nhận`}
@@ -3057,9 +3055,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           alignItems: 'center',
                           gap: 6,
                           fontSize: 12,
-                          color: '#0284C7',
-                          borderColor: '#BAE6FD',
-                          background: '#F0F9FF',
+                          color: 'var(--dm-blue-text)',
+                          borderColor: 'var(--dm-blue-border)',
+                          background: 'var(--dm-blue-bg)',
                         }}
                       >
                         <ExternalLink size={12} />
@@ -3091,7 +3089,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     {isSupplyMission ? <Package size={12} /> : <Radio size={12} />}
                                     <span>{mission.sosCode}</span>
                                   </span>
-                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                                     {mission.missionType}
                                     {compactMetric ? ` (${compactMetric})` : ''}
                                   </span>
@@ -3106,13 +3104,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                               </div>
 
                               {summaryText && (
-                                <p style={{ margin: 0, fontSize: 12.5, color: '#1E293B', lineHeight: 1.45 }}>
+                                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dm-text-body)', lineHeight: 1.45 }}>
                                   {summaryText}
                                 </p>
                               )}
 
                               {mission.location && (
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 12.5, color: '#334155' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 12.5, color: 'var(--dm-text-secondary)' }}>
                                   <MapPin size={13} color="#0284C7" style={{ marginTop: 2, flexShrink: 0 }} />
                                   <span>{mission.location}</span>
                                 </div>
@@ -3152,7 +3150,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     {historyList.length > 0 && (
                       <div className="mission-history-shell">
                         <div className="mission-history-shell-header">
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                             Lịch sử nhiệm vụ ({filteredHistory.length})
                           </span>
                           {cancelledCount > 0 && (
@@ -3280,19 +3278,19 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               {detailActiveTab === 'history' && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)', textTransform: 'uppercase' }}>
                       Nhật ký sự kiện &amp; Thay đổi biên chế
                     </span>
-                    <span style={{ fontSize: 12, color: '#64748B' }}>Dòng thời gian tác chiến</span>
+                    <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Dòng thời gian tác chiến</span>
                   </div>
 
                   {selectedTeamDetail.activityLogs.length === 0 ? (
                     <div className="operations-empty-state" style={{ padding: '30px 20px' }}>
                       <Clock size={32} color="#94A3B8" />
-                      <p style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+                      <p style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                         Chưa có nhật ký hoạt động
                       </p>
-                      <p style={{ margin: 0, fontSize: 12.5, color: '#64748B' }}>
+                      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dm-text-muted)' }}>
                         Các sự kiện biên chế lực lượng và điều động sẽ được ghi nhận tại đây khi có phát sinh.
                       </p>
                     </div>
@@ -3317,7 +3315,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
             {/* Drawer Footer */}
             <div className="team-drawer-footer">
-              <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+              <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                 Mã đội: {selectedTeamDetail._id} • Cập nhật lúc{' '}
                 {selectedTeamDetail.updatedAt
                   ? new Date(selectedTeamDetail.updatedAt).toLocaleTimeString('vi-VN')
@@ -3331,7 +3329,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'INACTIVE')}
                     disabled={actionInProgress === selectedTeamDetail._id}
                     title="Tạm ngưng hoạt động của đội"
-                    style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FFFFFF' }}
+                    style={{ color: 'var(--dm-red-text)', borderColor: 'var(--dm-red-border)', background: 'var(--dm-surface)' }}
                   >
                     <span>Tạm dừng đội</span>
                   </button>
@@ -3342,7 +3340,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'ACTIVE')}
                     disabled={actionInProgress === selectedTeamDetail._id}
                     title="Kích hoạt lại đội sẵn sàng tác chiến"
-                    style={{ color: '#16A34A', borderColor: '#BBF7D0', background: '#F0FDF4' }}
+                    style={{ color: 'var(--dm-green-text)', borderColor: 'var(--dm-green-border)', background: 'var(--dm-green-bg)' }}
                   >
                     <span>Kích hoạt lại</span>
                   </button>
@@ -3351,7 +3349,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   type="button"
                   className="coordination-action-btn outline"
                   onClick={() => handleOpenEditTeamModal(selectedTeamDetail)}
-                  style={{ color: '#0284C7', borderColor: '#BAE6FD', background: '#F0F9FF' }}
+                  style={{ color: 'var(--dm-blue-text)', borderColor: 'var(--dm-blue-border)', background: 'var(--dm-blue-bg)' }}
                   title="Chỉnh sửa thông tin, chuyên môn tác chiến và trụ sở của đội"
                 >
                   <Wrench size={14} />
@@ -3363,7 +3361,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   onClick={() => handleDeleteTeam(selectedTeamDetail)}
                   disabled={actionInProgress === selectedTeamDetail._id}
                   title="Giải thể và xóa đội cứu hộ này"
-                  style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
+                  style={{ color: 'var(--dm-red-text)', borderColor: 'var(--dm-red-border)', background: 'var(--dm-red-bg)' }}
                 >
                   <Trash2 size={14} />
                   <span>Xóa đội</span>
@@ -3397,10 +3395,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <PlusCircle size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Thêm Đội Cứu Hộ Địa Phương Mới
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
                     Thiết lập lực lượng cứu nạn và phân công chỉ huy
                   </p>
                 </div>
@@ -3418,7 +3416,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <form onSubmit={handleCreateTeamSubmit}>
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '72vh', overflowY: 'auto' }}>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                     Tên Đội Cứu Hộ *
                   </label>
                   <input
@@ -3430,7 +3428,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      border: '1px solid #CBD5E1',
+                      border: '1px solid var(--dm-border-strong)',
                       borderRadius: 6,
                       fontSize: 13,
                       outline: 'none',
@@ -3440,7 +3438,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Chuyên Môn Tác Chiến *
                     </label>
                     <select
@@ -3451,12 +3449,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 36,
                         boxSizing: 'border-box',
                         padding: '7px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         lineHeight: 1.4,
                         outline: 'none',
-                        background: '#FFFFFF',
+                        background: 'var(--dm-surface)',
                       }}
                     >
                       <option value="WATER_RESCUE">Đội cứu hộ đường thủy</option>
@@ -3470,7 +3468,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Địa Bàn Phụ Trách
                     </label>
                     <input
@@ -3481,12 +3479,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
-                        background: !isAdmin ? '#F8FAFC' : '#FFFFFF',
-                        color: !isAdmin ? '#64748B' : '#0F172A',
+                        background: !isAdmin ? 'var(--dm-surface-subtle)' : 'var(--dm-surface)',
+                        color: !isAdmin ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
                       }}
                     />
                   </div>
@@ -3495,10 +3493,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 12 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                         Chỉ Huy Đội Trưởng *
                       </label>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#0284C7', cursor: 'pointer', fontWeight: 600 }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--dm-blue-text)', cursor: 'pointer', fontWeight: 600 }}>
                         <input
                           type="checkbox"
                           checked={filterSameCommuneOnly}
@@ -3535,12 +3533,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 36,
                         boxSizing: 'border-box',
                         padding: '7px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         lineHeight: 1.4,
-                        background: '#FFFFFF',
-                        color: selectedLeaderId ? '#0F172A' : '#64748B',
+                        background: 'var(--dm-surface)',
+                        color: selectedLeaderId ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)',
                       }}
                       options={[
                         { value: '', label: '-- Chọn Cứu hộ viên --' },
@@ -3558,7 +3556,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Số Điện Thoại Trực Ban *
                     </label>
                     <input
@@ -3570,12 +3568,12 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
-                        background: newTeamPhone ? '#F0F9FF' : '#FFFFFF',
-                        color: '#0F172A',
+                        background: newTeamPhone ? 'var(--dm-blue-bg)' : 'var(--dm-surface)',
+                        color: 'var(--dm-text-strong)',
                         fontWeight: newTeamPhone ? 700 : 400,
                       }}
                     />
@@ -3585,7 +3583,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Trụ Sở / Điểm Tập Kết
                     </label>
                     <input
@@ -3596,7 +3594,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
@@ -3605,7 +3603,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Quân Số Biên Chế
                     </label>
                     <input
@@ -3617,7 +3615,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
@@ -3630,8 +3628,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               <div
                 style={{
                   padding: '14px 24px',
-                  borderTop: '1px solid #E2E8F0',
-                  background: '#F8FAFC',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   gap: 10,
@@ -3668,14 +3666,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           >
             <div className="executive-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="executive-icon-squircle" style={{ background: '#E0F2FE', color: '#0284C7' }}>
+                <div className="executive-icon-squircle" style={{ background: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)' }}>
                   <Wrench size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Chỉnh Sửa Thông Tin Đội Cứu Hộ
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
                     Cập nhật tên đội, chuyên môn tác chiến, chỉ huy và điểm tập kết
                   </p>
                 </div>
@@ -3694,7 +3692,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <form onSubmit={handleSaveEditTeam}>
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '72vh', overflowY: 'auto' }}>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                     Tên Đội Cứu Hộ *
                   </label>
                   <input
@@ -3705,7 +3703,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      border: '1px solid #CBD5E1',
+                      border: '1px solid var(--dm-border-strong)',
                       borderRadius: 6,
                       fontSize: 13,
                       outline: 'none',
@@ -3715,7 +3713,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Chuyên Môn Tác Chiến *
                     </label>
                     <select
@@ -3726,11 +3724,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 38,
                         boxSizing: 'border-box',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
-                        background: '#FFFFFF',
+                        background: 'var(--dm-surface)',
                       }}
                     >
                       <option value="WATER_RESCUE">Đội cứu hộ đường thủy</option>
@@ -3744,7 +3742,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Địa Bàn Phụ Trách
                     </label>
                     <input
@@ -3756,11 +3754,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 38,
                         boxSizing: 'border-box',
                         padding: '8px 12px',
-                        border: '1px solid #E2E8F0',
+                        border: '1px solid var(--dm-border)',
                         borderRadius: 6,
                         fontSize: 13,
-                        background: '#F8FAFC',
-                        color: '#64748B',
+                        background: 'var(--dm-surface-subtle)',
+                        color: 'var(--dm-text-muted)',
                       }}
                     />
                   </div>
@@ -3768,7 +3766,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Chỉ Huy Đội Trưởng
                     </label>
                     <select
@@ -3786,11 +3784,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 38,
                         boxSizing: 'border-box',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
-                        background: '#FFFFFF',
+                        background: 'var(--dm-surface)',
                       }}
                     >
                       <option value="">-- Giữ nguyên chỉ huy hiện tại --</option>
@@ -3814,7 +3812,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                       Số Điện Thoại Trực Ban
                     </label>
                     <input
@@ -3827,11 +3825,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         height: 38,
                         boxSizing: 'border-box',
                         padding: '8px 12px',
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         borderRadius: 6,
                         fontSize: 13,
                         outline: 'none',
-                        background: editTeamPhone ? '#F0F9FF' : '#FFFFFF',
+                        background: editTeamPhone ? 'var(--dm-blue-bg)' : 'var(--dm-surface)',
                         fontWeight: editTeamPhone ? 700 : 400,
                       }}
                     />
@@ -3839,7 +3837,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 </div>
 
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                     Trụ Sở Trực Chiến / Điểm Tập Kết
                   </label>
                   <input
@@ -3850,7 +3848,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      border: '1px solid #CBD5E1',
+                      border: '1px solid var(--dm-border-strong)',
                       borderRadius: 6,
                       fontSize: 13,
                       outline: 'none',
@@ -3859,7 +3857,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 </div>
 
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-strong)', display: 'block', marginBottom: 5 }}>
                     Phân Vùng / Ghi Chú Phụ Trách Cụ Thể
                   </label>
                   <input
@@ -3870,7 +3868,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      border: '1px solid #CBD5E1',
+                      border: '1px solid var(--dm-border-strong)',
                       borderRadius: 6,
                       fontSize: 13,
                       outline: 'none',
@@ -3882,8 +3880,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               <div
                 style={{
                   padding: '16px 24px',
-                  background: '#F8FAFC',
-                  borderTop: '1px solid #E2E8F0',
+                  background: 'var(--dm-surface-subtle)',
+                  borderTop: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   gap: 10,
@@ -3899,9 +3897,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     borderRadius: 6,
                     fontSize: 13,
                     fontWeight: 600,
-                    border: '1px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    color: '#475569',
+                    border: '1px solid var(--dm-border-strong)',
+                    background: 'var(--dm-surface)',
+                    color: 'var(--dm-text-secondary)',
                     cursor: 'pointer',
                   }}
                 >
@@ -3947,7 +3945,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '20px 24px 16px',
-                borderBottom: '1px solid #F1F5F9',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
@@ -3958,21 +3956,21 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   width: 42,
                   height: 42,
                   borderRadius: 10,
-                  background: '#FEF2F2',
+                  background: 'var(--dm-red-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#DC2626',
+                  color: 'var(--dm-red-text)',
                   flexShrink: 0,
                 }}
               >
                 <AlertTriangle size={22} />
               </div>
               <div style={{ flex: 1 }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                   Xác nhận giải thể đội cứu hộ
                 </h3>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
                   Thao tác này sẽ xóa đội khỏi danh sách tác chiến
                 </p>
               </div>
@@ -3987,14 +3985,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             </div>
 
             <div style={{ padding: '20px 24px' }}>
-              <p style={{ margin: '0 0 14px', fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn giải thể và xóa đội <strong style={{ color: '#0F172A' }}>"{teamToDelete.name}"</strong> khỏi hệ thống không?
+              <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn giải thể và xóa đội <strong style={{ color: 'var(--dm-text-strong)' }}>"{teamToDelete.name}"</strong> khỏi hệ thống không?
               </p>
 
               <div
                 style={{
-                  background: '#FFFBEB',
-                  border: '1px solid #FDE68A',
+                  background: 'var(--dm-amber-bg)',
+                  border: '1px solid var(--dm-amber-border)',
                   borderRadius: 8,
                   padding: '10px 14px',
                   display: 'flex',
@@ -4003,7 +4001,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 }}
               >
                 <Info size={16} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.45 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-amber-text)', lineHeight: 1.45 }}>
                   <strong>Lưu ý:</strong> Mọi phương tiện trực thuộc (nếu có) sẽ được tự động thu hồi về <strong>Kho dự trữ địa phương</strong> để tiếp tục sẵn sàng điều phối.
                 </span>
               </div>
@@ -4012,8 +4010,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '14px 24px',
-                borderTop: '1px solid #F1F5F9',
-                background: '#F8FAFC',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: 10,
@@ -4074,7 +4072,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   {(selectedApplicantDetail.fullName || 'CH')[0]?.toUpperCase()}
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     {selectedApplicantDetail.fullName || 'Người dân đăng ký'}
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -4088,7 +4086,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         ? 'Đã duyệt chính thức'
                         : 'Đang chờ thẩm định'}
                     </span>
-                    <span style={{ fontSize: 12, color: '#64748B' }}>
+                    <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                       ID: {selectedApplicantDetail._id?.slice(-8)}
                     </span>
                   </div>
@@ -4130,8 +4128,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '14px 24px',
-                borderTop: '1px solid #E2E8F0',
-                background: '#F8FAFC',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 borderBottomLeftRadius: 16,
@@ -4183,14 +4181,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           >
             <div className="executive-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#FEF3C7', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <UserCheck size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Yêu cầu xin gia nhập Đội cứu hộ trên địa bàn
                   </h3>
-                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                     Thẩm định và xét duyệt đơn xin gia nhập của người cứu trợ vào các đội cứu hộ trực thuộc
                   </div>
                 </div>
@@ -4206,9 +4204,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
             <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {allPendingJoinRequests.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
                   <CheckCircle2 size={42} color="#16A34A" style={{ margin: '0 auto 12px' }} />
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     Không có yêu cầu nào đang chờ phê duyệt
                   </div>
                   <div style={{ fontSize: 13, marginTop: 4 }}>
@@ -4220,8 +4218,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <div
                     key={`${req.teamId}-${req.rescuerId}`}
                     style={{
-                      background: '#FFFFFF',
-                      border: '1px solid #E2E8F0',
+                      background: 'var(--dm-surface)',
+                      border: '1px solid var(--dm-border)',
                       borderRadius: 12,
                       padding: 16,
                       display: 'flex',
@@ -4234,13 +4232,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
                       <div
                         className="applicant-avatar"
-                        style={{ width: 44, height: 44, fontSize: 16, background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}
+                        style={{ width: 44, height: 44, fontSize: 16, background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: '1px solid var(--dm-amber-border)' }}
                       >
                         {req.fullName[0]?.toUpperCase() || 'U'}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 800, fontSize: 14.5, color: '#0F172A' }}>
+                          <span style={{ fontWeight: 800, fontSize: 14.5, color: 'var(--dm-text-strong)' }}>
                             {req.fullName}
                           </span>
                           <span className={`verification-status-pill ${req.isVerified ? 'verified' : 'unverified'}`}>
@@ -4249,14 +4247,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#64748B', flexWrap: 'wrap' }}>
-                          <span>SĐT: <strong style={{ color: '#0284C7' }}>{req.phone || 'Chưa cập nhật'}</strong></span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--dm-text-muted)', flexWrap: 'wrap' }}>
+                          <span>SĐT: <strong style={{ color: 'var(--dm-blue-text)' }}>{req.phone || 'Chưa cập nhật'}</strong></span>
                           {req.email && <span>• Email: <strong>{req.email}</strong></span>}
                           {req.joinedAt && <span>• Ngày gửi: <strong>{req.joinedAt}</strong></span>}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                             Nguyện vọng gia nhập:
                           </span>
                           <span
@@ -4264,9 +4262,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 4,
-                              background: '#EFF6FF',
-                              border: '1px solid #BFDBFE',
-                              color: '#1D4ED8',
+                              background: 'var(--dm-blue-bg)',
+                              border: '1px solid var(--dm-blue-border)',
+                              color: 'var(--dm-blue-text)',
                               padding: '2px 8px',
                               borderRadius: 6,
                               fontSize: 12,
@@ -4280,13 +4278,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                         {req.skills && req.skills.length > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>Kỹ năng:</span>
+                            <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', fontWeight: 600 }}>Kỹ năng:</span>
                             {req.skills.map((skill, sIdx) => (
                               <span
                                 key={sIdx}
                                 style={{
-                                  background: '#F1F5F9',
-                                  color: '#475569',
+                                  background: 'var(--dm-surface-muted)',
+                                  color: 'var(--dm-text-secondary)',
                                   fontSize: 11,
                                   fontWeight: 600,
                                   padding: '1px 6px',
@@ -4337,8 +4335,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '12px 24px',
-                borderTop: '1px solid #E2E8F0',
-                background: '#F8FAFC',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 borderBottomLeftRadius: 16,
@@ -4377,22 +4375,22 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    background: '#EFF6FF',
+                    background: 'var(--dm-blue-bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#0284C7',
+                    color: 'var(--dm-blue-text)',
                     flexShrink: 0,
                   }}
                 >
                   <UserPlus size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Kết nạp thành viên vào đội cứu hộ
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Đội: <strong style={{ color: '#0F172A' }}>{selectedTeamDetail.name}</strong>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                    Đội: <strong style={{ color: 'var(--dm-text-strong)' }}>{selectedTeamDetail.name}</strong>
                   </p>
                 </div>
               </div>
@@ -4409,8 +4407,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <form onSubmit={handleAddMemberSubmit}>
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                    Chọn Cứu hộ viên kết nạp <span style={{ color: '#DC2626' }}>*</span>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
+                    Chọn Cứu hộ viên kết nạp <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                   </label>
                   <SearchableSelect
                     ariaLabel="Chọn Cứu hộ viên kết nạp"
@@ -4423,10 +4421,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       width: '100%',
                       padding: '10px 12px',
                       borderRadius: 8,
-                      border: '1px solid #CBD5E1',
+                      border: '1px solid var(--dm-border-strong)',
                       fontSize: 13,
-                      color: '#0F172A',
-                      background: '#FFFFFF',
+                      color: 'var(--dm-text-strong)',
+                      background: 'var(--dm-surface)',
                     }}
                     options={[
                       { value: '', label: '-- Chọn cứu hộ viên sẵn sàng --' },
@@ -4439,7 +4437,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       })),
                     ]}
                   />
-                  <span style={{ fontSize: 11.5, color: '#64748B', marginTop: 4, display: 'block' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 4, display: 'block' }}>
                     Danh sách hiển thị các Cứu hộ viên đã duyệt. Cứu hộ viên đã có đội sẽ bị khóa chọn.
                   </span>
                 </div>
@@ -4447,8 +4445,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 {selectedTeamDetail.leaderId || selectedTeamDetail.detailedMembers.some((m) => m.role === 'LEADER') ? (
                   <div
                     style={{
-                      background: '#F8FAFC',
-                      border: '1px solid #E2E8F0',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1px solid var(--dm-border)',
                       borderRadius: 8,
                       padding: '10px 14px',
                       display: 'flex',
@@ -4458,20 +4456,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                         Vai trò kết nạp:
                       </span>
                       <span className="member-role-badge member" style={{ fontSize: 11, padding: '3px 8px' }}>
                         Thành viên tác chiến
                       </span>
                     </div>
-                    <span style={{ fontSize: 12, color: '#64748B' }}>
-                      Đội trưởng hiện tại: <strong style={{ color: '#0F172A' }}>{selectedTeamDetail.leaderName || 'Đã có chỉ huy'}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                      Đội trưởng hiện tại: <strong style={{ color: 'var(--dm-text-strong)' }}>{selectedTeamDetail.leaderName || 'Đã có chỉ huy'}</strong>
                     </span>
                   </div>
                 ) : (
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
                       Vai trò nhiệm vụ ban đầu
                     </label>
                     <select
@@ -4482,10 +4480,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         width: '100%',
                         padding: '10px 12px',
                         borderRadius: 8,
-                        border: '1px solid #CBD5E1',
+                        border: '1px solid var(--dm-border-strong)',
                         fontSize: 13,
-                        color: '#0F172A',
-                        background: '#FFFFFF',
+                        color: 'var(--dm-text-strong)',
+                        background: 'var(--dm-surface)',
                         outline: 'none',
                       }}
                     >
@@ -4497,8 +4495,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 <div
                   style={{
-                    background: '#F0FDF4',
-                    border: '1px solid #BBF7D0',
+                    background: 'var(--dm-green-bg)',
+                    border: '1px solid var(--dm-green-border)',
                     borderRadius: 8,
                     padding: '10px 14px',
                     display: 'flex',
@@ -4507,7 +4505,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   }}
                 >
                   <Info size={16} color="#16A34A" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: '#166534', lineHeight: 1.45 }}>
+                  <span style={{ fontSize: 12, color: 'var(--dm-green-text)', lineHeight: 1.45 }}>
                     <strong>Quy định tác chiến:</strong> Mỗi người chỉ được biên chế vào duy nhất 1 đội cứu hộ trong hệ thống để tránh chồng chéo nhiệm vụ và đảm bảo tính sẵn sàng cứu trợ tức thì.
                   </span>
                 </div>
@@ -4516,8 +4514,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               <div
                 style={{
                   padding: '14px 24px',
-                  borderTop: '1px solid #F1F5F9',
-                  background: '#F8FAFC',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   gap: 10,
@@ -4577,22 +4575,22 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    background: '#FEF2F2',
+                    background: 'var(--dm-red-bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#DC2626',
+                    color: 'var(--dm-red-text)',
                     flexShrink: 0,
                   }}
                 >
                   <UserMinus size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Xác nhận đưa nhân sự rời đội
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Đội: <strong style={{ color: '#0F172A' }}>{memberToRemove.teamName}</strong>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                    Đội: <strong style={{ color: 'var(--dm-text-strong)' }}>{memberToRemove.teamName}</strong>
                   </p>
                 </div>
               </div>
@@ -4612,8 +4610,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 selectedTeamDetail.detailedMembers.filter((m) => m.status !== 'PENDING').length > 1 ? (
                 <div
                   style={{
-                    background: '#FEF2F2',
-                    border: '1px solid #FECACA',
+                    background: 'var(--dm-red-bg)',
+                    border: '1px solid var(--dm-red-border)',
                     borderRadius: 8,
                     padding: '12px 14px',
                     marginBottom: 14,
@@ -4623,20 +4621,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   }}
                 >
                   <AlertTriangle size={18} color="#DC2626" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: 12.5, color: '#991B1B', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--dm-red-text)', lineHeight: 1.5 }}>
                     <strong>Không thể xóa Đội trưởng:</strong> Đội hiện vẫn còn các thành viên khác. Quy định hệ thống yêu cầu bạn phải <strong>Bổ nhiệm Đội trưởng mới</strong> trước khi cho Đội trưởng hiện tại rời khỏi đội.
                   </div>
                 </div>
               ) : (
-                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
-                  Bạn có chắc chắn muốn đưa cứu hộ viên <strong style={{ color: '#0F172A' }}>"{memberToRemove.rescuerName}"</strong> ra khỏi biên chế của đội <strong style={{ color: '#0F172A' }}>"{memberToRemove.teamName}"</strong> không?
+                <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
+                  Bạn có chắc chắn muốn đưa cứu hộ viên <strong style={{ color: 'var(--dm-text-strong)' }}>"{memberToRemove.rescuerName}"</strong> ra khỏi biên chế của đội <strong style={{ color: 'var(--dm-text-strong)' }}>"{memberToRemove.teamName}"</strong> không?
                 </p>
               )}
 
               <div
                 style={{
-                  background: '#FFFBEB',
-                  border: '1px solid #FDE68A',
+                  background: 'var(--dm-amber-bg)',
+                  border: '1px solid var(--dm-amber-border)',
                   borderRadius: 8,
                   padding: '10px 14px',
                   display: 'flex',
@@ -4645,7 +4643,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 }}
               >
                 <Info size={16} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.45 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-amber-text)', lineHeight: 1.45 }}>
                   Sau khi rời khỏi đội, cứu hộ viên này sẽ trở về trạng thái tự do và sẵn sàng để kết nạp vào đội cứu hộ khác khi cần.
                 </span>
               </div>
@@ -4654,8 +4652,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '14px 24px',
-                borderTop: '1px solid #F1F5F9',
-                background: '#F8FAFC',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: 10,
@@ -4726,22 +4724,22 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    background: '#FEF3C7',
+                    background: 'var(--dm-amber-bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#D97706',
+                    color: 'var(--dm-amber-text)',
                     flexShrink: 0,
                   }}
                 >
                   <Crown size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                     Bổ nhiệm Đội trưởng chỉ huy
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Đội: <strong style={{ color: '#0F172A' }}>{memberToPromote.teamName}</strong>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                    Đội: <strong style={{ color: 'var(--dm-text-strong)' }}>{memberToPromote.teamName}</strong>
                   </p>
                 </div>
               </div>
@@ -4756,14 +4754,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             </div>
 
             <div style={{ padding: '20px 24px' }}>
-              <p style={{ margin: '0 0 14px', fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
-                Bạn có chắc chắn muốn bổ nhiệm cứu hộ viên <strong style={{ color: '#0F172A' }}>"{memberToPromote.rescuerName}"</strong> làm <strong style={{ color: '#D97706' }}>Đội trưởng chỉ huy mới</strong> của đội không?
+              <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn bổ nhiệm cứu hộ viên <strong style={{ color: 'var(--dm-text-strong)' }}>"{memberToPromote.rescuerName}"</strong> làm <strong style={{ color: 'var(--dm-amber-text)' }}>Đội trưởng chỉ huy mới</strong> của đội không?
               </p>
 
               <div
                 style={{
-                  background: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
+                  background: 'var(--dm-blue-bg)',
+                  border: '1px solid var(--dm-blue-border)',
                   borderRadius: 8,
                   padding: '10px 14px',
                   display: 'flex',
@@ -4772,7 +4770,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 }}
               >
                 <Info size={16} color="#2563EB" style={{ marginTop: 2, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.45 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-blue-text)', lineHeight: 1.45 }}>
                   Sau khi bổ nhiệm, cán bộ này sẽ chịu trách nhiệm chính tiếp nhận lệnh điều phối và phân công nhiệm vụ cho toàn đội. Đội trưởng hiện tại (nếu có) sẽ được chuyển về làm thành viên thường.
                 </span>
               </div>
@@ -4781,8 +4779,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             <div
               style={{
                 padding: '14px 24px',
-                borderTop: '1px solid #F1F5F9',
-                background: '#F8FAFC',
+                borderTop: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: 10,

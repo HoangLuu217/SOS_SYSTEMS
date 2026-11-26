@@ -44,41 +44,41 @@
 
 /* LIGHT THEME OVERRIDES FOR NEW COMPONENTS */
 [data-theme="light"] .sos-authority-locality-banner {
-  background: linear-gradient(135deg, #fef2f2, #fff1f2);
-  border: 1px solid #fecaca;
+  background: linear-gradient(135deg, var(--dm-red-bg), #fff1f2);
+  border: 1px solid var(--dm-red-border);
 }
 
 [data-theme="light"] .sos-authority-locality-title {
-  color: #dc2626;
+  color: var(--dm-red-text);
 }
 
 [data-theme="light"] .sos-authority-locality-desc {
-  color: #475569;
+  color: var(--dm-text-secondary);
 }
 
 [data-theme="light"] .sos-authority-locality-badge {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
+  background: var(--dm-red-bg);
+  color: var(--dm-red-text);
+  border: 1px solid var(--dm-red-border);
 }
 
 [data-theme="light"] .sos-quick-template-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #0f172a;
+  background: var(--dm-surface-subtle);
+  border: 1px solid var(--dm-border);
+  color: var(--dm-text-strong);
 }
 
 [data-theme="light"] .sos-quick-template-btn:hover {
-  background: #fff1f2;
-  border-color: #fca5a5;
+  background: var(--dm-red-bg);
+  border-color: var(--dm-red-border);
 }
 
 [data-theme="light"] .sos-quick-template-snippet {
-  color: #64748b;
+  color: var(--dm-text-muted);
 }
 
 [data-theme="light"] .sos-occupancy-bar-bg {
-  background: #e2e8f0;
+  background: var(--dm-surface-hover);
 }
 
 

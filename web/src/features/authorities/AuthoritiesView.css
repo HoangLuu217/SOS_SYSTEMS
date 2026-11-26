@@ -652,7 +652,7 @@
 .auth-drawer-panel {
   width: min(840px, 95vw);
   height: 100vh;
-  background: var(--sos-surface, #ffffff);
+  background: var(--sos-surface, var(--dm-surface));
   box-shadow: -12px 0 40px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
@@ -667,8 +667,8 @@
 
 .auth-drawer-header {
   padding: 16px 22px 0;
-  background: var(--sos-surface, #ffffff);
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   flex-shrink: 0;
 }
 
@@ -691,8 +691,8 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: var(--sos-primary-soft, #e0f2fe);
-  color: var(--sos-primary, #0284c7);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
+  color: var(--sos-primary, var(--dm-blue-text));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -710,14 +710,14 @@
   margin: 0;
   font-size: 16.5px;
   font-weight: 800;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   line-height: 1.3;
 }
 
 .auth-drawer-subtitle {
   margin: 2px 0 0;
   font-size: 12px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
 }
 
 .auth-drawer-close-btn {
@@ -726,7 +726,7 @@
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -736,8 +736,8 @@
 }
 
 .auth-drawer-close-btn:hover {
-  background: var(--sos-surface-muted, #f1f5f9);
-  color: var(--sos-text-primary, #0f172a);
+  background: var(--sos-surface-muted, var(--dm-surface-muted));
+  color: var(--sos-text-primary, var(--dm-text-strong));
 }
 
 .auth-drawer-tabs {
@@ -757,17 +757,17 @@
   border-bottom: 2px solid transparent;
   font-size: 13px;
   font-weight: 600;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .auth-drawer-tab:hover {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 .auth-drawer-tab.active {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   border-bottom-color: var(--sos-primary, #0284c7);
 }
 
@@ -775,7 +775,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--sos-bg, #f8fafc);
+  background: var(--sos-bg, var(--dm-surface-subtle));
   padding: 18px 22px;
   display: flex;
   flex-direction: column;
@@ -790,8 +790,8 @@
 }
 
 .auth-drawer-kpi-card {
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
   border-radius: 12px;
   padding: 12px 14px;
   display: flex;
@@ -802,7 +802,7 @@
 .auth-drawer-kpi-label {
   font-size: 10.5px;
   font-weight: 700;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
@@ -810,7 +810,7 @@
 .auth-drawer-kpi-value {
   font-size: 14px;
   font-weight: 800;
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -819,7 +819,7 @@
 
 .auth-drawer-kpi-sub {
   font-size: 11.5px;
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -827,8 +827,8 @@
 }
 
 .auth-drawer-section-card {
-  background: var(--sos-surface, #ffffff);
-  border: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border: 1px solid var(--sos-border, var(--dm-border));
   border-radius: 12px;
   flex: 1;
   min-height: 0;
@@ -843,7 +843,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 13px 18px;
-  border-bottom: 1px solid var(--sos-border, #e2e8f0);
+  border-bottom: 1px solid var(--sos-border, var(--dm-border));
   flex-shrink: 0;
 }
 
@@ -853,7 +853,7 @@
   gap: 7px;
   font-size: 12px;
   font-weight: 800;
-  color: var(--sos-text-secondary, #475569);
+  color: var(--sos-text-secondary, var(--dm-text-secondary));
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -864,7 +864,7 @@
   gap: 5px;
   background: transparent;
   border: none;
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
@@ -874,7 +874,7 @@
 }
 
 .auth-drawer-inline-edit-btn:hover {
-  background: var(--sos-primary-soft, #e0f2fe);
+  background: var(--sos-primary-soft, var(--dm-blue-bg));
 }
 
 .auth-drawer-kv-list {
@@ -890,7 +890,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 11px 0;
-  border-bottom: 1px solid var(--sos-surface-muted, #f1f5f9);
+  border-bottom: 1px solid var(--sos-surface-muted, var(--dm-border));
   font-size: 13px;
 }
 
@@ -899,20 +899,20 @@
 }
 
 .auth-drawer-kv-label {
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-weight: 500;
   flex-shrink: 0;
 }
 
 .auth-drawer-kv-value {
-  color: var(--sos-text-primary, #0f172a);
+  color: var(--sos-text-primary, var(--dm-text-strong));
   font-weight: 700;
   text-align: right;
   word-break: break-word;
 }
 
 .auth-drawer-kv-value.link {
-  color: var(--sos-primary, #0284c7);
+  color: var(--sos-primary, var(--dm-blue-text));
 }
 
 .auth-drawer-edit-grid {
@@ -948,8 +948,8 @@
 
 .auth-drawer-footer {
   padding: 12px 22px;
-  background: var(--sos-surface, #ffffff);
-  border-top: 1px solid var(--sos-border, #e2e8f0);
+  background: var(--sos-surface, var(--dm-surface));
+  border-top: 1px solid var(--sos-border, var(--dm-border));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -959,7 +959,7 @@
 
 .auth-drawer-footer-meta {
   font-size: 11.5px;
-  color: var(--sos-text-muted, #64748b);
+  color: var(--sos-text-muted, var(--dm-text-muted));
   font-family: var(--sos-font-mono, monospace);
 }
 

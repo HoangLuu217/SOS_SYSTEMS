@@ -31,7 +31,7 @@
 
 .sos-authority-locality-desc {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--dm-text-muted);
   line-height: 1.5;
 }
 
@@ -88,7 +88,7 @@
 
 .sos-quick-template-snippet {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--dm-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -172,7 +172,7 @@
 
 .sos-notif-card-desc {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--dm-text-muted);
   line-height: 1.4;
   margin-bottom: 8px;
 }
@@ -207,56 +207,56 @@
 }
 
 [data-theme="light"] .sos-notif-category-card {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: var(--dm-surface-subtle);
+  border-color: var(--dm-border);
 }
 
 [data-theme="light"] .sos-notif-category-card.instant-active {
-  background: #fef2f2;
+  background: var(--dm-red-bg);
   border-color: #ef4444;
 }
 
 [data-theme="light"] .sos-notif-category-card.system-active {
-  background: #eff6ff;
+  background: var(--dm-blue-bg);
   border-color: #2563eb;
 }
 
 [data-theme="light"] .sos-notif-category-card.safe-active {
-  background: #f0fdf4;
+  background: var(--dm-green-bg);
   border-color: #16a34a;
 }
 
 [data-theme="light"] .sos-notif-category-card.weather-active {
-  background: #f0f9ff;
+  background: var(--dm-blue-bg);
   border-color: #0284c7;
 }
 
 [data-theme="light"] .sos-notif-category-card.hazard-active {
-  background: #fff7ed;
+  background: var(--dm-orange-bg);
   border-color: #ea580c;
 }
 
 [data-theme="light"] .sos-notif-card-title {
-  color: #0f172a;
+  color: var(--dm-text-strong);
 }
 
 [data-theme="light"] .sos-notif-card-desc {
-  color: #64748b;
+  color: var(--dm-text-muted);
 }
 
 [data-theme="light"] .sos-notif-tag {
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--dm-surface-hover);
+  color: var(--dm-text-secondary);
 }
 
 [data-theme="light"] .sos-badge.instant {
-  background: #fee2e2;
-  color: #dc2626;
-  border-color: #fca5a5;
+  background: var(--dm-red-bg);
+  color: var(--dm-red-text);
+  border-color: var(--dm-red-border);
 }
 
 [data-theme="light"] .sos-badge.system {
-  background: #dbeafe;
-  color: #1d4ed8;
-  border-color: #93c5fd;
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
+  border-color: var(--dm-blue-border);
 }

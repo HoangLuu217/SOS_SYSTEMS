@@ -812,8 +812,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   minWidth: 215,
                   fontWeight: 700,
                   borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
-                  background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
-                  color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
+                  background: areaFilter !== 'ALL' ? 'var(--dm-blue-bg)' : undefined,
+                  color: areaFilter !== 'ALL' ? 'var(--dm-blue-text)' : undefined,
                 }}
                 options={[
                   {
@@ -912,9 +912,9 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   padding: '7px 12px',
                   fontSize: 12.5,
                   fontWeight: 600,
-                  color: '#dc2626',
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
+                  color: 'var(--dm-red-text)',
+                  background: 'var(--dm-red-bg)',
+                  border: '1px solid var(--dm-red-border)',
                   borderRadius: 8,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
@@ -1038,7 +1038,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                             {maskCccd(app.idNumber)}
                           </span>
                           {app.isCccdVerified ? (
-                            <span className="ra-doc-status-badge has-doc" style={{ background: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }}>
+                            <span className="ra-doc-status-badge has-doc" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', borderColor: 'var(--dm-green-border)' }}>
                               <CheckCircle2 size={11} /> Đã quét mã thẻ
                             </span>
                           ) : app.hasCccdPhotos ? (
@@ -1340,7 +1340,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   <div className="ra-flat-grid-2">
                     <div className="ra-kv-item">
                       <span className="ra-kv-label">Địa bàn đăng ký hoạt động</span>
-                      <span className="ra-kv-value" style={{ color: '#15803d' }}>
+                      <span className="ra-kv-value" style={{ color: 'var(--dm-green-text)' }}>
                         {selectedApplicant.areaName || 'Chưa có thông tin địa bàn'}
                       </span>
                     </div>
@@ -1429,7 +1429,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                           </span>
                         ))
                       ) : (
-                        <span style={{ fontSize: 13, color: '#94a3b8' }}>Chưa cập nhật kỹ năng cụ thể</span>
+                        <span style={{ fontSize: 13, color: 'var(--dm-text-muted)' }}>Chưa cập nhật kỹ năng cụ thể</span>
                       )}
                     </div>
                   </div>
@@ -1596,31 +1596,31 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               </p>
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border-strong)',
                   borderRadius: 8,
                   padding: '12px 16px',
                 }}
               >
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#1e3a8a' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dm-blue-text)' }}>
                   {selectedApplicant.fullName}
                 </div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: 13, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                   Số CCCD: {selectedApplicant.idNumber} • SĐT: {selectedApplicant.phone}
                 </div>
-                <div style={{ fontSize: 12.5, color: '#15803d', marginTop: 4, fontWeight: 600 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--dm-green-text)', marginTop: 4, fontWeight: 600 }}>
                   Địa bàn: {selectedApplicant.areaName}
                 </div>
               </div>
 
               <div
                 style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
+                  background: 'var(--dm-blue-bg)',
+                  border: '1px solid var(--dm-blue-border)',
                   borderRadius: 8,
                   padding: '10px 14px',
                   fontSize: 12.5,
-                  color: '#1d4ed8',
+                  color: 'var(--dm-blue-text)',
                   lineHeight: 1.4,
                 }}
               >
@@ -1709,7 +1709,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   rút khỏi mọi Đội cứu hộ đang tham gia và tài khoản lập tức chuyển về vai trò <strong>Người dân (CITIZEN)</strong>.
                 </div>
               </div>
-              <p style={{ marginTop: 14, marginBottom: 6, fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
+              <p style={{ marginTop: 14, marginBottom: 6, fontWeight: 700, fontSize: 13, color: 'var(--dm-text-strong)' }}>
                 Lý do thu hồi quyền (bắt buộc):
               </p>
               <textarea
@@ -1797,7 +1797,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '12px 18px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
               }}
             >
               <span style={{ fontWeight: 700, fontSize: 14 }}>{zoomedImage.title}</span>

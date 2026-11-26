@@ -147,19 +147,19 @@ export const SOS_STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bgColor: string }
 > = {
-  PENDING: { label: 'Chờ tiếp nhận', color: '#D97706', bgColor: '#FEF3C7' },
-  VERIFIED: { label: 'Đã xác minh', color: '#0284C7', bgColor: '#E0F2FE' },
-  ASSIGNED: { label: 'Đã phân công', color: '#7C3AED', bgColor: '#EDE9FE' },
-  ACCEPTED: { label: 'Đội đã nhận lệnh', color: '#7C3AED', bgColor: '#EDE9FE' },
-  ON_THE_WAY: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
-  EN_ROUTE: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
-  ARRIVED: { label: 'Đã tiếp cận hiện trường', color: '#059669', bgColor: '#D1FAE5' },
-  IN_PROGRESS: { label: 'Đang cứu hộ', color: '#2563EB', bgColor: '#EFF6FF' },
-  RESCUING: { label: 'Đang cứu nạn', color: '#DC2626', bgColor: '#FEE2E2' },
-  COMPLETED: { label: 'Hoàn thành', color: '#16A34A', bgColor: '#DCFCE7' },
-  RESOLVED: { label: 'Đã giải quyết', color: '#16A34A', bgColor: '#DCFCE7' },
-  CANCELLED: { label: 'Đã hủy', color: '#DC2626', bgColor: '#FEE2E2' },
-  REJECTED: { label: 'Từ chối', color: '#DC2626', bgColor: '#FEE2E2' },
+  PENDING: { label: 'Chờ tiếp nhận', color: 'var(--dm-amber-text)', bgColor: '#FEF3C7' },
+  VERIFIED: { label: 'Đã xác minh', color: 'var(--dm-blue-text)', bgColor: '#E0F2FE' },
+  ASSIGNED: { label: 'Đã phân công', color: 'var(--dm-purple-text)', bgColor: '#EDE9FE' },
+  ACCEPTED: { label: 'Đội đã nhận lệnh', color: 'var(--dm-purple-text)', bgColor: '#EDE9FE' },
+  ON_THE_WAY: { label: 'Đang di chuyển tới', color: 'var(--dm-blue-text)', bgColor: '#EFF6FF' },
+  EN_ROUTE: { label: 'Đang di chuyển tới', color: 'var(--dm-blue-text)', bgColor: '#EFF6FF' },
+  ARRIVED: { label: 'Đã tiếp cận hiện trường', color: 'var(--dm-green-text)', bgColor: '#D1FAE5' },
+  IN_PROGRESS: { label: 'Đang cứu hộ', color: 'var(--dm-blue-text)', bgColor: '#EFF6FF' },
+  RESCUING: { label: 'Đang cứu nạn', color: 'var(--dm-red-text)', bgColor: '#FEE2E2' },
+  COMPLETED: { label: 'Hoàn thành', color: 'var(--dm-green-text)', bgColor: '#DCFCE7' },
+  RESOLVED: { label: 'Đã giải quyết', color: 'var(--dm-green-text)', bgColor: '#DCFCE7' },
+  CANCELLED: { label: 'Đã hủy', color: 'var(--dm-red-text)', bgColor: '#FEE2E2' },
+  REJECTED: { label: 'Từ chối', color: 'var(--dm-red-text)', bgColor: '#FEE2E2' },
 };
 
 // Trích xuất thông tin SOS từ tin nhắn
@@ -1636,7 +1636,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                       <div className="ra-kv-grid">
                         <div className="ra-kv-item">
                           <span className="ra-kv-label">Họ và tên người thân</span>
-                          <span className="ra-kv-value" style={{ fontWeight: 700, color: '#9a3412' }}>
+                          <span className="ra-kv-value" style={{ fontWeight: 700, color: 'var(--dm-orange-text)' }}>
                             {citizenModalData.emergencyContact?.name || citizenModalData.emergencyContacts?.[0]?.name}
                           </span>
                         </div>
@@ -1652,7 +1652,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                         <div className="ra-kv-item">
                           <span className="ra-kv-label">Số điện thoại người thân</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span className="ra-kv-value phone" style={{ color: '#15803d', fontWeight: 700 }}>
+                            <span className="ra-kv-value phone" style={{ color: 'var(--dm-green-text)', fontWeight: 700 }}>
                               {citizenModalData.emergencyContact?.phone || citizenModalData.emergencyContacts?.[0]?.phone}
                             </span>
                             {(citizenModalData.emergencyContact?.phone || citizenModalData.emergencyContacts?.[0]?.phone) && (

@@ -604,7 +604,7 @@ export const DispatchWorkflow = ({
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ color: '#94a3b8' }}
+            style={{ color: 'var(--dm-text-muted)' }}
           >
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
             <circle cx="12" cy="10" r="3" />
@@ -927,8 +927,8 @@ export const DispatchWorkflow = ({
         <div
           style={{
             padding: '8px 12px',
-            background: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
+            background: 'var(--dm-surface-subtle)',
+            borderBottom: '1px solid var(--dm-border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -956,7 +956,7 @@ export const DispatchWorkflow = ({
                   fontWeight: 800,
                   textTransform: 'uppercase',
                   letterSpacing: '0.35px',
-                  color: '#334155',
+                  color: 'var(--dm-text-secondary)',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -975,7 +975,7 @@ export const DispatchWorkflow = ({
                   fontWeight: 800,
                   fontFamily: 'var(--sos-font-mono, monospace)',
                   fontVariantNumeric: 'tabular-nums',
-                  color: '#0f172a',
+                  color: 'var(--dm-text-strong)',
                   letterSpacing: '-0.2px',
                 }}
               >
@@ -984,7 +984,7 @@ export const DispatchWorkflow = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {selectedSos.timeAgo || 'Vừa xong'}
               </span>
               <span
@@ -1068,13 +1068,13 @@ export const DispatchWorkflow = ({
               width: 58,
               height: 58,
               borderRadius: '50%',
-              background: isCompleted ? '#dcfce7' : '#f1f5f9',
+              background: isCompleted ? 'var(--dm-green-bg)' : 'var(--dm-surface-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 26,
               marginBottom: 12,
-              border: isCompleted ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
+              border: isCompleted ? '1.5px solid var(--dm-green-border)' : '1.5px solid var(--dm-border-strong)',
             }}
           >
             {isCompleted ? '✅' : '🚫'}
@@ -1083,7 +1083,7 @@ export const DispatchWorkflow = ({
             style={{
               fontSize: 15,
               fontWeight: 800,
-              color: isCompleted ? '#166534' : '#334155',
+              color: isCompleted ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
               marginBottom: 6,
             }}
           >
@@ -1138,7 +1138,7 @@ export const DispatchWorkflow = ({
                     letterSpacing: '-0.1px',
                   }}
                 >
-                  <LifeBuoy size={16} style={{ color: '#0f172a', flexShrink: 0 }} />
+                  <LifeBuoy size={16} style={{ color: 'var(--dm-text-strong)', flexShrink: 0 }} />
                   <span>PHÂN CÔNG</span>
                 </div>
                 <span style={{ fontSize: 12, color: 'var(--sos-text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
@@ -1161,9 +1161,9 @@ export const DispatchWorkflow = ({
                     gap: 5,
                     padding: '4px 10px',
                     borderRadius: 6,
-                    border: '1px solid #cbd5e1',
-                    background: isLoadingAdvisor ? '#f1f5f9' : '#ffffff',
-                    color: '#334155',
+                    border: '1px solid var(--dm-border-strong)',
+                    background: isLoadingAdvisor ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
+                    color: 'var(--dm-text-secondary)',
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: isLoadingAdvisor ? 'wait' : 'pointer',
@@ -1172,7 +1172,7 @@ export const DispatchWorkflow = ({
                   }}
                   title="Phân tích lại ca SOS và đề xuất phương án điều phối bằng AI"
                 >
-                  <RefreshCw size={12.5} style={{ color: '#475569' }} />
+                  <RefreshCw size={12.5} style={{ color: 'var(--dm-text-secondary)' }} />
                   <span>{isLoadingAdvisor ? 'Đang phân tích...' : aiAdvisor ? 'Phân tích lại AI' : 'Đề xuất AI'}</span>
                 </button>
               )}
@@ -1188,8 +1188,8 @@ export const DispatchWorkflow = ({
                 gap: 4,
                 padding: 3,
                 borderRadius: 8,
-                background: '#f1f5f9',
-                border: '1px solid #e2e8f0',
+                background: 'var(--dm-surface-muted)',
+                border: '1px solid var(--dm-border)',
               }}
             >
               <button
@@ -1204,9 +1204,9 @@ export const DispatchWorkflow = ({
                   gap: 6,
                   padding: '6px 8px',
                   borderRadius: 6,
-                  border: dispatchTab === 'AI' ? '1px solid #cbd5e1' : '1px solid transparent',
-                  background: dispatchTab === 'AI' ? '#ffffff' : 'transparent',
-                  color: dispatchTab === 'AI' ? '#3730a3' : '#64748b',
+                  border: dispatchTab === 'AI' ? '1px solid var(--dm-border-strong)' : '1px solid transparent',
+                  background: dispatchTab === 'AI' ? 'var(--dm-surface)' : 'transparent',
+                  color: dispatchTab === 'AI' ? 'var(--dm-purple-text)' : 'var(--dm-text-muted)',
                   boxShadow: dispatchTab === 'AI' ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
                   fontSize: 12.5,
                   fontWeight: 800,
@@ -1223,8 +1223,8 @@ export const DispatchWorkflow = ({
                       fontWeight: 800,
                       padding: '0 6px',
                       borderRadius: 999,
-                      background: dispatchTab === 'AI' ? '#eef2ff' : '#e2e8f0',
-                      color: dispatchTab === 'AI' ? '#4338ca' : '#475569',
+                      background: dispatchTab === 'AI' ? 'var(--dm-purple-bg)' : 'var(--dm-surface-hover)',
+                      color: dispatchTab === 'AI' ? 'var(--dm-purple-text)' : 'var(--dm-text-secondary)',
                     }}
                   >
                     {validRecTeamIds.length} đội
@@ -1244,9 +1244,9 @@ export const DispatchWorkflow = ({
                   gap: 6,
                   padding: '6px 8px',
                   borderRadius: 6,
-                  border: dispatchTab === 'TEAMS' ? '1px solid #cbd5e1' : '1px solid transparent',
-                  background: dispatchTab === 'TEAMS' ? '#ffffff' : 'transparent',
-                  color: dispatchTab === 'TEAMS' ? '#0f172a' : '#64748b',
+                  border: dispatchTab === 'TEAMS' ? '1px solid var(--dm-border-strong)' : '1px solid transparent',
+                  background: dispatchTab === 'TEAMS' ? 'var(--dm-surface)' : 'transparent',
+                  color: dispatchTab === 'TEAMS' ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)',
                   boxShadow: dispatchTab === 'TEAMS' ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none',
                   fontSize: 12.5,
                   fontWeight: 800,
@@ -1268,9 +1268,9 @@ export const DispatchWorkflow = ({
                 style={{
                   padding: '8px 10px',
                   borderRadius: 8,
-                  background: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  color: '#991b1b',
+                  background: 'var(--dm-red-bg)',
+                  border: '1px solid var(--dm-red-border)',
+                  color: 'var(--dm-red-text)',
                   fontSize: 12,
                   display: 'flex',
                   alignItems: 'flex-start',
@@ -1278,7 +1278,7 @@ export const DispatchWorkflow = ({
                   marginBottom: 4,
                 }}
               >
-                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+                <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1, color: 'var(--dm-red-text)' }} />
                 <div>
                   <strong style={{ display: 'block', fontSize: 12 }}>Cảnh báo điều phối đa ca</strong>
                   <span>{smartRecs.conflicts[0].message}</span>
@@ -1293,15 +1293,15 @@ export const DispatchWorkflow = ({
                   style={{
                     padding: '10px 12px',
                     borderRadius: 10,
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border-strong)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 8,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 800, color: '#1e293b' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 800, color: 'var(--dm-text-body)' }}>
                       <Sparkles size={14.5} style={{ color: '#4f46e5', flexShrink: 0 }} />
                       <span>Nhận định & Đề xuất điều phối AI</span>
                     </div>
@@ -1312,9 +1312,9 @@ export const DispatchWorkflow = ({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 4,
-                          background: '#dcfce7',
-                          color: '#15803d',
-                          border: '1px solid #86efac',
+                          background: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: '1px solid var(--dm-green-border)',
                           borderRadius: 5,
                           padding: '2px 8px',
                           fontSize: 11.5,
@@ -1329,7 +1329,7 @@ export const DispatchWorkflow = ({
                   </div>
 
                   {/* Tóm tắt đầy đủ */}
-                  <div style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.5, fontWeight: 500 }}>
+                  <div style={{ fontSize: 13, color: 'var(--dm-text-body)', lineHeight: 1.5, fontWeight: 500 }}>
                     {summaryText}
                   </div>
 
@@ -1338,17 +1338,17 @@ export const DispatchWorkflow = ({
                     <div
                       style={{
                         paddingTop: 7,
-                        borderTop: '1px dashed #cbd5e1',
+                        borderTop: '1px dashed var(--dm-border-strong)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 4,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: '#334155' }}>
-                        <ShieldAlert size={13.5} style={{ color: '#475569', flexShrink: 0 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: 'var(--dm-text-secondary)' }}>
+                        <ShieldAlert size={13.5} style={{ color: 'var(--dm-text-secondary)', flexShrink: 0 }} />
                         <span>Đánh giá mức độ ca SOS</span>
                       </div>
-                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: '#334155', lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--dm-text-secondary)', lineHeight: 1.45, display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {sosAiReasons.map((reason, idx) => (
                           <li key={idx}>{reason}</li>
                         ))}
@@ -1361,14 +1361,14 @@ export const DispatchWorkflow = ({
                     <div
                       style={{
                         paddingTop: 8,
-                        borderTop: '1px dashed #cbd5e1',
+                        borderTop: '1px dashed var(--dm-border-strong)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 6,
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: '#0369a1', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: 'var(--dm-blue-text)', minWidth: 0 }}>
                           <Package size={13.5} style={{ flexShrink: 0 }} />
                           <span>Vật tư AI đề xuất cấp kèm</span>
                           <span
@@ -1377,9 +1377,9 @@ export const DispatchWorkflow = ({
                               fontWeight: 800,
                               padding: '1px 6px',
                               borderRadius: 999,
-                              background: selectedSuggestedSupplyCount > 0 ? '#e0f2fe' : '#f1f5f9',
-                              color: selectedSuggestedSupplyCount > 0 ? '#0369a1' : '#64748b',
-                              border: `1px solid ${selectedSuggestedSupplyCount > 0 ? '#bae6fd' : '#e2e8f0'}`,
+                              background: selectedSuggestedSupplyCount > 0 ? 'var(--dm-blue-bg)' : 'var(--dm-surface-muted)',
+                              color: selectedSuggestedSupplyCount > 0 ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
+                              border: `1px solid ${selectedSuggestedSupplyCount > 0 ? 'var(--dm-blue-border)' : 'var(--dm-border)'}`,
                               fontVariantNumeric: 'tabular-nums',
                             }}
                           >
@@ -1396,7 +1396,7 @@ export const DispatchWorkflow = ({
                               padding: '2px 4px',
                               fontSize: 11,
                               fontWeight: 700,
-                              color: '#0284c7',
+                              color: 'var(--dm-blue-text)',
                               cursor: 'pointer',
                               whiteSpace: 'nowrap',
                               flexShrink: 0,
@@ -1431,15 +1431,15 @@ export const DispatchWorkflow = ({
                                 padding: '7px 9px',
                                 borderRadius: 8,
                                 border: isOutOfStock
-                                  ? '1px dashed #cbd5e1'
+                                  ? '1px dashed var(--dm-border-strong)'
                                   : isSelected
                                     ? '1.5px solid #0284c7'
-                                    : '1px solid #cbd5e1',
+                                    : '1px solid var(--dm-border-strong)',
                                 background: isOutOfStock
-                                  ? '#f8fafc'
+                                  ? 'var(--dm-surface-subtle)'
                                   : isSelected
-                                    ? '#f0f9ff'
-                                    : '#ffffff',
+                                    ? 'var(--dm-blue-bg)'
+                                    : 'var(--dm-surface)',
                                 opacity: isOutOfStock ? 0.65 : 1,
                                 cursor: isOutOfStock ? 'not-allowed' : 'pointer',
                                 boxShadow: isSelected ? '0 1px 4px rgba(2, 132, 199, 0.12)' : '0 1px 2px rgba(15, 23, 42, 0.03)',
@@ -1453,8 +1453,8 @@ export const DispatchWorkflow = ({
                                   width: 18,
                                   height: 18,
                                   borderRadius: 5,
-                                  border: `2px solid ${isOutOfStock ? '#cbd5e1' : isSelected ? '#0284c7' : '#94a3b8'}`,
-                                  background: isOutOfStock ? '#e2e8f0' : isSelected ? '#0284c7' : '#ffffff',
+                                  border: `2px solid ${isOutOfStock ? 'var(--dm-border-strong)' : isSelected ? '#0284c7' : 'var(--dm-border-strong)'}`,
+                                  background: isOutOfStock ? 'var(--dm-surface-hover)' : isSelected ? '#0284c7' : 'var(--dm-surface)',
                                   color: '#ffffff',
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -1472,7 +1472,7 @@ export const DispatchWorkflow = ({
                                   style={{
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    color: isSelected ? '#0c4a6e' : '#0f172a',
+                                    color: isSelected ? 'var(--dm-blue-text)' : 'var(--dm-text-strong)',
                                     lineHeight: 1.35,
                                     wordBreak: 'break-word',
                                   }}
@@ -1487,17 +1487,17 @@ export const DispatchWorkflow = ({
                                     gap: 5,
                                     marginTop: 2,
                                     fontSize: 10.5,
-                                    color: '#64748b',
+                                    color: 'var(--dm-text-muted)',
                                     fontWeight: 600,
                                   }}
                                 >
                                   <span>
-                                    AI đề xuất: <strong style={{ color: '#334155' }}>x{suggestedQty}</strong> {unit}
+                                    AI đề xuất: <strong style={{ color: 'var(--dm-text-secondary)' }}>x{suggestedQty}</strong> {unit}
                                   </span>
                                   {stockCount !== undefined && (
                                     <>
                                       <span>•</span>
-                                      <span style={{ color: isOutOfStock ? '#dc2626' : '#059669' }}>
+                                      <span style={{ color: isOutOfStock ? 'var(--dm-red-text)' : 'var(--dm-green-text)' }}>
                                         {isOutOfStock ? 'Hết tồn kho' : `Kho còn: ${stockCount}`}
                                       </span>
                                     </>
@@ -1505,7 +1505,7 @@ export const DispatchWorkflow = ({
                                   {supply.fromTeamInventory && (
                                     <>
                                       <span>•</span>
-                                      <span style={{ color: '#0284c7' }}>Trên xe đội</span>
+                                      <span style={{ color: 'var(--dm-blue-text)' }}>Trên xe đội</span>
                                     </>
                                   )}
                                 </div>
@@ -1519,8 +1519,8 @@ export const DispatchWorkflow = ({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 4,
-                                    background: '#ffffff',
-                                    border: '1px solid #bae6fd',
+                                    background: 'var(--dm-surface)',
+                                    border: '1px solid var(--dm-blue-border)',
                                     borderRadius: 6,
                                     padding: '2px 4px',
                                     flexShrink: 0,
@@ -1536,8 +1536,8 @@ export const DispatchWorkflow = ({
                                       height: 20,
                                       borderRadius: 4,
                                       border: 'none',
-                                      background: '#f1f5f9',
-                                      color: '#334155',
+                                      background: 'var(--dm-surface-muted)',
+                                      color: 'var(--dm-text-secondary)',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
@@ -1553,7 +1553,7 @@ export const DispatchWorkflow = ({
                                       textAlign: 'center',
                                       fontSize: 11.5,
                                       fontWeight: 800,
-                                      color: '#0369a1',
+                                      color: 'var(--dm-blue-text)',
                                       fontVariantNumeric: 'tabular-nums',
                                     }}
                                   >
@@ -1570,14 +1570,12 @@ export const DispatchWorkflow = ({
                                       height: 20,
                                       borderRadius: 4,
                                       border: 'none',
-                                      background:
-                                        stockCount !== undefined && currentQty >= stockCount
-                                          ? '#f1f5f9'
-                                          : '#e0f2fe',
-                                      color:
-                                        stockCount !== undefined && currentQty >= stockCount
-                                          ? '#94a3b8'
-                                          : '#0284c7',
+                                      background: stockCount !== undefined && currentQty >= stockCount
+                                          ? 'var(--dm-surface-muted)'
+                                          : 'var(--dm-blue-bg)',
+                                      color: stockCount !== undefined && currentQty >= stockCount
+                                          ? 'var(--dm-text-muted)'
+                                          : 'var(--dm-blue-text)',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
@@ -1596,9 +1594,9 @@ export const DispatchWorkflow = ({
                                   style={{
                                     fontSize: 11,
                                     fontWeight: 800,
-                                    color: isOutOfStock ? '#94a3b8' : '#334155',
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
+                                    color: isOutOfStock ? 'var(--dm-text-muted)' : 'var(--dm-text-secondary)',
+                                    background: 'var(--dm-surface-subtle)',
+                                    border: '1px solid var(--dm-border)',
                                     borderRadius: 5,
                                     padding: '2px 7px',
                                     flexShrink: 0,
@@ -1621,8 +1619,8 @@ export const DispatchWorkflow = ({
                       style={{
                         padding: '7px 9px',
                         borderRadius: 7,
-                        background: '#fffbeb',
-                        border: '1px solid #fde68a',
+                        background: 'var(--dm-amber-bg)',
+                        border: '1px solid var(--dm-amber-border)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 4,
@@ -1636,12 +1634,12 @@ export const DispatchWorkflow = ({
                             alignItems: 'flex-start',
                             gap: 6,
                             fontSize: 12,
-                            color: '#92400e',
+                            color: 'var(--dm-amber-text)',
                             fontWeight: 600,
                             lineHeight: 1.4,
                           }}
                         >
-                          <AlertTriangle size={13.5} style={{ color: '#d97706', flexShrink: 0, marginTop: 2 }} />
+                          <AlertTriangle size={13.5} style={{ color: 'var(--dm-amber-text)', flexShrink: 0, marginTop: 2 }} />
                           <span>{cleanAiText(w)}</span>
                         </div>
                       ))}
@@ -1698,9 +1696,9 @@ export const DispatchWorkflow = ({
                         width: '100%',
                         padding: '7px 12px',
                         borderRadius: 7,
-                        border: '1px solid #cbd5e1',
-                        background: '#ffffff',
-                        color: '#0f172a',
+                        border: '1px solid var(--dm-border-strong)',
+                        background: 'var(--dm-surface)',
+                        color: 'var(--dm-text-strong)',
                         fontSize: 12.5,
                         fontWeight: 700,
                         cursor: 'pointer',
@@ -1722,7 +1720,7 @@ export const DispatchWorkflow = ({
                         padding: '0 2px',
                       }}
                     >
-                      <span style={{ fontSize: 11.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                         Đội AI đề xuất ({validRecTeams.length} đội)
                       </span>
                       <button
@@ -1732,7 +1730,7 @@ export const DispatchWorkflow = ({
                           background: 'transparent',
                           border: 'none',
                           padding: 0,
-                          color: '#0284c7',
+                          color: 'var(--dm-blue-text)',
                           fontSize: 12,
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -1773,10 +1771,10 @@ export const DispatchWorkflow = ({
                 style={{
                   padding: '20px 14px',
                   textAlign: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                   borderRadius: 8,
-                  border: '1px dashed #cbd5e1',
-                  color: '#64748b',
+                  border: '1px dashed var(--dm-border-strong)',
+                  color: 'var(--dm-text-muted)',
                   fontSize: 12.5,
                 }}
               >

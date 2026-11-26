@@ -570,9 +570,9 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               display: 'flex',
               alignItems: 'center',
               gap: 10,
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              color: '#991b1b',
+              background: 'var(--dm-red-bg)',
+              border: '1px solid var(--dm-red-border)',
+              color: 'var(--dm-red-text)',
               borderRadius: 10,
               padding: '8px 14px',
               fontSize: 12.5,
@@ -630,7 +630,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
                   gap: 5,
                   background: 'rgba(220, 38, 38, 0.08)',
                   border: '1px solid rgba(220, 38, 38, 0.3)',
-                  color: '#dc2626',
+                  color: 'var(--dm-red-text)',
                   borderRadius: 6,
                   padding: '5px 10px',
                   fontSize: 11.5,
@@ -688,14 +688,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: showWardBoundaries ? '#2563eb' : '#ffffff',
-                border: `1px solid ${showWardBoundaries ? '#1d4ed8' : '#e2e8f0'}`,
+                background: showWardBoundaries ? '#2563eb' : 'var(--dm-surface)',
+                border: `1px solid ${showWardBoundaries ? '#1d4ed8' : 'var(--dm-border)'}`,
                 borderBottom: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: showWardBoundaries ? '#ffffff' : '#334155',
+                color: showWardBoundaries ? '#ffffff' : 'var(--dm-text-secondary)',
                 opacity: wardsLoading ? 0.65 : 1,
                 transition: 'all 0.15s ease',
               }}
@@ -723,14 +723,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: showShelters ? '#10b981' : '#ffffff',
-                border: `1px solid ${showShelters ? '#059669' : '#e2e8f0'}`,
+                background: showShelters ? '#10b981' : 'var(--dm-surface)',
+                border: `1px solid ${showShelters ? '#059669' : 'var(--dm-border)'}`,
                 borderBottom: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: showShelters ? '#ffffff' : '#334155',
+                color: showShelters ? '#ffffff' : 'var(--dm-text-secondary)',
                 transition: 'all 0.15s ease',
               }}
               title={`Trú ẩn (${shelters.length}) — ${showShelters ? 'Bấm để ẩn điểm an toàn' : 'Bấm để hiện điểm an toàn'}`}
@@ -753,13 +753,13 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: showHazards ? '#dc2626' : '#ffffff',
-                border: `1px solid ${showHazards ? '#b91c1c' : '#e2e8f0'}`,
+                background: showHazards ? '#dc2626' : 'var(--dm-surface)',
+                border: `1px solid ${showHazards ? '#b91c1c' : 'var(--dm-border)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: showHazards ? '#ffffff' : '#334155',
+                color: showHazards ? '#ffffff' : 'var(--dm-text-secondary)',
                 transition: 'all 0.15s ease',
               }}
               title={`Nguy hiểm (${hazards.length}) — ${showHazards ? 'Bấm để ẩn điểm nguy hiểm' : 'Bấm để hiện điểm nguy hiểm'}`}
@@ -785,14 +785,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--dm-surface)',
+                border: '1px solid var(--dm-border)',
                 borderBottom: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#334155',
+                color: 'var(--dm-text-secondary)',
               }}
               title="Phóng to"
             >
@@ -804,14 +804,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--dm-surface)',
+                border: '1px solid var(--dm-border)',
                 borderBottom: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#334155',
+                color: 'var(--dm-text-secondary)',
               }}
               title="Thu nhỏ"
             >
@@ -823,13 +823,13 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               style={{
                 width: 36,
                 height: 36,
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--dm-surface)',
+                border: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#334155',
+                color: 'var(--dm-text-secondary)',
               }}
               title="Đưa về toàn cảnh bản đồ Đà Nẵng"
             >
@@ -906,7 +906,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
                   }}
                 >
                   <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                       {sh.name} •{' '}
                       {metrics.isOverloaded
                         ? `Quá tải (${metrics.percent}%)`
@@ -944,7 +944,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
                   }}
                 >
                   <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#dc2626' }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-red-text)' }}>
                       {hz.title}
                     </div>
                   </Tooltip>

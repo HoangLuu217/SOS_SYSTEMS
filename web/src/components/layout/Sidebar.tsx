@@ -29,15 +29,14 @@ import {
   LifeBuoy,
   Package,
   Truck,
-
   Bell,
   Home,
   AlertTriangle,
   BarChart3,
   History,
-  LogOut,
-  ChevronLeft,
+  ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   Users,
   UserCheck,
   Building2,
@@ -49,6 +48,10 @@ import {
   CloudSun,
   ShieldCheck,
   Droplet,
+  User as UserIcon,
+  LogOut,
+  MapPin,
+  PhoneCall,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -58,7 +61,6 @@ import './Sidebar.css';
    ========================================================================== */
 
 export type NavItemKey =
-  // 4 Nhóm chính - Hệ thống Điều hành Tác chiến RescueSOS
   | 'map'
   | 'sos_requests'
   | 'coordination'
@@ -76,7 +78,6 @@ export type NavItemKey =
   | 'operation_logs'
   | 'chat'
   | 'settings'
-  // Nhóm Quản trị (Admin)
   | 'citizens'
   | 'rescuers_admin'
   | 'authorities'
@@ -94,7 +95,7 @@ export interface NavItemConfig {
 }
 
 export interface NavGroupConfig {
-  title: string;
+  title?: string;
   items: NavItemConfig[];
 }
 
@@ -105,23 +106,23 @@ export interface SidebarProps {
   onLogout?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  hiddenRail?: boolean;
 }
 
 /* ==========================================================================
-   SIDEBAR COMPONENT (CHUẨN GIAO DIỆN SAAS)
+   CHRONICLE APP SIDEBAR (WORKSPACE SWITCHER + CALM NAVMAIN + NAVUSER FOOTER)
    ========================================================================== */
 
 export const Sidebar: React.FC<SidebarProps> = ({
   user,
-  activeKey = 'rescuers', // Mặc định Đội cứu hộ địa phương ở trạng thái Active
+  activeKey = 'rescuers',
   onSelectKey,
   onLogout,
   collapsed = false,
-  onToggleCollapse,
+  hiddenRail = false,
 }) => {
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
 
-  // Trạng thái đếm số liệu thời gian thực từ database
   const [sosCounts, setSosCounts] = useState<{ unassigned: number; active: number }>({
     unassigned: 0,
     active: 0,
@@ -129,16 +130,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
-
-
-  // State menu nổi (Flyout Submenu) khi hover vào Phương tiện & Vật tư
+  // Chronicle inline tree for Phương tiện & Vật tư + collapsed flyout
+  const [isResourcesExpanded, setIsResourcesExpanded] = useState<boolean>(
+    () => activeKey === 'resources'
+  );
   const [isResourcesFlyoutOpen, setIsResourcesFlyoutOpen] = useState(false);
-  const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const [currentResourceSubTab, setCurrentResourceSubTab] = useState<'VEHICLES' | 'SUPPLIES' | 'CONSUMABLES'>('VEHICLES');
+  const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  const [currentResourceSubTab, setCurrentResourceSubTab] = useState<
+    'VEHICLES' | 'SUPPLIES' | 'CONSUMABLES'
+  >('VEHICLES');
+
+  // Popover states for Workspace Switcher & NavUser
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
   const flyoutTimerRef = useRef<any>(null);
   const resourcesItemRef = useRef<HTMLDivElement | null>(null);
-
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const userFooterRef = useRef<HTMLDivElement | null>(null);
   const isFetchingCountsRef = useRef(false);
+
+  // Close sidebar popovers on outside click / Escape
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (workspaceRef.current && !workspaceRef.current.contains(target)) {
+        setIsWorkspaceMenuOpen(false);
+      }
+      if (userFooterRef.current && !userFooterRef.current.contains(target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsWorkspaceMenuOpen(false);
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   // Đồng bộ số liệu thời gian thực (chạy song song 3 API, tránh chồng chéo request)
   const fetchRealCounts = useCallback(async () => {
@@ -170,8 +208,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             .getSosRequests()
             .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
           const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-          const active = fallback.filter((s) =>
-            ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
+          const active = fallback.filter(
+            (s) =>
+              ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(
+                s.status as any
+              ) || !!s.assignmentId
           ).length;
           setSosCounts({ unassigned, active });
         }
@@ -181,8 +222,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const rescuerRes = rescuerResult.value;
         if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
           let rescuers = rescuerRes.data.users;
-
-          const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
+          const isAdminUser = Boolean(
+            user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN'
+          );
 
           if (!isAdminUser) {
             const activeOfficer = domainDService.getActiveOfficer();
@@ -210,21 +252,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const normCommune = normalizeStr(cleanLocalCommune);
 
               rescuers = rescuers.filter((u: any) => {
-                const rescuerAreaId = u.rescuer?.areaId?._id || u.rescuer?.areaId || u.areaId?._id || u.areaId || u.citizen?.areaId?._id || u.citizen?.areaId;
-                if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId || String(rescuerAreaId || '') === String(userAreaId))) {
+                const rescuerAreaId =
+                  u.rescuer?.areaId?._id ||
+                  u.rescuer?.areaId ||
+                  u.areaId?._id ||
+                  u.areaId ||
+                  u.citizen?.areaId?._id ||
+                  u.citizen?.areaId;
+                if (
+                  userAreaId &&
+                  (u.authority?.areaId === userAreaId ||
+                    u.rescuer?.preferredAreaId === userAreaId ||
+                    String(rescuerAreaId || '') === String(userAreaId))
+                ) {
                   return true;
                 }
-                const addrStr = typeof u.address === 'string'
-                  ? u.address
-                  : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
+                const addrStr =
+                  typeof u.address === 'string'
+                    ? u.address
+                    : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
                 const target = `${u.rescuer?.areaName || ''} ${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
-                return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
+                return (
+                  (cleanLocalCommune && target.includes(cleanLocalCommune)) ||
+                  (normCommune && normalizeStr(target).includes(normCommune))
+                );
               });
             }
           }
 
           const pendingCount = rescuers.filter(
-            (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
+            (u: any) =>
+              (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
           ).length;
           setPendingRescuersCount(pendingCount);
         }
@@ -251,7 +309,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('storage', onDataUpdated);
     window.addEventListener('sos_chat_unread_updated', onDataUpdated);
 
-    // Lắng nghe sự kiện hồ sơ cứu hộ mới / duyệt hồ sơ thời gian thực qua Socket.IO
     const unsubApp = onRescuerApplicationSubmitted(() => fetchRealCounts());
     const unsubVer = onRescuerVerificationChanged(() => fetchRealCounts());
     const unsubSosCreated = onSosCreated(() => fetchRealCounts());
@@ -273,13 +330,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [fetchRealCounts]);
 
+  // Phát sự kiện đồng bộ số đếm thời gian thực lên Inset Header
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('sos_sidebar_counts', {
+        detail: {
+          sosUnassigned: sosCounts.unassigned,
+          sosActive: sosCounts.active,
+          pendingRescuers: pendingRescuersCount,
+          chatUnread: chatUnreadCount,
+        },
+      })
+    );
+  }, [sosCounts.unassigned, sosCounts.active, pendingRescuersCount, chatUnreadCount]);
+
   // Đồng bộ sub-tab Phương tiện & Vật tư từ URL và sự kiện điều hướng
   useEffect(() => {
     const syncSubTab = () => {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab')?.toUpperCase();
       const path = window.location.pathname.toLowerCase();
-      if (tabParam === 'SUPPLIES' || tabParam === 'CONSUMABLES' || path.includes('/supplies') || path.includes('/consumables')) {
+      if (
+        tabParam === 'SUPPLIES' ||
+        tabParam === 'CONSUMABLES' ||
+        path.includes('/supplies') ||
+        path.includes('/consumables')
+      ) {
         setCurrentResourceSubTab('SUPPLIES');
       } else {
         setCurrentResourceSubTab('VEHICLES');
@@ -304,7 +380,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, []);
 
-  // Xử lý mở / đóng Flyout Submenu khi hover vào Phương tiện & Vật tư
   const handleResourcesMouseEnter = () => {
     if (flyoutTimerRef.current) {
       clearTimeout(flyoutTimerRef.current);
@@ -361,7 +436,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleItemClick = (key: NavItemKey) => {
     if (key === 'resources') {
-      handleSelectResourceSubTab(currentResourceSubTab || 'VEHICLES');
+      if (!collapsed) {
+        setIsResourcesExpanded((prev) => !prev);
+      }
+      if (activeKey !== 'resources') {
+        handleSelectResourceSubTab(currentResourceSubTab || 'VEHICLES');
+      }
       return;
     }
     if (onSelectKey) {
@@ -370,99 +450,92 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   /* --------------------------------------------------------------------------
-     4 NHÓM MENU CHÍNH CỦA RESCUESOS DASHBOARD (CHUẨN SAAS)
+     CHRONICLE CALM SIDEBAR NAV GROUPS (PRIMARY TOP + SENTENCE-CASE GROUPS)
      -------------------------------------------------------------------------- */
   const operationMenuGroups: NavGroupConfig[] = [
-    // NHÓM 1: ĐIỀU HÀNH CỨU HỘ
     {
-      title: 'ĐIỀU HÀNH CỨU HỘ',
       items: [
         {
           key: 'map',
-          label: 'Bản đồ cứu hộ',
-          icon: <Map size={18} className="sos-nav-icon" />,
+          label: 'Bản đồ SOS',
+          icon: <Map size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'sos_requests',
           label: 'Điều phối SOS',
-          icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: sosCounts.unassigned > 0
-            ? `${sosCounts.unassigned} chờ`
-            : sosCounts.active > 0
-            ? `${sosCounts.active} cứu`
-            : undefined,
+          icon: <Siren size={16} strokeWidth={1.8} className="ch-nav-icon" />,
+          badge:
+            sosCounts.unassigned > 0
+              ? `${sosCounts.unassigned}`
+              : sosCounts.active > 0
+                ? `${sosCounts.active}`
+                : undefined,
           badgeType: 'danger',
         },
       ],
     },
-
-    // NHÓM MỚI: TRAO ĐỔI TÁC CHIẾN (Nằm giữa Điều Hành Cứu Hộ và Lực Lượng & Nguồn Lực)
     {
-      title: 'TRAO ĐỔI TÁC CHIẾN',
+      title: 'Tác chiến',
       items: [
         {
           key: 'chat',
           label: 'Trao đổi',
-          icon: <MessageSquare size={18} className="sos-nav-icon" />,
-          badge: chatUnreadCount > 0 ? 'dot' : (activeKey !== 'chat' ? 'dot' : undefined),
+          icon: <MessageSquare size={16} strokeWidth={1.8} className="ch-nav-icon" />,
+          badge: chatUnreadCount > 0 ? `${chatUnreadCount}` : undefined,
           badgeType: 'danger',
         },
       ],
     },
-
-    // NHÓM 2: LỰC LƯỢNG & NGUỒN LỰC
     {
-      title: 'LỰC LƯỢNG & NGUỒN LỰC',
+      title: 'Lực lượng',
       items: [
         {
           key: 'rescuers_approval',
-          label: 'Duyệt hồ sơ cứu hộ',
-          icon: <UserCheck size={18} className="sos-nav-icon" />,
-          badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
+          label: 'Duyệt cứu hộ',
+          icon: <UserCheck size={16} strokeWidth={1.8} className="ch-nav-icon" />,
+          badge: pendingRescuersCount > 0 ? `${pendingRescuersCount}` : undefined,
           badgeType: 'warning',
         },
         {
           key: 'rescuers',
-          label: 'Đội cứu hộ địa phương',
-          icon: <LifeBuoy size={18} className="sos-nav-icon" />,
+          label: 'Đội cứu hộ',
+          icon: <LifeBuoy size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'resources',
-          label: 'Phương tiện & Vật tư',
-          icon: <Package size={18} className="sos-nav-icon" />,
+          label: 'Phương tiện & Kho',
+          icon: <Package size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
       ],
     },
-
-    // NHÓM 3: THÔNG BÁO & CỘNG ĐỒNG
     {
-      title: 'THÔNG BÁO & CỘNG ĐỒNG',
+      title: 'Cộng đồng',
       items: [
         ...(isAdmin
           ? [
               {
                 key: 'notifications' as NavItemKey,
-                label: 'Gửi thông báo',
-                icon: <Bell size={18} className="sos-nav-icon" />,
+                label: 'Thông báo',
+                icon: <Bell size={16} strokeWidth={1.8} className="ch-nav-icon" />,
               },
             ]
           : []),
         {
           key: 'safety_checks',
-          label: 'Kiểm tra an toàn',
-          icon: <ShieldCheck size={18} className="sos-nav-icon" />,
+          label: 'An toàn dân cư',
+          icon: <ShieldCheck size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'blood_donations',
           label: 'Hiến máu',
-          icon: <Droplet size={18} className="sos-nav-icon" />,
+          icon: <Droplet size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         ...(isAdmin
           ? [
               {
                 key: 'weather' as NavItemKey,
-                label: 'Bản tin thời tiết',
-                icon: <CloudSun size={18} className="sos-nav-icon" />,
+                label: 'Thời tiết',
+                icon: <CloudSun size={16} strokeWidth={1.8} className="ch-nav-icon" />,
               },
             ]
           : []),
@@ -470,75 +543,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'shelters',
           label: 'Điểm trú ẩn',
           useCase: 'UC-L12',
-          icon: <Home size={18} className="sos-nav-icon" />,
+          icon: <Home size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'hazard_reports',
           label: 'Điểm nguy hiểm',
           useCase: 'UC-L15',
-          icon: <AlertTriangle size={18} className="sos-nav-icon" />,
+          icon: <AlertTriangle size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
       ],
     },
-
-    // NHÓM 4: BÁO CÁO & GIÁM SÁT
     {
-      title: 'BÁO CÁO & GIÁM SÁT',
+      title: 'Báo cáo',
       items: [
         {
           key: 'reports',
-          label: 'Báo cáo & Thống kê',
-          icon: <BarChart3 size={18} className="sos-nav-icon" />,
+          label: 'Báo cáo',
+          icon: <BarChart3 size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'operation_logs',
           label: 'Nhật ký',
-          icon: <History size={18} className="sos-nav-icon" />,
+          icon: <History size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
       ],
     },
-
   ];
 
-  /* --------------------------------------------------------------------------
-     NHÓM MENU QUẢN TRỊ VIÊN HỆ THỐNG (DÀNH CHO ADMIN)
-     -------------------------------------------------------------------------- */
   const adminAdditionalGroups: NavGroupConfig[] = [
     {
-      title: 'QUẢN TRỊ HỆ THỐNG',
+      title: 'Quản trị',
       items: [
         {
           key: 'citizens',
           label: 'Người dân',
-          icon: <Users size={18} className="sos-nav-icon" />,
+          icon: <Users size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'rescuers_admin',
           label: 'Xác minh cứu hộ',
-          icon: <UserCheck size={18} className="sos-nav-icon" />,
+          icon: <UserCheck size={16} strokeWidth={1.8} className="ch-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount}` : undefined,
           badgeType: 'warning',
         },
         {
           key: 'authorities',
-          label: 'Cán bộ & Tổ chức',
-          icon: <Building2 size={18} className="sos-nav-icon" />,
+          label: 'Cán bộ & Đơn vị',
+          icon: <Building2 size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
         {
           key: 'areas',
-          label: 'Khu vực hành chính',
-          icon: <Globe2 size={18} className="sos-nav-icon" />,
+          label: 'Địa bàn',
+          icon: <Globe2 size={16} strokeWidth={1.8} className="ch-nav-icon" />,
         },
       ],
     },
   ];
 
-  // Danh mục menu hiển thị
   const currentGroups = isAdmin
     ? [...operationMenuGroups, ...adminAdditionalGroups]
     : operationMenuGroups;
 
-  // Xác định trạng thái active của mục hiện tại
   const isItemActive = (key: NavItemKey) => {
     if (activeKey) {
       if (key === 'notifications' && (activeKey === 'notifications' || activeKey === 'alerts')) {
@@ -546,17 +611,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       return activeKey === key;
     }
-    return key === 'rescuers'; // Fallback active cho Đội cứu hộ địa phương
+    return key === 'rescuers';
   };
 
-  // Chuẩn hóa chức danh cán bộ (chỉ dùng Chỉ huy cho cấp khu vực)
   const normalizePosition = (pos?: string | null) => {
     if (isAdmin) return pos || 'Quản trị viên hệ thống';
     if (!pos || /phó\s*trưởng|trưởng\s*ban|cán\s*bộ/i.test(pos)) return 'Chỉ huy khu vực';
     return pos;
   };
 
-  // Thông tin user hiển thị ở Profile Bar & Modal chỉnh sửa Profile
   const [localProfile, setLocalProfile] = useState<{
     fullName: string;
     position: string;
@@ -570,13 +633,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     longitude: number | null;
     officeAddress: string;
   }>(() => {
-    const initialAreaName =
-      isAdmin
-        ? 'Toàn quốc'
-        : (user?.authority?.areaName ||
-          (user?.authority?.department
-            ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
-            : 'Khu vực quản lý'));
+    const initialAreaName = isAdmin
+      ? 'Toàn quốc'
+      : user?.authority?.areaName ||
+        (user?.authority?.department
+          ? user.authority.department
+              .replace(/^Ban Chỉ Huy PCTT\s*/i, '')
+              .replace(/\(.*?\)/g, '')
+              .trim()
+          : 'Khu vực quản lý');
     const fallbackCoords = getAreaCoordinates(initialAreaName, user?.authority?.department);
     const lat = user?.authority?.latitude ?? fallbackCoords.lat;
     const lng = user?.authority?.longitude ?? fallbackCoords.lng;
@@ -588,7 +653,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       email: user?.email || 'canbo@sos.gov.vn',
       managedArea: initialAreaName,
       avatarUrl: user?.avatarUrl || '',
-      mapUrl: user?.authority?.mapUrl || (user?.authority?.latitude && user?.authority?.longitude ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
+      mapUrl:
+        user?.authority?.mapUrl ||
+        (user?.authority?.latitude && user?.authority?.longitude
+          ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`
+          : ''),
       latitude: lat,
       longitude: lng,
       officeAddress: user?.authority?.officeAddress || '',
@@ -599,6 +668,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [profileSuccessMsg, setProfileSuccessMsg] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onOpenProfile = () => setIsProfileModalOpen(true);
+    window.addEventListener('sos_open_profile_modal', onOpenProfile);
+    return () => window.removeEventListener('sos_open_profile_modal', onOpenProfile);
+  }, []);
 
   // Trạng thái đổi mật khẩu trong hồ sơ
   const [showPasswordSection, setShowPasswordSection] = useState(false);
@@ -630,7 +705,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpSuccessNotice, setOtpSuccessNotice] = useState<string | null>(null);
 
-  // Bộ đếm lùi thời gian gửi lại mã OTP (60s)
   useEffect(() => {
     if (otpCountdown <= 0) return;
     const timer = setInterval(() => {
@@ -639,7 +713,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => clearInterval(timer);
   }, [otpCountdown]);
 
-  // Đồng bộ khi prop user thay đổi từ bên ngoài hoặc qua storage
   useEffect(() => {
     if (user) {
       const p = (user as any)?.phoneNumber || (user as any)?.phone || '0905 114 115';
@@ -648,13 +721,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsPhoneVerified(isVer);
       setVerifiedPhone(isVer ? cleanP : '');
 
-      const syncedAreaName =
-        isAdmin
-          ? 'Toàn quốc'
-          : (user.authority?.areaName ||
-            (user.authority?.department
-              ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
-              : 'Khu vực quản lý'));
+      const syncedAreaName = isAdmin
+        ? 'Toàn quốc'
+        : user.authority?.areaName ||
+          (user.authority?.department
+            ? user.authority.department
+                .replace(/^Ban Chỉ Huy PCTT\s*/i, '')
+                .replace(/\(.*?\)/g, '')
+                .trim()
+            : 'Khu vực quản lý');
       const fallbackCoords = getAreaCoordinates(syncedAreaName, user.authority?.department);
       const lat = user.authority?.latitude ?? fallbackCoords.lat;
       const lng = user.authority?.longitude ?? fallbackCoords.lng;
@@ -667,7 +742,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         email: user.email || 'canbo@sos.gov.vn',
         managedArea: syncedAreaName,
         avatarUrl: user.avatarUrl || '',
-        mapUrl: user.authority?.mapUrl || (user.authority?.latitude && user.authority?.longitude ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
+        mapUrl:
+          user.authority?.mapUrl ||
+          (user.authority?.latitude && user.authority?.longitude
+            ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`
+            : ''),
         latitude: lat,
         longitude: lng,
         officeAddress: user.authority?.officeAddress || '',
@@ -675,7 +754,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [user, isAdmin]);
 
-  // Tải ảnh đại diện lên Cloudinary và cập nhật tức thì
   const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -693,7 +771,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setUploadingAvatar(true);
     setAvatarError(null);
 
-    // Tạo preview cục bộ ngay lập tức để trải nghiệm mượt mà
     const previewUrl = URL.createObjectURL(file);
     setLocalProfile((prev) => ({ ...prev, avatarUrl: previewUrl }));
 
@@ -703,7 +780,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const cloudUrl = res.data.avatarUrl;
         setLocalProfile((prev) => ({ ...prev, avatarUrl: cloudUrl }));
 
-        // Cập nhật auth user trong localStorage & phát event đồng bộ toàn bộ app
         const rawUser = localStorage.getItem('sos_auth_user');
         if (rawUser) {
           try {
@@ -712,7 +788,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             localStorage.setItem('sos_auth_user', JSON.stringify(updated));
             window.dispatchEvent(new Event('storage'));
             window.dispatchEvent(new CustomEvent('sos_user_profile_updated', { detail: updated }));
-          } catch { }
+          } catch {}
         }
 
         setProfileSuccessMsg(true);
@@ -729,7 +805,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Khi cán bộ thay đổi số điện thoại trong ô input
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPhone = e.target.value;
     setLocalProfile({ ...localProfile, phone: newPhone });
@@ -744,7 +819,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setOtpSuccessNotice(null);
   };
 
-  // Gửi mã OTP xác thực số điện thoại
   const handleSendPhoneOtp = async () => {
     const cleanPhone = localProfile.phone.replace(/[^0-9]/g, '');
     if (cleanPhone.length < 10) {
@@ -765,7 +839,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Xác thực mã OTP 6 số
   const handleVerifyPhoneOtp = async () => {
     const cleanPhone = localProfile.phone.replace(/[^0-9]/g, '');
     const cleanOtp = otpCode.trim();
@@ -784,7 +857,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setOtpSuccessNotice('✓ Đã xác thực số điện thoại thành công!');
       setTimeout(() => setOtpSuccessNotice(null), 4000);
 
-      // Cập nhật ngay bộ nhớ tạm auth user
       const rawUser = localStorage.getItem('sos_auth_user');
       if (rawUser) {
         const u = JSON.parse(rawUser);
@@ -812,9 +884,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setProfileErrorMsg(null);
     try {
       const rawUser = localStorage.getItem('sos_auth_user');
-      const currentUserObj = rawUser ? JSON.parse(rawUser) : (user || {});
+      const currentUserObj = rawUser ? JSON.parse(rawUser) : user || {};
 
-      // 1. Gửi request PATCH /api/users/me lưu trực tiếp vào cơ sở dữ liệu MongoDB
       const res = await updateUserProfile({
         fullName: localProfile.fullName,
         phone: localProfile.phone,
@@ -823,18 +894,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isPhoneVerified: isPhoneVerified,
         authority: isAdmin
           ? {
-            position: localProfile.position,
-            organizationName: localProfile.organizationName,
-            areaName: 'Toàn quốc',
-          }
+              position: localProfile.position,
+              organizationName: localProfile.organizationName,
+              areaName: 'Toàn quốc',
+            }
           : {
-            position: localProfile.position,
-            organizationName: localProfile.organizationName,
-            mapUrl: localProfile.mapUrl,
-            latitude: localProfile.latitude ?? undefined,
-            longitude: localProfile.longitude ?? undefined,
-            officeAddress: localProfile.officeAddress,
-          },
+              position: localProfile.position,
+              organizationName: localProfile.organizationName,
+              mapUrl: localProfile.mapUrl,
+              latitude: localProfile.latitude ?? undefined,
+              longitude: localProfile.longitude ?? undefined,
+              officeAddress: localProfile.officeAddress,
+            },
       });
 
       const serverUser = res.success && res.data ? res.data : null;
@@ -851,15 +922,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ...(serverUser?.authority || {}),
           areaId: isAdmin
             ? null
-            : (serverUser?.authority?.areaId || currentUserObj.authority?.areaId || null),
+            : serverUser?.authority?.areaId || currentUserObj.authority?.areaId || null,
           department: isAdmin
-            ? (serverUser?.authority?.department || 'Ban Quản Trị Hệ Thống SOS')
-            : (serverUser?.authority?.department || currentUserObj.authority?.department),
+            ? serverUser?.authority?.department || 'Ban Quản Trị Hệ Thống SOS'
+            : serverUser?.authority?.department || currentUserObj.authority?.department,
           position: localProfile.position,
           organizationName: localProfile.organizationName,
-          areaName: isAdmin ? 'Toàn quốc' : (serverUser?.authority?.areaName || currentUserObj.authority?.areaName || localProfile.managedArea),
-          provinceCode: isAdmin ? undefined : (serverUser?.authority?.provinceCode ?? currentUserObj.authority?.provinceCode),
-          wardCode: isAdmin ? undefined : (serverUser?.authority?.wardCode ?? currentUserObj.authority?.wardCode),
+          areaName: isAdmin
+            ? 'Toàn quốc'
+            : serverUser?.authority?.areaName ||
+              currentUserObj.authority?.areaName ||
+              localProfile.managedArea,
+          provinceCode: isAdmin
+            ? undefined
+            : serverUser?.authority?.provinceCode ?? currentUserObj.authority?.provinceCode,
+          wardCode: isAdmin
+            ? undefined
+            : serverUser?.authority?.wardCode ?? currentUserObj.authority?.wardCode,
           mapUrl: serverUser?.authority?.mapUrl ?? localProfile.mapUrl,
           latitude: serverUser?.authority?.latitude ?? localProfile.latitude ?? undefined,
           longitude: serverUser?.authority?.longitude ?? localProfile.longitude ?? undefined,
@@ -867,7 +946,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         } as any,
       };
 
-      // 2. Lưu vào local storage & phát sự kiện đồng bộ toàn hệ thống
       localStorage.setItem('sos_auth_user', JSON.stringify(updatedUser));
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('sos_user_profile_updated', { detail: updatedUser }));
@@ -883,122 +961,182 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
-  // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
+  const rawUserName =
+    localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   const displayUserName = rawUserName.replace(/\s*\([^)]*\)/g, '').trim() || rawUserName;
-  const displayUserRole = normalizePosition(localProfile.position || user?.authority?.position);
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
+  const scopeSubtitle = isAdmin
+    ? 'Quản trị viên'
+    : (localProfile.managedArea || 'TP. Đà Nẵng').split(',')[0].trim();
 
   return (
     <aside
-      className={`sos-sidebar ${collapsed ? 'collapsed' : ''}`}
-      aria-label="Sidebar điều hướng RescueSOS"
+      className={`ch-sidebar sos-sidebar ${collapsed ? 'collapsed' : ''} ${
+        hiddenRail ? 'hidden-rail' : ''
+      }`}
+      aria-label="Thanh điều hướng dọc Cứu Hộ Cứu Nạn"
     >
-      {/* ===================================================================
-          1. HEADER / LOGO: SOS SYSTEMS & NÚT THU GỌN
-          =================================================================== */}
-      <div className="sos-sidebar-header">
-        <div className="sos-brand" title="Cứu Hộ Cứu Nạn">
-          <div className="sos-brand-logo-wrap">
-            <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo" />
-            <span className="sos-brand-pulse" />
-          </div>
-
+      {/* 1. CHRONICLE WORKSPACE SWITCHER HEADER */}
+      <div className="ch-sidebar-header" ref={workspaceRef}>
+        <button
+          type="button"
+          className={`ch-workspace-btn ${isWorkspaceMenuOpen ? 'open' : ''}`}
+          onClick={() => setIsWorkspaceMenuOpen((prev) => !prev)}
+          title="Cứu Hộ Cứu Nạn"
+        >
+          <span className="ch-workspace-mark">
+            <img src="/logoSOS.png" alt="Logo Cứu Hộ Cứu Nạn" />
+          </span>
           {!collapsed && (
-            <div className="sos-brand-info">
-              <span className="sos-brand-title">Cứu Hộ Cứu Nạn</span>
-            </div>
+            <>
+              <span className="ch-workspace-copy">
+                <strong>Cứu Hộ Cứu Nạn</strong>
+                <span>{scopeSubtitle}</span>
+              </span>
+              <ChevronsUpDown size={14} className="ch-workspace-chev" />
+            </>
           )}
-        </div>
+        </button>
 
-        {onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="sos-collapse-toggle"
-            title={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-            aria-label="Toggle Sidebar"
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
+        {isWorkspaceMenuOpen && (
+          <div className="ch-sidebar-popover ch-workspace-popover">
+            <div className="ch-ws-pop-head">
+              <span>Cổng hiện tại</span>
+              <div className="ch-ws-pop-role">
+                {isAdmin ? <ShieldCheck size={14} /> : <MapPin size={14} />}
+                <strong>{isAdmin ? 'Quản trị viên (ADMIN)' : 'Chính quyền cơ sở'}</strong>
+              </div>
+              <small>{isAdmin ? 'Toàn TP. Đà Nẵng & Hoàng Sa' : localProfile.managedArea}</small>
+            </div>
+            <div className="ch-ws-pop-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectKey?.('map');
+                  setIsWorkspaceMenuOpen(false);
+                }}
+              >
+                <Map size={14} />
+                <span>Bản đồ SOS</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectKey?.('sos_requests');
+                  setIsWorkspaceMenuOpen(false);
+                }}
+              >
+                <Siren size={14} />
+                <span>Điều phối SOS</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectKey?.('reports');
+                  setIsWorkspaceMenuOpen(false);
+                }}
+              >
+                <BarChart3 size={14} />
+                <span>Báo cáo</span>
+              </button>
+            </div>
+            <div className="ch-ws-pop-foot">
+              <PhoneCall size={12} />
+              <span>Hotline: 112 • 114 • 115</span>
+            </div>
+          </div>
         )}
       </div>
 
-
-
-      {/* ===================================================================
-          2. MENU ĐIỀU HƯỚNG (4 NHÓM CHÍNH PHÂN CẤP RÕ RÀNG)
-          =================================================================== */}
-      <nav className="sos-sidebar-nav" role="navigation">
+      {/* 2. CHRONICLE CALM NAVMAIN */}
+      <nav className="ch-sidebar-nav sos-sidebar-nav" role="navigation">
         {currentGroups.map((group, groupIdx) => (
-          <div key={groupIdx} className="sos-nav-group">
-            {/* Tiêu đề nhóm: IN HOA, màu xám nhạt (gray-400), font nhỏ, letter-spacing rộng */}
-            {!collapsed && (
-              <div className="sos-nav-group-title">
-                {group.title}
-              </div>
+          <div key={groupIdx} className="ch-nav-group">
+            {!collapsed && group.title && (
+              <div className="ch-nav-group-label">{group.title}</div>
             )}
-            {/* Danh sách các item thuộc nhóm */}
-            <div className="sos-nav-group-items">
+            <div className="ch-nav-group-items">
               {group.items.map((item) => {
                 const active = isItemActive(item.key);
                 const isResources = item.key === 'resources';
                 return (
-                  <div
-                    key={item.key}
-                    ref={isResources ? resourcesItemRef : undefined}
-                    className={`sos-nav-item ${active ? 'active' : ''} ${isResources ? 'sos-nav-item-resources' : ''}`}
-                    onMouseEnter={isResources ? handleResourcesMouseEnter : undefined}
-                    onMouseLeave={isResources ? handleResourcesMouseLeave : undefined}
-                    onClick={() => handleItemClick(item.key)}
-                    title={collapsed ? item.label : undefined}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        handleItemClick(item.key);
-                      }
-                    }}
-                  >
-                    {/* Icon đại diện */}
-                    {item.icon}
+                  <React.Fragment key={item.key}>
+                    <div
+                      ref={isResources ? resourcesItemRef : undefined}
+                      className={`ch-nav-item ${active ? 'active' : ''}`}
+                      onMouseEnter={isResources && collapsed ? handleResourcesMouseEnter : undefined}
+                      onMouseLeave={isResources && collapsed ? handleResourcesMouseLeave : undefined}
+                      onClick={() => handleItemClick(item.key)}
+                      title={collapsed ? item.label : undefined}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          handleItemClick(item.key);
+                        }
+                      }}
+                    >
+                      {item.icon}
 
-                    {/* Tên hiển thị & Badge */}
-                    {!collapsed && (
-                      <>
-                        <span className="sos-nav-label">{item.label}</span>
-                        {isResources && (
-                          <ChevronRight
-                            size={14}
-                            style={{
-                              marginLeft: item.badge ? 6 : 'auto',
-                              color: active ? '#2563eb' : '#94a3b8',
-                              opacity: 0.8,
-                              flexShrink: 0,
-                            }}
-                          />
-                        )}
-                        {item.badge && (
-                          item.badge === 'dot' ? (
-                            <span className="sos-nav-badge-dot" title="Có tin nhắn mới" />
-                          ) : (
-                            <span
-                              className={`sos-nav-badge-pill ${item.badgeType || 'info'}`}
-                            >
-                              {item.badge}
+                      {!collapsed && (
+                        <>
+                          <span className="ch-nav-label">{item.label}</span>
+                          {isResources ? (
+                            <span className="ch-nav-caret">
+                              {isResourcesExpanded ? (
+                                <ChevronDown size={13} />
+                              ) : (
+                                <ChevronRight size={13} />
+                              )}
                             </span>
-                          )
-                        )}
-                      </>
-                    )}
+                          ) : (
+                            item.badge && (
+                              <span
+                                className={`ch-nav-counter ${item.badgeType || 'info'}`}
+                              >
+                                {item.badge}
+                              </span>
+                            )
+                          )}
+                        </>
+                      )}
 
-                    {/* Hiệu ứng chấm active khi collapsed */}
-                    {collapsed && active && <span className="sos-nav-collapsed-active-dot" />}
-                    {collapsed && !active && item.badge && (
-                      <span className="sos-nav-collapsed-badge-dot" title="Có tin nhắn mới" />
+                      {collapsed && item.badge && (
+                        <span className="ch-collapsed-dot" title={item.label} />
+                      )}
+                    </div>
+
+                    {/* Inline Hairline Submenu Tree for Phương tiện & Vật tư */}
+                    {isResources && !collapsed && isResourcesExpanded && (
+                      <div className="ch-nav-submenu">
+                        <button
+                          type="button"
+                          className={`ch-nav-subitem ${
+                            activeKey === 'resources' && currentResourceSubTab === 'VEHICLES'
+                              ? 'active'
+                              : ''
+                          }`}
+                          onClick={() => handleSelectResourceSubTab('VEHICLES')}
+                        >
+                          <Truck size={14} />
+                          <span>Phương tiện</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`ch-nav-subitem ${
+                            activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES'
+                              ? 'active'
+                              : ''
+                          }`}
+                          onClick={() => handleSelectResourceSubTab('SUPPLIES')}
+                        >
+                          <Package size={14} />
+                          <span>Vật tư cứu trợ</span>
+                        </button>
+                      </div>
                     )}
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -1006,68 +1144,99 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* ===================================================================
-          3. FOOTER CỦA SIDEBAR (GHIM CỐ ĐỊNH Ở DƯỚI CÙNG)
-          =================================================================== */}
-      <div className="sos-sidebar-footer">
-        {/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) */}
-        <div className="sos-user-profile-card">
-          <div
-            className="sos-user-profile-left clickable"
-            onClick={() => setIsProfileModalOpen(true)}
-            title="Nhấp để chỉnh sửa hồ sơ cán bộ & thông tin địa phương"
-            role="button"
-            tabIndex={0}
-          >
-            <div className="sos-user-avatar-wrap">
-              <div
-                className={`sos-user-avatar ${isAdmin ? 'admin' : 'authority'}`}
-                title="Nhấp để xem hồ sơ & đổi ảnh đại diện"
-              >
-                {displayAvatar ? (
-                  <img
-                    src={displayAvatar}
-                    alt={displayUserName}
-                    className="sos-user-avatar-img"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  userInitial
-                )}
-              </div>
-              <span className="sos-user-online-dot" title="Đang trực tuyến" />
-            </div>
-
-            {!collapsed && (
-              <div className="sos-user-meta">
-                <span className="sos-user-name" title={displayUserName}>
-                  {displayUserName}
-                </span>
-                <span className="sos-user-role" title={displayUserRole}>
-                  {displayUserRole}
-                </span>
-              </div>
+      {/* 3. CHRONICLE NAVUSER FOOTER (MATCHING overview.webp BOTTOM USER ROW) */}
+      <div className="ch-sidebar-footer" ref={userFooterRef}>
+        <button
+          type="button"
+          className={`ch-navuser-btn ${isUserMenuOpen ? 'open' : ''}`}
+          onClick={() => setIsUserMenuOpen((prev) => !prev)}
+          title={`${displayUserName} — ${localProfile.email}`}
+        >
+          <span className={`ch-navuser-avatar ${isAdmin ? 'admin' : 'authority'}`}>
+            {displayAvatar ? (
+              <img
+                src={displayAvatar}
+                alt={displayUserName}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              userInitial
             )}
-          </div>
-
-          {/* Nút Đăng xuất */}
-          {onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              className="sos-btn-logout-icon"
-              title="Đăng xuất khỏi hệ thống"
-              aria-label="Đăng xuất"
-            >
-              <LogOut size={15} />
-            </button>
+          </span>
+          {!collapsed && (
+            <>
+              <span className="ch-navuser-meta">
+                <strong>{displayUserName}</strong>
+                <span>{localProfile.email}</span>
+              </span>
+              <ChevronsUpDown size={14} className="ch-workspace-chev" />
+            </>
           )}
-        </div>
+        </button>
+
+        {isUserMenuOpen && (
+          <div className="ch-sidebar-popover ch-navuser-popover">
+            <div className="ch-navuser-pop-head">
+              <span className={`ch-navuser-avatar ${isAdmin ? 'admin' : 'authority'}`}>
+                {displayAvatar ? <img src={displayAvatar} alt={displayUserName} /> : userInitial}
+              </span>
+              <div className="ch-navuser-meta">
+                <strong>{displayUserName}</strong>
+                <span>{localProfile.position}</span>
+              </div>
+            </div>
+            <div className="ch-navuser-pop-items">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  setIsProfileModalOpen(true);
+                }}
+              >
+                <UserIcon size={14} />
+                <span>Hồ sơ cá nhân</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  onSelectKey?.('reports');
+                }}
+              >
+                <BarChart3 size={14} />
+                <span>Báo cáo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  onSelectKey?.('operation_logs');
+                }}
+              >
+                <History size={14} />
+                <span>Nhật ký</span>
+              </button>
+            </div>
+            <div className="ch-navuser-pop-foot">
+              <button
+                type="button"
+                className="ch-navuser-logout"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  onLogout?.();
+                }}
+              >
+                <LogOut size={14} />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Toast thông báo cập nhật hồ sơ thành công - Render trực tiếp vào document.body */}
+      {/* Toast thông báo cập nhật hồ sơ thành công */}
       {profileSuccessMsg &&
         typeof document !== 'undefined' &&
         createPortal(
@@ -1078,7 +1247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           document.body
         )}
 
-      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương - Render trực tiếp vào document.body để luôn nổi lên trên Map */}
+      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương (Preserved 100% logic) */}
       {isProfileModalOpen &&
         typeof document !== 'undefined' &&
         createPortal(
@@ -1129,7 +1298,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           userInitial
                         )}
 
-                        {/* Lớp phủ camera khi hover hoặc đang upload */}
                         <div className="sos-avatar-camera-overlay">
                           {uploadingAvatar ? (
                             <div className="sos-avatar-spinner" />
@@ -1152,7 +1320,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
                       <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
                       {uploadingAvatar && (
-                        <span className="sos-avatar-uploading-inline">Đang lưu ảnh lên Cloudinary...</span>
+                        <span className="sos-avatar-uploading-inline">
+                          Đang lưu ảnh lên Cloudinary...
+                        </span>
                       )}
                       {avatarError && <span className="sos-avatar-error-inline">{avatarError}</span>}
                     </div>
@@ -1160,7 +1330,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                   {/* Bố cục hai cột độc lập */}
                   <div className="sos-profile-columns-grid">
-                    {/* Cột trái: Họ và tên cán bộ → Hòm thư điện tử công vụ */}
                     <div className="sos-profile-col sos-profile-col-left">
                       <div className="sos-profile-field sos-field-fullname">
                         <label>
@@ -1171,7 +1340,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           type="text"
                           required
                           value={localProfile.fullName}
-                          onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
+                          onChange={(e) =>
+                            setLocalProfile({ ...localProfile, fullName: e.target.value })
+                          }
                           placeholder="VD: Cán Bộ Điều Hành SOS"
                         />
                       </div>
@@ -1185,15 +1356,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           type="email"
                           required
                           value={localProfile.email}
-                          onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })}
+                          onChange={(e) =>
+                            setLocalProfile({ ...localProfile, email: e.target.value })
+                          }
                           placeholder="VD: authority@sos.vn"
                         />
                       </div>
                     </div>
 
-                    {/* Cột phải: Số điện thoại trực ban → Khối xác thực OTP */}
                     <div className="sos-profile-col sos-profile-col-right">
-
                       <div className="sos-profile-field sos-field-phone">
                         <div className="sos-phone-label-row">
                           <label>
@@ -1212,7 +1383,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </div>
 
                         <div className="sos-phone-auth-group">
-                          {/* Hàng đầu: input số điện thoại và nút “Gửi mã” hoặc “Gửi lại (58s)” */}
                           <div className="sos-phone-input-row">
                             <input
                               type="tel"
@@ -1227,7 +1397,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 type="button"
                                 className="sos-btn-send-otp"
                                 onClick={handleSendPhoneOtp}
-                                disabled={sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()}
+                                disabled={
+                                  sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()
+                                }
                                 title="Gửi mã OTP xác minh số điện thoại này"
                               >
                                 {sendingOtp
@@ -1241,7 +1413,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             )}
                           </div>
 
-                          {/* Hàng tiếp theo: input “Mã OTP 6 số” và nút “Xác nhận” */}
                           {showOtpBox && !isPhoneVerified && (
                             <div className="sos-otp-row">
                               <div className="sos-otp-input-wrap">
@@ -1275,14 +1446,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                           )}
 
-                          {/* Ghi chú nhỏ dưới OTP: chỉ hiển thị sau khi gửi thành công */}
                           {showOtpBox && !isPhoneVerified && (
                             <div className="sos-otp-note">
                               Mã xác thực đã gửi đến số điện thoại của bạn.
                             </div>
                           )}
 
-                          {/* Lỗi hiển thị ngay dưới trường liên quan, không đưa xuống cuối form */}
                           {otpError && (
                             <div className="sos-field-error">
                               <i className="bi bi-exclamation-triangle"></i> {otpError}
@@ -1298,45 +1467,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  {/* Phần địa bàn phụ trách: Admin là Toàn quốc, Cán bộ địa phương chọn Tỉnh/Xã */}
+                  {/* Địa bàn phụ trách */}
                   {isAdmin ? (
                     <div className="sos-profile-area-section">
                       <label className="sos-profile-section-label">
-                        <i className="bi bi-shield-check" style={{ color: '#2563eb' }}></i>
+                        <i className="bi bi-shield-check" style={{ color: 'var(--primary)' }}></i>
                         <span>Phạm vi quản trị hệ thống:</span>
                       </label>
-                      <div
-                        style={{
-                          padding: '14px 16px',
-                          background: '#f0f9ff',
-                          borderRadius: '8px',
-                          border: '1px solid #bae6fd',
-                          color: '#0369a1',
-                          fontSize: '13.5px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          marginTop: '6px',
-                        }}
-                      >
-                        <i className="bi bi-globe2" style={{ fontSize: '22px', color: '#0284c7' }}></i>
+                      <div className="ch-profile-scope-banner">
+                        <i className="bi bi-globe2"></i>
                         <div>
-                          <strong style={{ fontSize: '14px', color: '#0c4a6e', display: 'block', marginBottom: '2px' }}>
-                            Toàn quốc (Quản trị viên toàn hệ thống)
-                          </strong>
-                          Tài khoản Quản trị viên (Admin) có phạm vi điều hành, giám sát toàn diện trên tất cả các Tỉnh / Thành phố trên cả nước, không giới hạn theo địa bàn phụ trách cụ thể.
+                          <strong>Toàn quốc (Quản trị viên toàn hệ thống)</strong>
+                          Tài khoản Quản trị viên (Admin) có phạm vi điều hành, giám sát toàn diện
+                          trên tất cả các Tỉnh / Thành phố trên cả nước.
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="sos-profile-area-section">
                       <label className="sos-profile-section-label">
-                        <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
+                        <i className="bi bi-geo-alt" style={{ color: 'var(--primary)' }}></i>
                         <span>Địa bàn phụ trách quản lý:</span>
                       </label>
 
                       <div className="sos-profile-managed-area">
-                        <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
+                        <span className="sos-profile-sublabel">
+                          Địa bàn hiển thị trong hồ sơ &amp; phân quyền:
+                        </span>
                         <input
                           type="text"
                           required
@@ -1344,7 +1501,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           disabled={true}
                           value={(() => {
                             const baseArea = localProfile.managedArea || '';
-                            const cityFromDept = user?.authority?.department?.match(/\(([^)]+)\)/)?.[1]?.trim();
+                            const cityFromDept = user?.authority?.department
+                              ?.match(/\(([^)]+)\)/)?.[1]
+                              ?.trim();
                             if (
                               baseArea &&
                               cityFromDept &&
@@ -1364,7 +1523,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         latitude={localProfile.latitude}
                         longitude={localProfile.longitude}
                         officeAddress={localProfile.officeAddress}
-                        defaultCenter={getAreaCoordinates(localProfile.managedArea, user?.authority?.department)}
+                        defaultCenter={getAreaCoordinates(
+                          localProfile.managedArea,
+                          user?.authority?.department
+                        )}
                         onChange={(next) =>
                           setLocalProfile((prev) => ({
                             ...prev,
@@ -1379,43 +1541,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
 
                   {/* Khu vực Đổi mật khẩu tài khoản */}
-                  <div
-                    style={{
-                      marginTop: 14,
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 12,
-                      background: '#f8fafc',
-                      padding: '12px 14px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13.5, color: '#0f172a' }}>
-                        <i className="bi bi-key" style={{ color: '#2563eb' }}></i>
+                  <div className="ch-profile-pwd-box">
+                    <div className="ch-profile-pwd-head">
+                      <div className="ch-profile-pwd-title">
+                        <i className="bi bi-key"></i>
                         <span>Bảo mật &amp; Đổi mật khẩu</span>
                       </div>
                       <button
                         type="button"
+                        className="ch-profile-pwd-toggle"
                         onClick={() => {
                           setShowPasswordSection((prev) => !prev);
                           setPasswordError(null);
                           setPasswordSuccess(null);
-                        }}
-                        style={{
-                          border: '1px solid #cbd5e1',
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          borderRadius: 8,
-                          padding: '5px 12px',
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                          cursor: 'pointer',
                         }}
                       >
                         {showPasswordSection ? 'Thu gọn' : 'Đổi mật khẩu'}
@@ -1481,25 +1619,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
 
                         {passwordSuccess && (
-                          <div
-                            style={{
-                              padding: '8px 12px',
-                              borderRadius: 8,
-                              background: '#ecfdf5',
-                              border: '1px solid #a7f3d0',
-                              color: '#047857',
-                              fontSize: 13,
-                              fontWeight: 500,
-                            }}
-                          >
-                            <i className="bi bi-check-circle-fill" style={{ marginRight: 6 }}></i>
-                            {passwordSuccess}
+                          <div className="sos-field-success">
+                            <i className="bi bi-check-circle-fill"></i>
+                            <span>{passwordSuccess}</span>
                           </div>
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                           <button
                             type="button"
+                            className="sos-profile-btn-save"
                             disabled={changingPassword}
                             onClick={async () => {
                               setPasswordError(null);
@@ -1538,16 +1667,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 setChangingPassword(false);
                               }
                             }}
-                            style={{
-                              border: 'none',
-                              background: changingPassword ? '#93c5fd' : '#0284c7',
-                              color: '#ffffff',
-                              borderRadius: 8,
-                              padding: '8px 16px',
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: changingPassword ? 'not-allowed' : 'pointer',
-                            }}
                           >
                             {changingPassword ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
                           </button>
@@ -1563,7 +1682,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </div>
 
-                {/* Footer có viền trên nhẹ và các nút căn phải */}
                 <div className="sos-profile-modal-actions">
                   <button
                     type="button"
@@ -1583,10 +1701,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>,
           document.body
         )}
-      {/* ===================================================================
-          4. MENU NỔI (FLYOUT POPOVER) KHI HOVER VÀO PHƯƠNG TIỆN & VẬT TƯ
-          =================================================================== */}
+
+      {/* Flyout Popover khi sidebar thu gọn và hover Phương tiện & Vật tư */}
       {isResourcesFlyoutOpen &&
+        typeof document !== 'undefined' &&
         createPortal(
           <div
             className="sos-nav-flyout-popover"
@@ -1598,33 +1716,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onMouseLeave={handleFlyoutMouseLeave}
           >
             <div className="sos-nav-flyout-menu">
-              {/* 1. Phương tiện cơ động */}
               <div
-                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'VEHICLES' ? 'active' : ''
-                  }`}
+                className={`sos-nav-flyout-item ${
+                  activeKey === 'resources' && currentResourceSubTab === 'VEHICLES' ? 'active' : ''
+                }`}
                 onClick={() => handleSelectResourceSubTab('VEHICLES')}
                 role="button"
                 tabIndex={0}
               >
-                <Truck size={18} color="#475569" className="sos-nav-flyout-item-icon" />
+                <Truck size={17} className="sos-nav-flyout-item-icon" />
                 <div className="sos-nav-flyout-info">
                   <div className="sos-nav-flyout-title">Phương tiện cơ động</div>
                   <div className="sos-nav-flyout-desc">Ca-nô, xuồng máy, xe tải, cứu thương</div>
                 </div>
               </div>
 
-              {/* 2. Thiết bị cứu hộ & Hàng cứu trợ tổng hợp */}
               <div
-                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES' ? 'active' : ''
-                  }`}
+                className={`sos-nav-flyout-item ${
+                  activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES' ? 'active' : ''
+                }`}
                 onClick={() => handleSelectResourceSubTab('SUPPLIES')}
                 role="button"
                 tabIndex={0}
               >
-                <Package size={18} color="#475569" className="sos-nav-flyout-item-icon" />
+                <Package size={17} className="sos-nav-flyout-item-icon" />
                 <div className="sos-nav-flyout-info">
                   <div className="sos-nav-flyout-title">Thiết bị &amp; Hàng cứu trợ</div>
-                  <div className="sos-nav-flyout-desc">Áo phao, bộ đàm, đèn pin, lương thực, nước uống</div>
+                  <div className="sos-nav-flyout-desc">
+                    Áo phao, bộ đàm, đèn pin, lương thực, nước uống
+                  </div>
                 </div>
               </div>
             </div>

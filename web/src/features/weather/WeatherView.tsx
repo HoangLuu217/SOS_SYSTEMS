@@ -833,19 +833,17 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <h2>
               <CloudSun size={20} color="#0284c7" />
-              <span>QUẢN LÝ BẢN TIN &amp; CẢNH BÁO THỜI TIẾT</span>
+              <span>Bản tin thời tiết</span>
             </h2>
             <div
               className="weather-autoclean-tag"
-              title="Hệ thống chạy ngầm tự động xóa vĩnh viễn các bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày định kỳ mỗi 30 phút mà không cần thao tác nút nhấn."
+              title="Tự động xóa bản tin lưu trữ và bản tin chờ duyệt quá 2 ngày."
             >
               <Sparkles size={12} color="#10b981" />
-              <span>Tự động dọn lưu trữ 2 ngày</span>
+              <span>Tự dọn sau 2 ngày</span>
             </div>
           </div>
-          <p>
-            Theo dõi dữ liệu khí tượng từ AI crawler, kiểm duyệt và phát cảnh báo thiên tai tới ứng dụng di động.
-          </p>
+          <p>Duyệt tin khí tượng và phát cảnh báo thiên tai tới ứng dụng di động.</p>
         </div>
 
         <div className="weather-header-actions">
@@ -1146,7 +1144,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                           />
                         </td>
                       )}
-                      <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>
+                      <td style={{ textAlign: 'center', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                         {(currentPage - 1) * pageSize + index + 1}
                       </td>
                       <td style={{ textAlign: 'center' }}>
@@ -1722,7 +1720,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                               areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
                             });
                           }}
-                          triggerStyle={{ width: '100%', background: '#ffffff', color: '#0f172a' }}
+                          triggerStyle={{ width: '100%', background: 'var(--dm-surface)', color: 'var(--dm-text-strong)' }}
                           options={areaOptions}
                         />
                       );
@@ -1773,7 +1771,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       className="weather-form-input"
                       style={
                         isFuturePublishedDate(formValues.publishedAt)
-                          ? { borderColor: '#dc2626', background: '#fef2f2' }
+                          ? { borderColor: '#dc2626', background: 'var(--dm-red-bg)' }
                           : undefined
                       }
                       value={formValues.publishedAt || ''}
@@ -1786,7 +1784,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       }}
                     />
                     {isFuturePublishedDate(formValues.publishedAt) ? (
-                      <small style={{ color: '#dc2626', fontWeight: 600, fontSize: '11.5px' }}>
+                      <small style={{ color: 'var(--dm-red-text)', fontWeight: 600, fontSize: '11.5px' }}>
                         Ngày đăng không được vượt quá hôm nay ({formatDate(todayDateMax)}).
                       </small>
                     ) : null}
@@ -1898,40 +1896,38 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '680px', width: '92%' }}
           >
-            <div className="weather-modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '14px' }}>
+            <div className="weather-modal-header" style={{ borderBottom: '1px solid var(--dm-border)', paddingBottom: '14px' }}>
               <div className="weather-modal-header-title">
                 <div
                   style={{
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background:
-                      broadcastForm.priority === 'CRITICAL'
-                        ? '#fee2e2'
+                    background: broadcastForm.priority === 'CRITICAL'
+                        ? 'var(--dm-red-bg)'
                         : broadcastForm.priority === 'HIGH'
-                          ? '#ffedd5'
-                          : '#e0f2fe',
+                          ? 'var(--dm-orange-bg)'
+                          : 'var(--dm-blue-bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color:
-                      broadcastForm.priority === 'CRITICAL'
-                        ? '#dc2626'
+                    color: broadcastForm.priority === 'CRITICAL'
+                        ? 'var(--dm-red-text)'
                         : broadcastForm.priority === 'HIGH'
-                          ? '#ea580c'
-                          : '#0284c7',
+                          ? 'var(--dm-orange-text)'
+                          : 'var(--dm-blue-text)',
                     flexShrink: 0,
                   }}
                 >
                   <BellRing size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '15.5px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '15.5px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     {broadcastModalItem.status === 'pending'
                       ? 'PHÊ DUYỆT & ĐĂNG THÔNG BÁO CHO NGƯỜI DÂN'
                       : 'ĐĂNG THÔNG BÁO BẢN TIN THỜI TIẾT'}
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                     {broadcastModalItem.status === 'pending'
                       ? 'Kích hoạt bản tin công khai và gửi thông báo đẩy (Push Notification) đến ứng dụng di động'
                       : 'Gửi thông báo đẩy (Push Notification) về bản tin đã duyệt tới điện thoại người dân'}
@@ -1962,8 +1958,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {/* Thẻ tóm tắt thông tin bài viết gốc */}
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: '10px',
                   padding: '12px 14px',
                   display: 'flex',
@@ -1980,7 +1976,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       height: '70px',
                       borderRadius: '8px',
                       objectFit: 'cover',
-                      border: '1px solid #cbd5e1',
+                      border: '1px solid var(--dm-border-strong)',
                       flexShrink: 0,
                     }}
                     onError={(e) => {
@@ -1998,17 +1994,17 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       {CATEGORY_MAP[broadcastModalItem.category]?.label || 'Tin thời tiết'}
                     </span>
                     {(broadcastModalItem.sourceName || broadcastModalItem.source_name) && (
-                      <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                      <span style={{ fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>
                         Nguồn: <strong>{broadcastModalItem.sourceName || broadcastModalItem.source_name}</strong>
                       </span>
                     )}
                     {broadcastModalItem.area && (
-                      <span style={{ fontSize: '11.5px', color: '#0284c7' }}>
+                      <span style={{ fontSize: '11.5px', color: 'var(--dm-blue-text)' }}>
                         • {broadcastModalItem.area}
                       </span>
                     )}
                   </div>
-                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#1e293b', lineHeight: 1.4 }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-body)', lineHeight: 1.4 }}>
                     {broadcastModalItem.title}
                   </h4>
                 </div>
@@ -2018,9 +2014,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               <div className="weather-form-group" style={{ margin: 0 }}>
                 <label className="weather-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>
-                    Tiêu đề thông báo đẩy <span style={{ color: '#dc2626' }}>*</span>
+                    Tiêu đề thông báo đẩy <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                   </span>
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>
+                  <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)', fontWeight: 400 }}>
                     Hiển thị trên thanh thông báo điện thoại
                   </span>
                 </label>
@@ -2031,16 +2027,16 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
                   placeholder="Nhập tiêu đề thông báo ngắn gọn, rõ ràng..."
                   disabled={broadcasting}
-                  style={{ fontWeight: 600, color: '#0f172a' }}
+                  style={{ fontWeight: 600, color: 'var(--dm-text-strong)' }}
                 />
               </div>
 
               <div className="weather-form-group" style={{ margin: 0 }}>
                 <label className="weather-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>
-                    Nội dung thông báo chi tiết <span style={{ color: '#dc2626' }}>*</span>
+                    Nội dung thông báo chi tiết <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                   </span>
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>
+                  <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)', fontWeight: 400 }}>
                     Tóm tắt ngắn gọn để người dân nắm tình hình
                   </span>
                 </label>
@@ -2066,9 +2062,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     style={{
                       padding: '10px 8px',
                       borderRadius: '8px',
-                      border: broadcastForm.priority === 'NORMAL' ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                      background: broadcastForm.priority === 'NORMAL' ? '#f0f9ff' : '#ffffff',
-                      color: broadcastForm.priority === 'NORMAL' ? '#0284c7' : '#64748b',
+                      border: broadcastForm.priority === 'NORMAL' ? '2px solid #0284c7' : '1px solid var(--dm-border)',
+                      background: broadcastForm.priority === 'NORMAL' ? 'var(--dm-blue-bg)' : 'var(--dm-surface)',
+                      color: broadcastForm.priority === 'NORMAL' ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
@@ -2078,7 +2074,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     }}
                   >
                     <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Bình thường</span>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>Tin dự báo định kỳ</span>
+                    <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>Tin dự báo định kỳ</span>
                   </button>
 
                   <button
@@ -2088,9 +2084,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     style={{
                       padding: '10px 8px',
                       borderRadius: '8px',
-                      border: broadcastForm.priority === 'HIGH' ? '2px solid #ea580c' : '1px solid #e2e8f0',
-                      background: broadcastForm.priority === 'HIGH' ? '#fff7ed' : '#ffffff',
-                      color: broadcastForm.priority === 'HIGH' ? '#ea580c' : '#64748b',
+                      border: broadcastForm.priority === 'HIGH' ? '2px solid #ea580c' : '1px solid var(--dm-border)',
+                      background: broadcastForm.priority === 'HIGH' ? 'var(--dm-orange-bg)' : 'var(--dm-surface)',
+                      color: broadcastForm.priority === 'HIGH' ? 'var(--dm-orange-text)' : 'var(--dm-text-muted)',
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
@@ -2100,7 +2096,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     }}
                   >
                     <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Quan trọng</span>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>Mưa to, ngập úng</span>
+                    <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>Mưa to, ngập úng</span>
                   </button>
 
                   <button
@@ -2110,9 +2106,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     style={{
                       padding: '10px 8px',
                       borderRadius: '8px',
-                      border: broadcastForm.priority === 'CRITICAL' ? '2px solid #dc2626' : '1px solid #e2e8f0',
-                      background: broadcastForm.priority === 'CRITICAL' ? '#fef2f2' : '#ffffff',
-                      color: broadcastForm.priority === 'CRITICAL' ? '#dc2626' : '#64748b',
+                      border: broadcastForm.priority === 'CRITICAL' ? '2px solid #dc2626' : '1px solid var(--dm-border)',
+                      background: broadcastForm.priority === 'CRITICAL' ? 'var(--dm-red-bg)' : 'var(--dm-surface)',
+                      color: broadcastForm.priority === 'CRITICAL' ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
@@ -2122,7 +2118,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     }}
                   >
                     <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Khẩn cấp / Nguy hiểm</span>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>Bão lớn, lũ quét</span>
+                    <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>Bão lớn, lũ quét</span>
                   </button>
                 </div>
               </div>
@@ -2146,8 +2142,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   searchPlaceholder="Tìm nhanh Phường / Xã..."
                   triggerStyle={{
                     width: '100%',
-                    background: '#ffffff',
-                    color: '#0f172a',
+                    background: 'var(--dm-surface)',
+                    color: 'var(--dm-text-strong)',
                   }}
                   options={[
                     {
@@ -2168,15 +2164,15 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {/* Live Preview trên điện thoại (Nền trắng đồng bộ) */}
               <div
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--dm-surface)',
+                  border: '1px solid var(--dm-border-strong)',
                   borderRadius: '10px',
                   padding: '14px',
                   boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--dm-text-secondary)' }}>
                     <Smartphone size={14} color="#0284c7" />
                     <span>Xem trước thông báo trên điện thoại người dân</span>
                   </div>
@@ -2186,24 +2182,21 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '999px',
-                      background:
-                        broadcastForm.priority === 'CRITICAL'
-                          ? '#fef2f2'
+                      background: broadcastForm.priority === 'CRITICAL'
+                          ? 'var(--dm-red-bg)'
                           : broadcastForm.priority === 'HIGH'
-                            ? '#fff7ed'
-                            : '#f0f9ff',
-                      color:
-                        broadcastForm.priority === 'CRITICAL'
-                          ? '#dc2626'
+                            ? 'var(--dm-orange-bg)'
+                            : 'var(--dm-blue-bg)',
+                      color: broadcastForm.priority === 'CRITICAL'
+                          ? 'var(--dm-red-text)'
                           : broadcastForm.priority === 'HIGH'
-                            ? '#ea580c'
-                            : '#0284c7',
-                      border:
-                        broadcastForm.priority === 'CRITICAL'
-                          ? '1px solid #fecaca'
+                            ? 'var(--dm-orange-text)'
+                            : 'var(--dm-blue-text)',
+                      border: broadcastForm.priority === 'CRITICAL'
+                          ? '1px solid var(--dm-red-border)'
                           : broadcastForm.priority === 'HIGH'
-                            ? '1px solid #fed7aa'
-                            : '1px solid #bae6fd',
+                            ? '1px solid var(--dm-orange-border)'
+                            : '1px solid var(--dm-blue-border)',
                     }}
                   >
                     {broadcastForm.priority}
@@ -2211,27 +2204,27 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 </div>
                 <div
                   style={{
-                    background: '#f8fafc',
+                    background: 'var(--dm-surface-subtle)',
                     borderRadius: '8px',
                     padding: '12px 14px',
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid var(--dm-border)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#0284c7' }}>SOS THỜI TIẾT</span>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>• Vừa xong</span>
+                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--dm-blue-text)' }}>SOS THỜI TIẾT</span>
+                      <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>• Vừa xong</span>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                    <span style={{ fontSize: '11px', color: 'var(--dm-text-secondary)', fontWeight: 600 }}>
                       {broadcastForm.areaId === 'ALL'
                         ? daNangProvince?.name || 'Thành phố Đà Nẵng'
                         : areaById.get(broadcastForm.areaId)?.name || daNangProvince?.name || 'Thành phố Đà Nẵng'}
                     </span>
                   </div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', lineHeight: 1.4 }}>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--dm-text-strong)', marginBottom: '4px', lineHeight: 1.4 }}>
                     {broadcastForm.title || 'Tiêu đề thông báo...'}
                   </div>
-                  <div style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: '12.5px', color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
                     {broadcastForm.content || 'Nội dung thông báo sẽ xuất hiện tại đây...'}
                   </div>
                 </div>
@@ -2241,7 +2234,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <div
               className="weather-modal-footer"
               style={{
-                borderTop: '1px solid #e2e8f0',
+                borderTop: '1px solid var(--dm-border)',
                 padding: '14px 20px',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -2258,7 +2251,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     onClick={handleConfirmApproveOnly}
                     disabled={broadcasting}
                     title="Chỉ duyệt bài viết lên web/app, không gửi push notification làm phiền người dân"
-                    style={{ fontSize: '12.5px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}
+                    style={{ fontSize: '12.5px', color: 'var(--dm-green-text)', borderColor: 'var(--dm-green-border)', background: 'var(--dm-green-bg)' }}
                   >
                     <CheckCircle2 size={15} />
                     <span>Chỉ duyệt bản tin (Không gửi thông báo)</span>

@@ -151,15 +151,15 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             <div className="sos-view-card-title">
               <Building2 size={18} color="var(--sos-primary)" />
               <span>
-                Phường / Xã Trực Thuộc: {DA_NANG_PROVINCE_NAME} ({filteredSubUnits.length}/{subUnits.length} địa bàn)
+                {DA_NANG_PROVINCE_NAME} ({filteredSubUnits.length}/{subUnits.length} địa bàn)
               </span>
             </div>
             <div className="areas-subtitle-row">
               <span className="areas-scope-chip">
                 <MapPin size={11} />
-                Phạm vi hoạt động: TP. Đà Nẵng (VN-DN)
+                TP. Đà Nẵng (VN-DN)
               </span>
-              <span>Danh mục các phường, xã và cán bộ trực ban phụ trách địa bàn</span>
+              <span>Phường, xã và cán bộ phụ trách</span>
             </div>
           </div>
 

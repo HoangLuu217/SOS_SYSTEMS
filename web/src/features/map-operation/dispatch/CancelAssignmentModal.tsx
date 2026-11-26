@@ -51,13 +51,13 @@ export const CancelAssignmentModal = ({
         style={{
           width: '100%',
           maxWidth: 480,
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--dm-surface)',
           borderRadius: 16,
           boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid #fee2e2',
+          border: '1px solid var(--dm-red-border)',
         }}
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
@@ -67,8 +67,8 @@ export const CancelAssignmentModal = ({
         <div
           style={{
             padding: '18px 22px',
-            backgroundColor: '#fff1f2',
-            borderBottom: '1px solid #fecaca',
+            backgroundColor: 'var(--dm-red-bg)',
+            borderBottom: '1px solid var(--dm-red-border)',
             display: 'flex',
             alignItems: 'center',
             gap: 12,
@@ -79,8 +79,8 @@ export const CancelAssignmentModal = ({
               width: 38,
               height: 38,
               borderRadius: 10,
-              backgroundColor: '#fee2e2',
-              color: '#dc2626',
+              backgroundColor: 'var(--dm-red-bg)',
+              color: 'var(--dm-red-text)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -95,7 +95,7 @@ export const CancelAssignmentModal = ({
                 margin: 0,
                 fontSize: 16,
                 fontWeight: 700,
-                color: '#991b1b',
+                color: 'var(--dm-red-text)',
                 lineHeight: 1.3,
               }}
             >
@@ -105,7 +105,7 @@ export const CancelAssignmentModal = ({
               style={{
                 margin: '2px 0 0 0',
                 fontSize: 12,
-                color: '#b91c1c',
+                color: 'var(--dm-red-text)',
                 fontWeight: 500,
               }}
             >
@@ -120,27 +120,27 @@ export const CancelAssignmentModal = ({
             {/* Alert Message Box */}
             <div
               style={{
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                backgroundColor: 'var(--dm-surface-subtle)',
+                border: '1px solid var(--dm-border)',
                 borderRadius: 10,
                 padding: '12px 14px',
                 fontSize: 13,
-                color: '#334155',
+                color: 'var(--dm-text-secondary)',
                 lineHeight: 1.6,
               }}
             >
               Bạn có chắc chắn muốn hủy phân công đội cứu hộ cho yêu cầu{' '}
-              <strong style={{ color: '#0f172a' }}>{sosCode}</strong>? Sự cố sẽ chuyển về trạng thái{' '}
+              <strong style={{ color: 'var(--dm-text-strong)' }}>{sosCode}</strong>? Sự cố sẽ chuyển về trạng thái{' '}
               <span
                 style={{
                   display: 'inline-block',
-                  backgroundColor: '#ecfdf5',
-                  color: '#059669',
+                  backgroundColor: 'var(--dm-green-bg)',
+                  color: 'var(--dm-green-text)',
                   fontWeight: 700,
                   fontSize: 12,
                   padding: '1px 6px',
                   borderRadius: 4,
-                  border: '1px solid #a7f3d0',
+                  border: '1px solid var(--dm-green-border)',
                 }}
               >
                 ĐÃ XÁC MINH
@@ -154,14 +154,14 @@ export const CancelAssignmentModal = ({
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: '#1e293b',
+                  color: 'var(--dm-text-body)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 4,
                 }}
               >
                 <span>Lý do hủy điều động</span>
-                <span style={{ color: '#dc2626' }}>*</span>
+                <span style={{ color: 'var(--dm-red-text)' }}>*</span>
               </label>
               <textarea
                 rows={3}
@@ -172,12 +172,12 @@ export const CancelAssignmentModal = ({
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  border: '1px solid #cbd5e1',
+                  border: '1px solid var(--dm-border-strong)',
                   borderRadius: 8,
                   fontSize: 13.5,
-                  color: '#0f172a',
+                  color: 'var(--dm-text-strong)',
                   lineHeight: 1.5,
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'var(--dm-surface)',
                   outline: 'none',
                   resize: 'vertical',
                   boxSizing: 'border-box',
@@ -200,8 +200,8 @@ export const CancelAssignmentModal = ({
           <div
             style={{
               padding: '14px 22px',
-              backgroundColor: '#f8fafc',
-              borderTop: '1px solid #e2e8f0',
+              backgroundColor: 'var(--dm-surface-subtle)',
+              borderTop: '1px solid var(--dm-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
@@ -216,12 +216,12 @@ export const CancelAssignmentModal = ({
               }}
               style={{
                 padding: '9px 18px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
+                backgroundColor: 'var(--dm-surface)',
+                border: '1px solid var(--dm-border-strong)',
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#475569',
+                color: 'var(--dm-text-secondary)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}

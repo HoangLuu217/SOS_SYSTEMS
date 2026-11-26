@@ -532,9 +532,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           handoffStatus === 'ASSIGNED'
             ? 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Chờ xe tiếp vận xác nhận đưa nạn nhân tới nơi an toàn.'
             : 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Vui lòng điều xe tiếp vận đón nạn nhân.',
-        bg: '#fffbeb',
-        border: '#fcd34d',
-        textColor: '#b45309',
+        bg: 'var(--dm-amber-bg)',
+        border: 'var(--dm-amber-border)',
+        textColor: 'var(--dm-amber-text)',
         dotColor: '#f59e0b',
         isCompleted: false,
         showEta: false,
@@ -547,9 +547,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'HOÀN TẤT CỨU HỘ',
         badgeText: '✓ ĐÃ HOÀN TẤT NHIỆM VỤ',
         subText: 'Cứu nạn thành công, an toàn.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: 'var(--dm-green-bg)',
+        border: 'var(--dm-green-border)',
+        textColor: 'var(--dm-green-text)',
         dotColor: '#16a34a',
         isCompleted: true,
         showEta: false,
@@ -562,9 +562,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'ĐANG CỨU HỘ TẠI HIỆN TRƯỜNG',
         badgeText: '🛟 ĐANG CỨU HỘ TẠI CHỖ',
         subText: 'Đang đưa người dân lên ca-nô.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: 'var(--dm-green-bg)',
+        border: 'var(--dm-green-border)',
+        textColor: 'var(--dm-green-text)',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -577,9 +577,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
         badgeText: '📍 ĐÃ ĐẾN HIỆN TRƯỜNG',
         subText: 'Đã có mặt tại hiện trường.',
-        bg: '#eff6ff',
-        border: '#93c5fd',
-        textColor: '#1d4ed8',
+        bg: 'var(--dm-blue-bg)',
+        border: 'var(--dm-blue-border)',
+        textColor: 'var(--dm-blue-text)',
         dotColor: '#2563eb',
         isCompleted: false,
         showEta: false,
@@ -592,9 +592,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
         badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
         subText: 'Đang xuất phát tiếp cận vị trí.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: 'var(--dm-green-bg)',
+        border: 'var(--dm-green-border)',
+        textColor: 'var(--dm-green-text)',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -607,9 +607,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'ĐÃ TIẾP NHẬN LỆNH ĐIỀU ĐỘNG',
         badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
         subText: 'Đã nhận lệnh, chuẩn bị xuất phát.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: 'var(--dm-green-bg)',
+        border: 'var(--dm-green-border)',
+        textColor: 'var(--dm-green-text)',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -622,9 +622,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         statusHeading: 'ĐỘI TỪ CHỐI TIẾP NHẬN',
         badgeText: '⚠️ TỪ CHỐI NHẬN LỆNH',
         subText: 'Đội từ chối • Vui lòng đổi đội.',
-        bg: '#fef2f2',
-        border: '#fca5a5',
-        textColor: '#dc2626',
+        bg: 'var(--dm-red-bg)',
+        border: 'var(--dm-red-border)',
+        textColor: 'var(--dm-red-text)',
         dotColor: '#ef4444',
         isCompleted: false,
         showEta: false,
@@ -636,9 +636,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       statusHeading: 'CHỜ ĐỘI XÁC NHẬN LỆNH',
       badgeText: '⏳ CHỜ ĐỘI NHẬN LỆNH',
       subText: 'Đang truyền lệnh đến cứu hộ viên.',
-      bg: '#fffbeb',
-      border: '#fde68a',
-      textColor: '#b45309',
+      bg: 'var(--dm-amber-bg)',
+      border: 'var(--dm-amber-border)',
+      textColor: 'var(--dm-amber-text)',
       dotColor: '#f59e0b',
       isCompleted: false,
       showEta: true,
@@ -668,8 +668,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           minHeight: 0,
           overflowY: 'auto',
           borderRadius: 12,
-          background: '#ffffff',
-          border: '1.5px solid #cbd5e1',
+          background: 'var(--dm-surface)',
+          border: '1.5px solid var(--dm-border-strong)',
           boxShadow: '0 2px 6px -1px rgba(0, 0, 0, 0.05)',
           display: 'flex',
           flexDirection: 'column',
@@ -683,7 +683,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             zIndex: 10,
             padding: '10px 14px',
             background: statusInfo.bg,
-            borderBottom: '1px solid #e2e8f0',
+            borderBottom: '1px solid var(--dm-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -739,9 +739,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   fontSize: 11.5,
                   fontWeight: 900,
-                  color: '#15803d',
-                  background: '#dcfce7',
-                  border: '1px solid #86efac',
+                  color: 'var(--dm-green-text)',
+                  background: 'var(--dm-green-bg)',
+                  border: '1px solid var(--dm-green-border)',
                   padding: '3px 8px',
                   borderRadius: 6,
                 }}
@@ -754,17 +754,17 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
-                  background: '#ffffff',
-                  border: '1.2px solid #cbd5e1',
+                  background: 'var(--dm-surface)',
+                  border: '1.2px solid var(--dm-border-strong)',
                   padding: '3px 8px',
                   borderRadius: 7,
                   boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#0284c7' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-blue-text)' }}>
                   ~{assignment?.etaMinutes}p
                 </span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.3px' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--dm-text-muted)', letterSpacing: '0.3px' }}>
                   DỰ KIẾN
                 </span>
               </div>
@@ -794,7 +794,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   style={{
                     fontSize: 11.5,
                     fontWeight: 900,
-                    color: '#b45309',
+                    color: 'var(--dm-amber-text)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.2px',
                   }}
@@ -808,9 +808,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   fontWeight: 800,
                   padding: '2px 7px',
                   borderRadius: 4,
-                  background: '#fef3c7',
-                  color: '#92400e',
-                  border: '1px solid #fcd34d',
+                  background: 'var(--dm-amber-bg)',
+                  color: 'var(--dm-amber-text)',
+                  border: '1px solid var(--dm-amber-border)',
                 }}
               >
                 CHỜ DUYỆT
@@ -828,18 +828,18 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     justifyContent: 'space-between',
                     gap: 10,
                     fontSize: 12,
-                    color: '#1e293b',
+                    color: 'var(--dm-text-body)',
                     padding: '5px 8px',
-                    background: '#ffffff',
+                    background: 'var(--dm-surface)',
                     borderRadius: 6,
-                    border: '1px solid #fde68a',
+                    border: '1px solid var(--dm-amber-border)',
                   }}
                 >
                   <span style={{ fontWeight: 700, flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
                   <span
                     style={{
                       fontWeight: 800,
-                      color: '#b45309',
+                      color: 'var(--dm-amber-text)',
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
                     }}
@@ -883,10 +883,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   padding: '0 14px',
                   height: 32,
-                  background: '#fef2f2',
-                  border: '1px solid #fca5a5',
+                  background: 'var(--dm-red-bg)',
+                  border: '1px solid var(--dm-red-border)',
                   borderRadius: 6,
-                  color: '#dc2626',
+                  color: 'var(--dm-red-text)',
                   fontSize: 12,
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -904,8 +904,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               margin: '6px 12px 6px 12px',
               borderRadius: 10,
-              border: '1.5px solid #86efac',
-              background: '#f0fdf4',
+              border: '1.5px solid var(--dm-green-border)',
+              background: 'var(--dm-green-bg)',
               padding: '8px 12px',
               display: 'flex',
               flexDirection: 'column',
@@ -919,7 +919,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   style={{
                     fontSize: 11,
                     fontWeight: 900,
-                    color: '#15803d',
+                    color: 'var(--dm-green-text)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.2px',
                   }}
@@ -933,9 +933,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   fontWeight: 800,
                   padding: '2px 6px',
                   borderRadius: 4,
-                  background: '#dcfce7',
-                  color: '#166534',
-                  border: '1px solid #bbf7d0',
+                  background: 'var(--dm-green-bg)',
+                  color: 'var(--dm-green-text)',
+                  border: '1px solid var(--dm-green-border)',
                 }}
               >
                 ĐÃ XUẤT CẤP
@@ -952,18 +952,18 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     justifyContent: 'space-between',
                     gap: 10,
                     fontSize: 11.5,
-                    color: '#1e293b',
+                    color: 'var(--dm-text-body)',
                     padding: '4px 8px',
-                    background: '#ffffff',
+                    background: 'var(--dm-surface)',
                     borderRadius: 6,
                     border: '1px solid #dcfce7',
                   }}
                 >
-                  <span style={{ fontWeight: 600, color: '#166534', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--dm-green-text)', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
                   <span
                     style={{
                       fontWeight: 800,
-                      color: '#0284c7',
+                      color: 'var(--dm-blue-text)',
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
                     }}
@@ -1006,15 +1006,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               {assignment?.rescuerName ? assignment.rescuerName.charAt(0).toUpperCase() : 'C'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15.5, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.2px' }}>
+              <div style={{ fontSize: 15.5, fontWeight: 900, color: 'var(--dm-text-strong)', letterSpacing: '-0.2px' }}>
                 {assignment?.rescuerName || 'Cứu Hộ Viên'}
               </div>
-              <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, fontWeight: 700, lineHeight: 1.35 }}>
-                <span style={{ color: '#0284c7' }}>{assignment?.rescuerRole || 'CỨU HỘ VIÊN'}</span>
+              <div style={{ fontSize: 12.5, color: 'var(--dm-text-secondary)', marginTop: 2, fontWeight: 700, lineHeight: 1.35 }}>
+                <span style={{ color: 'var(--dm-blue-text)' }}>{assignment?.rescuerRole || 'CỨU HỘ VIÊN'}</span>
                 <span> • </span>
                 <span>{assignment?.rescueTeamName || 'Đội Cứu Hộ'}</span>
                 {rescuerPhone && rescuerPhone !== 'Chưa cập nhật' && (
-                  <span style={{ color: '#475569', fontWeight: 600 }}> • SĐT: <strong>{rescuerPhone}</strong></span>
+                  <span style={{ color: 'var(--dm-text-secondary)', fontWeight: 600 }}> • SĐT: <strong>{rescuerPhone}</strong></span>
                 )}
               </div>
             </div>
@@ -1024,13 +1024,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#e2e8f0' }} />
+        <div style={{ height: 1, background: 'var(--dm-surface-hover)' }} />
 
         {/* 2B: Assigned Vehicle Specs */}
         <div
           style={{
             padding: '12px 14px',
-            background: '#f8fafc',
+            background: 'var(--dm-surface-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -1038,12 +1038,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           }}
         >
           <div>
-            <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a' }}>
+            <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--dm-text-strong)' }}>
               {assignment?.vehicleName || 'Ca-nô cứu hộ'}
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600, marginTop: 2 }}>
               Sức chứa:{' '}
-              <strong style={{ color: '#334155' }}>
+              <strong style={{ color: 'var(--dm-text-secondary)' }}>
                 {String(assignment?.vehicleCapacity || '6').includes('chiến sĩ') ||
                   String(assignment?.vehicleCapacity || '6').includes('người')
                   ? assignment?.vehicleCapacity
@@ -1056,9 +1056,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               padding: '4px 10px',
               borderRadius: 6,
-              background: '#ffffff',
-              border: '1.5px solid #cbd5e1',
-              color: '#0f172a',
+              background: 'var(--dm-surface)',
+              border: '1.5px solid var(--dm-border-strong)',
+              color: 'var(--dm-text-strong)',
               fontWeight: 900,
               fontFamily: 'monospace',
               fontSize: 13.5,
@@ -1071,12 +1071,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#e2e8f0' }} />
+        <div style={{ height: 1, background: 'var(--dm-surface-hover)' }} />
 
 
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#e2e8f0' }} />
+        <div style={{ height: 1, background: 'var(--dm-surface-hover)' }} />
 
         {/* 2C: Tactical Route Stepper (Point A -> Point B) */}
         <div
@@ -1103,10 +1103,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               <div style={{ width: 2, height: 32, background: '#cbd5e1', margin: '3px 0' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <div style={{ color: 'var(--dm-text-muted)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Điểm Xuất Phát (Trạm Cứu Hộ):
               </div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
+              <div style={{ fontWeight: 800, color: 'var(--dm-text-strong)', fontSize: 13.5, marginTop: 2 }}>
                 {assignment?.authorityOrganizationName || 'Ban Chỉ Huy PCTT & TKCN'}
               </div>
             </div>
@@ -1127,14 +1127,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <div style={{ color: 'var(--dm-red-text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Điểm Cứu Nạn (Vị Trí Gặp Nạn):
               </div>
-              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: 14, marginTop: 2, lineHeight: 1.4 }}>
+              <div style={{ fontWeight: 900, color: 'var(--dm-red-text)', fontSize: 14, marginTop: 2, lineHeight: 1.4 }}>
                 {selectedSos.locationName}
               </div>
-              <div style={{ fontSize: 12.5, color: '#334155', marginTop: 3, fontWeight: 700 }}>
-                Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: '#dc2626' }}>{selectedSos.affectedPeople} người</span>)
+              <div style={{ fontSize: 12.5, color: 'var(--dm-text-secondary)', marginTop: 3, fontWeight: 700 }}>
+                Nạn nhân: <strong style={{ color: 'var(--dm-text-strong)' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: 'var(--dm-red-text)' }}>{selectedSos.affectedPeople} người</span>)
               </div>
             </div>
           </div>
@@ -1158,7 +1158,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: '#d97706', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    <div style={{ color: 'var(--dm-amber-text)', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                       Điểm Hẹn Bến Cập Bờ (Tiếp Vận):
                     </div>
                     {(() => {
@@ -1169,11 +1169,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                       return (
                         <>
-                          <div style={{ fontWeight: 900, color: '#b45309', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
+                          <div style={{ fontWeight: 900, color: 'var(--dm-amber-text)', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
                             🚗 {name || address || 'Điểm đón ven bờ'}
                           </div>
                           {!isDuplicate && (
-                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: 600 }}>
+                            <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2, fontWeight: 600 }}>
                               {address}
                             </div>
                           )}
@@ -1200,8 +1200,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     style={{
                       marginTop: 4,
                       borderRadius: 8,
-                      border: isHandoffAssignedOrDone ? '1px solid #86efac' : '1.5px solid #fdba74',
-                      background: isHandoffAssignedOrDone ? '#f0fdf4' : '#fff7ed',
+                      border: isHandoffAssignedOrDone ? '1px solid var(--dm-green-border)' : '1.5px solid var(--dm-orange-border)',
+                      background: isHandoffAssignedOrDone ? 'var(--dm-green-bg)' : 'var(--dm-orange-bg)',
                       padding: isHandoffAssignedOrDone ? '6px 8px' : '10px 12px',
                       display: 'flex',
                       flexDirection: 'column',
@@ -1218,7 +1218,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                               style={{
                                 fontSize: 11.5,
                                 fontWeight: 800,
-                                color: '#15803d',
+                                color: 'var(--dm-green-text)',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.2px',
                                 whiteSpace: 'nowrap',
@@ -1253,10 +1253,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 onClick={() => setIsRoadModalOpen(true)}
                                 style={{
                                   padding: '2px 6px',
-                                  background: '#ffffff',
-                                  border: '1px solid #93c5fd',
+                                  background: 'var(--dm-surface)',
+                                  border: '1px solid var(--dm-blue-border)',
                                   borderRadius: 4,
-                                  color: '#1d4ed8',
+                                  color: 'var(--dm-blue-text)',
                                   fontWeight: 800,
                                   fontSize: 10.5,
                                   cursor: 'pointer',
@@ -1271,10 +1271,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 disabled={isCancellingRoad}
                                 style={{
                                   padding: '2px 6px',
-                                  background: '#ffffff',
-                                  border: '1px solid #fca5a5',
+                                  background: 'var(--dm-surface)',
+                                  border: '1px solid var(--dm-red-border)',
                                   borderRadius: 4,
-                                  color: '#b91c1c',
+                                  color: 'var(--dm-red-text)',
                                   fontWeight: 800,
                                   fontSize: 10.5,
                                   cursor: 'pointer',
@@ -1292,15 +1292,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             display: 'flex',
                             alignItems: 'center',
                             gap: 6,
-                            background: '#ffffff',
-                            border: '1px solid #bbf7d0',
+                            background: 'var(--dm-surface)',
+                            border: '1px solid var(--dm-green-border)',
                             borderRadius: 6,
                             padding: '3px 8px',
                             fontSize: 11,
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                          <span style={{ fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                             {cleanVehicleName(handoff.assignedVehicleName)}
                           </span>
                           {handoff.assignedVehiclePlate && (
@@ -1310,20 +1310,20 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 fontWeight: 800,
                                 padding: '1px 4px',
                                 borderRadius: 3,
-                                background: '#f1f5f9',
-                                border: '1px solid #cbd5e1',
-                                color: '#1e293b',
+                                background: 'var(--dm-surface-muted)',
+                                border: '1px solid var(--dm-border-strong)',
+                                color: 'var(--dm-text-body)',
                               }}
                             >
                               {handoff.assignedVehiclePlate}
                             </span>
                           )}
                           {handoff.assignedRoadTeamName && (
-                            <span style={{ color: '#475569', fontSize: 10.5, fontWeight: 700 }}>
+                            <span style={{ color: 'var(--dm-text-secondary)', fontSize: 10.5, fontWeight: 700 }}>
                               • {handoff.assignedRoadTeamName}
                             </span>
                           )}
-                          <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 600 }}>
+                          <span style={{ color: 'var(--dm-text-muted)', fontSize: 10.5, fontWeight: 600 }}>
                             • 👤 {handoff.assignedDriverName || 'Tài xế'}
                             {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
                           </span>
@@ -1338,7 +1338,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                               style={{
                                 fontSize: 12,
                                 fontWeight: 900,
-                                color: '#c2410c',
+                                color: 'var(--dm-orange-text)',
                                 textTransform: 'uppercase',
                               }}
                             >
@@ -1351,19 +1351,19 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                               fontWeight: 800,
                               padding: '2px 7px',
                               borderRadius: 5,
-                              background: '#fed7aa',
-                              color: '#9a3412',
+                              background: 'var(--dm-orange-bg-strong)',
+                              color: 'var(--dm-orange-text)',
                             }}
                           >
                             CHỜ ĐIỀU XE
                           </span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
+                        <div style={{ fontSize: 12, color: 'var(--dm-text-secondary)', lineHeight: 1.45 }}>
                           <div>
                             • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
                           </div>
                           {selectedSos.shoreHandoff.notes && (
-                            <div style={{ marginTop: 2, fontStyle: 'italic', color: '#475569' }}>
+                            <div style={{ marginTop: 2, fontStyle: 'italic', color: 'var(--dm-text-secondary)' }}>
                               • <strong>Ghi chú:</strong> "{selectedSos.shoreHandoff.notes}"
                             </div>
                           )}
@@ -1423,13 +1423,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               width: '100%',
               maxWidth: 540,
               maxHeight: '88vh',
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 16,
               boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--dm-border)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1438,11 +1438,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               style={{
                 padding: '16px 20px',
                 background: 'linear-gradient(to right, #f0f9ff 0%, #f8fafc 100%)',
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 flexShrink: 0,
               }}
             >
@@ -1452,22 +1452,22 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    background: '#e0f2fe',
-                    border: '1px solid #bae6fd',
+                    background: 'var(--dm-blue-bg)',
+                    border: '1px solid var(--dm-blue-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#0284c7',
+                    color: 'var(--dm-blue-text)',
                     flexShrink: 0,
                   }}
                 >
                   <Ambulance size={22} color="#0284c7" />
                 </div>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', letterSpacing: -0.2 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)', letterSpacing: -0.2 }}>
                     Điều Phối Xe Đón Bờ (Tiếp Vận)
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
                     Tiếp nhận bàn giao nạn nhân tại bến cập bờ
                   </div>
                 </div>
@@ -1476,10 +1476,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 type="button"
                 onClick={() => setIsRoadModalOpen(false)}
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--dm-surface)',
+                  border: '1px solid var(--dm-border-strong)',
                   borderRadius: 8,
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   fontSize: 16,
                   width: 34,
                   height: 34,
@@ -1518,11 +1518,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               <div
                 style={{
                   padding: '12px 14px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: 10,
                   fontSize: 12.5,
-                  color: '#0f172a',
+                  color: 'var(--dm-text-strong)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 9,
@@ -1534,7 +1534,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       width: 28,
                       height: 28,
                       borderRadius: 6,
-                      background: '#fee2e2',
+                      background: 'var(--dm-red-bg)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1545,28 +1545,28 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     <MapPin size={15} color="#dc2626" />
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ color: '#64748b', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    <div style={{ color: 'var(--dm-text-muted)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                       Điểm hẹn bến cập bờ
                     </div>
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
+                    <div style={{ fontWeight: 800, color: 'var(--dm-text-strong)', fontSize: 13.5, marginTop: 2 }}>
                       {selectedSos.shoreHandoff?.landingPoint?.name || selectedSos.shoreHandoff?.landingPoint?.address || 'Điểm đón ven bờ'}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--dm-border)' }}>
                   <div
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
                       padding: '4px 9px',
-                      background: '#fff7ed',
-                      border: '1px solid #ffedd5',
+                      background: 'var(--dm-orange-bg)',
+                      border: '1px solid var(--dm-orange-border)',
                       borderRadius: 6,
                       fontSize: 12,
                       fontWeight: 700,
-                      color: '#c2410c',
+                      color: 'var(--dm-orange-text)',
                     }}
                   >
                     <Users size={13} color="#ea580c" />
@@ -1579,12 +1579,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       alignItems: 'center',
                       gap: 5,
                       padding: '4px 9px',
-                      background: '#f1f5f9',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--dm-surface-muted)',
+                      border: '1px solid var(--dm-border)',
                       borderRadius: 6,
                       fontSize: 12,
                       fontWeight: 700,
-                      color: '#334155',
+                      color: 'var(--dm-text-secondary)',
                     }}
                   >
                     <Shield size={13} color="#64748b" />
@@ -1605,8 +1605,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       alignItems: 'center',
                       gap: 6,
                       padding: '0 10px',
-                      background: '#ffffff',
-                      border: '1.5px solid #cbd5e1',
+                      background: 'var(--dm-surface)',
+                      border: '1.5px solid var(--dm-border-strong)',
                       borderRadius: 8,
                       height: 36,
                     }}
@@ -1622,7 +1622,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         outline: 'none',
                         width: '100%',
                         fontSize: 12,
-                        color: '#0f172a',
+                        color: 'var(--dm-text-strong)',
                         background: 'transparent',
                       }}
                     />
@@ -1633,7 +1633,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#94a3b8',
+                          color: 'var(--dm-text-muted)',
                           cursor: 'pointer',
                           padding: 2,
                           fontSize: 13,
@@ -1658,9 +1658,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       fontSize: 11.5,
                       fontWeight: 700,
                       cursor: 'pointer',
-                      border: vehicleTypeFilter === 'ALL' ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                      background: vehicleTypeFilter === 'ALL' ? '#0284c7' : '#ffffff',
-                      color: vehicleTypeFilter === 'ALL' ? '#ffffff' : '#64748b',
+                      border: vehicleTypeFilter === 'ALL' ? '1.5px solid #0284c7' : '1px solid var(--dm-border)',
+                      background: vehicleTypeFilter === 'ALL' ? '#0284c7' : 'var(--dm-surface)',
+                      color: vehicleTypeFilter === 'ALL' ? '#ffffff' : 'var(--dm-text-muted)',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -1677,9 +1677,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       fontSize: 11.5,
                       fontWeight: 700,
                       cursor: 'pointer',
-                      border: vehicleTypeFilter === 'AMBULANCE' ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                      background: vehicleTypeFilter === 'AMBULANCE' ? '#0284c7' : '#ffffff',
-                      color: vehicleTypeFilter === 'AMBULANCE' ? '#ffffff' : '#64748b',
+                      border: vehicleTypeFilter === 'AMBULANCE' ? '1.5px solid #0284c7' : '1px solid var(--dm-border)',
+                      background: vehicleTypeFilter === 'AMBULANCE' ? '#0284c7' : 'var(--dm-surface)',
+                      color: vehicleTypeFilter === 'AMBULANCE' ? '#ffffff' : 'var(--dm-text-muted)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1701,9 +1701,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       fontSize: 11.5,
                       fontWeight: 700,
                       cursor: 'pointer',
-                      border: vehicleTypeFilter === 'TRUCK' ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                      background: vehicleTypeFilter === 'TRUCK' ? '#0284c7' : '#ffffff',
-                      color: vehicleTypeFilter === 'TRUCK' ? '#ffffff' : '#64748b',
+                      border: vehicleTypeFilter === 'TRUCK' ? '1.5px solid #0284c7' : '1px solid var(--dm-border)',
+                      background: vehicleTypeFilter === 'TRUCK' ? '#0284c7' : 'var(--dm-surface)',
+                      color: vehicleTypeFilter === 'TRUCK' ? '#ffffff' : 'var(--dm-text-muted)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1723,7 +1723,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   style={{
                     fontSize: 11,
                     fontWeight: 800,
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     textTransform: 'uppercase',
                     display: 'block',
                     marginBottom: 6,
@@ -1737,8 +1737,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   <div
                     style={{
                       padding: '24px 16px',
-                      background: '#f8fafc',
-                      border: '1.5px dashed #cbd5e1',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1.5px dashed var(--dm-border-strong)',
                       borderRadius: 10,
                       textAlign: 'center',
                       display: 'flex',
@@ -1748,10 +1748,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     }}
                   >
                     <AlertCircle size={28} color="#94a3b8" />
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
                       Không có phương tiện phù hợp trong khu vực {targetAreaInfo.label}
                     </div>
-                    <div style={{ fontSize: 11.5, color: '#64748b', maxWidth: 360 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', maxWidth: 360 }}>
                       Không tìm thấy xe tiếp vận khả dụng theo tiêu chí tìm kiếm hoặc tất cả xe trong khu vực đang bận nhiệm vụ khác.
                     </div>
 
@@ -1811,19 +1811,19 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             padding: '10px 14px',
                             borderRadius: 10,
                             border: isCurrentAssigned
-                              ? '1.5px dashed #cbd5e1'
+                              ? '1.5px dashed var(--dm-border-strong)'
                               : isBusyOther || isTeamBusyRescuing || isVehicleInMission
-                                ? '1.5px dashed #fca5a5'
+                                ? '1.5px dashed var(--dm-red-border)'
                                 : isSelected
                                   ? '2px solid #0284c7'
-                                  : '1.5px solid #e2e8f0',
+                                  : '1.5px solid var(--dm-border)',
                             background: isCurrentAssigned
-                              ? '#f8fafc'
+                              ? 'var(--dm-surface-subtle)'
                               : isBusyOther || isTeamBusyRescuing || isVehicleInMission
                                 ? '#fff5f5'
                                 : isSelected
-                                  ? '#f0f9ff'
-                                  : '#ffffff',
+                                  ? 'var(--dm-blue-bg)'
+                                  : 'var(--dm-surface)',
                             cursor: isDisabled ? 'not-allowed' : 'pointer',
                             opacity: isDisabled ? 0.58 : 1,
                             display: 'flex',
@@ -1841,19 +1841,19 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 height: 38,
                                 borderRadius: 8,
                                 background: isCurrentAssigned
-                                  ? '#f1f5f9'
+                                  ? 'var(--dm-surface-muted)'
                                   : isBusyOther || isTeamBusyRescuing || isVehicleInMission
-                                    ? '#fee2e2'
+                                    ? 'var(--dm-red-bg)'
                                     : v.type === 'Ambulance'
-                                      ? '#eff6ff'
-                                      : '#fffbeb',
+                                      ? 'var(--dm-blue-bg)'
+                                      : 'var(--dm-amber-bg)',
                                 border: isCurrentAssigned
-                                  ? '1px solid #cbd5e1'
+                                  ? '1px solid var(--dm-border-strong)'
                                   : isBusyOther || isTeamBusyRescuing || isVehicleInMission
-                                    ? '1px solid #fecaca'
+                                    ? '1px solid var(--dm-red-border)'
                                     : v.type === 'Ambulance'
-                                      ? '1px solid #bfdbfe'
-                                      : '1px solid #fef3c7',
+                                      ? '1px solid var(--dm-blue-border)'
+                                      : '1px solid var(--dm-amber-border)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -1867,7 +1867,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 13.5, fontWeight: 900, color: isDisabled ? '#64748b' : '#0f172a' }}>
+                                <span style={{ fontSize: 13.5, fontWeight: 900, color: isDisabled ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)' }}>
                                   {v.name}
                                 </span>
                                 <span
@@ -1876,10 +1876,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     fontWeight: 800,
                                     fontFamily: 'monospace',
                                     padding: '1px 6px',
-                                    background: '#f1f5f9',
-                                    border: '1px solid #cbd5e1',
+                                    background: 'var(--dm-surface-muted)',
+                                    border: '1px solid var(--dm-border-strong)',
                                     borderRadius: 4,
-                                    color: '#334155',
+                                    color: 'var(--dm-text-secondary)',
                                   }}
                                 >
                                   {v.plate}
@@ -1891,9 +1891,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                       fontWeight: 800,
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: '#e2e8f0',
-                                      color: '#475569',
-                                      border: '1px solid #cbd5e1',
+                                      background: 'var(--dm-surface-hover)',
+                                      color: 'var(--dm-text-secondary)',
+                                      border: '1px solid var(--dm-border-strong)',
                                     }}
                                   >
                                     🚫 Đang phục vụ điểm này (Xe hiện tại)
@@ -1906,9 +1906,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                       fontWeight: 800,
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: '#fee2e2',
-                                      color: '#b91c1c',
-                                      border: '1px solid #fecaca',
+                                      background: 'var(--dm-red-bg)',
+                                      color: 'var(--dm-red-text)',
+                                      border: '1px solid var(--dm-red-border)',
                                     }}
                                   >
                                     ⏳ Đang bận đón ({busyMissionLabel})
@@ -1921,9 +1921,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                       fontWeight: 800,
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: '#fee2e2',
-                                      color: '#b91c1c',
-                                      border: '1px solid #fecaca',
+                                      background: 'var(--dm-red-bg)',
+                                      color: 'var(--dm-red-text)',
+                                      border: '1px solid var(--dm-red-border)',
                                     }}
                                   >
                                     🚑 Đội đang đi cứu ({teamBusyMissionLabel})
@@ -1936,9 +1936,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                       fontWeight: 800,
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: '#fee2e2',
-                                      color: '#b91c1c',
-                                      border: '1px solid #fecaca',
+                                      background: 'var(--dm-red-bg)',
+                                      color: 'var(--dm-red-text)',
+                                      border: '1px solid var(--dm-red-border)',
                                     }}
                                   >
                                     ⛔ Xe đang làm nhiệm vụ
@@ -1946,9 +1946,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 )}
                               </div>
 
-                              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <span>
-                                  Đội: <strong style={{ color: isDisabled ? '#64748b' : '#0f172a' }}>{team?.name || v.teamName || 'Đội Phản Ứng Nhanh'}</strong>
+                                  Đội: <strong style={{ color: isDisabled ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)' }}>{team?.name || v.teamName || 'Đội Phản Ứng Nhanh'}</strong>
                                 </span>
                                 {teamLeader?.name && (
                                   <span
@@ -1957,9 +1957,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                       fontWeight: 700,
                                       padding: '1px 6px',
                                       borderRadius: 4,
-                                      background: isDisabled ? '#f1f5f9' : '#eff6ff',
-                                      color: isDisabled ? '#64748b' : '#1d4ed8',
-                                      border: isDisabled ? '1px solid #cbd5e1' : '1px solid #bfdbfe',
+                                      background: isDisabled ? 'var(--dm-surface-muted)' : 'var(--dm-blue-bg)',
+                                      color: isDisabled ? 'var(--dm-text-muted)' : 'var(--dm-blue-text)',
+                                      border: isDisabled ? '1px solid var(--dm-border-strong)' : '1px solid var(--dm-blue-border)',
                                     }}
                                   >
                                     Đội trưởng: {teamLeader.name}
@@ -1968,7 +1968,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                               </div>
 
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                                <span style={{ fontSize: 11, color: '#475569' }}>
+                                <span style={{ fontSize: 11, color: 'var(--dm-text-secondary)' }}>
                                   Sức chứa: <strong>{v.capacity}</strong>
                                 </span>
                                 {isEnough ? (
@@ -1976,8 +1976,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 800,
-                                      color: isDisabled ? '#64748b' : '#16a34a',
-                                      background: isDisabled ? '#f1f5f9' : '#dcfce7',
+                                      color: isDisabled ? 'var(--dm-text-muted)' : 'var(--dm-green-text)',
+                                      background: isDisabled ? 'var(--dm-surface-muted)' : 'var(--dm-green-bg)',
                                       padding: '1px 5px',
                                       borderRadius: 4,
                                     }}
@@ -1989,8 +1989,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 800,
-                                      color: '#ea580c',
-                                      background: '#fff7ed',
+                                      color: 'var(--dm-orange-text)',
+                                      background: 'var(--dm-orange-bg)',
                                       padding: '1px 5px',
                                       borderRadius: 4,
                                     }}
@@ -2009,11 +2009,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '3px 8px',
                                   borderRadius: 6,
-                                  background: '#f1f5f9',
-                                  border: '1px solid #cbd5e1',
+                                  background: 'var(--dm-surface-muted)',
+                                  border: '1px solid var(--dm-border-strong)',
                                   fontSize: 10.5,
                                   fontWeight: 800,
-                                  color: '#64748b',
+                                  color: 'var(--dm-text-muted)',
                                 }}
                               >
                                 Đang chọn
@@ -2024,11 +2024,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '3px 8px',
                                   borderRadius: 6,
-                                  background: '#fee2e2',
-                                  border: '1px solid #fecaca',
+                                  background: 'var(--dm-red-bg)',
+                                  border: '1px solid var(--dm-red-border)',
                                   fontSize: 10.5,
                                   fontWeight: 800,
-                                  color: '#b91c1c',
+                                  color: 'var(--dm-red-text)',
                                 }}
                               >
                                 Đang bận
@@ -2039,11 +2039,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '3px 8px',
                                   borderRadius: 6,
-                                  background: '#fee2e2',
-                                  border: '1px solid #fecaca',
+                                  background: 'var(--dm-red-bg)',
+                                  border: '1px solid var(--dm-red-border)',
                                   fontSize: 10.5,
                                   fontWeight: 800,
-                                  color: '#b91c1c',
+                                  color: 'var(--dm-red-text)',
                                 }}
                               >
                                 Đang đi cứu
@@ -2054,11 +2054,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '3px 8px',
                                   borderRadius: 6,
-                                  background: '#fee2e2',
-                                  border: '1px solid #fecaca',
+                                  background: 'var(--dm-red-bg)',
+                                  border: '1px solid var(--dm-red-border)',
                                   fontSize: 10.5,
                                   fontWeight: 800,
-                                  color: '#b91c1c',
+                                  color: 'var(--dm-red-text)',
                                 }}
                               >
                                 Bận nhiệm vụ
@@ -2071,7 +2071,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                   width: 18,
                                   height: 18,
                                   borderRadius: '50%',
-                                  border: '2px solid #cbd5e1',
+                                  border: '2px solid var(--dm-border-strong)',
                                 }}
                               />
                             )}
@@ -2088,8 +2088,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '14px 20px',
-                background: '#f8fafc',
-                borderTop: '1px solid #e2e8f0',
+                background: 'var(--dm-surface-subtle)',
+                borderTop: '1px solid var(--dm-border)',
                 display: 'flex',
                 gap: 10,
                 flexShrink: 0,
@@ -2101,12 +2101,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   flex: 1,
                   height: 42,
-                  background: '#ffffff',
-                  border: '1.5px solid #cbd5e1',
+                  background: 'var(--dm-surface)',
+                  border: '1.5px solid var(--dm-border-strong)',
                   borderRadius: 8,
                   fontWeight: 800,
                   fontSize: 13,
-                  color: '#475569',
+                  color: 'var(--dm-text-secondary)',
                   cursor: 'pointer',
                   transition: 'all 0.12s ease',
                 }}
@@ -2168,13 +2168,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               width: '100%',
               maxWidth: 440,
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 16,
               boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--dm-border)',
               animation: 'modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2183,8 +2183,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '16px 20px',
-                background: '#fef2f2',
-                borderBottom: '1px solid #fee2e2',
+                background: 'var(--dm-red-bg)',
+                borderBottom: '1px solid var(--dm-red-border)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
@@ -2195,21 +2195,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   width: 40,
                   height: 40,
                   borderRadius: '50%',
-                  background: '#fee2e2',
+                  background: 'var(--dm-red-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#dc2626',
+                  color: 'var(--dm-red-text)',
                   flexShrink: 0,
                 }}
               >
                 <AlertTriangle size={22} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#991b1b' }}>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-red-text)' }}>
                   Từ chối yêu cầu chi viện vật tư
                 </h4>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b91c1c' }}>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--dm-red-text)' }}>
                   Xác nhận phản hồi đến đội cứu hộ tác chiến
                 </p>
               </div>
@@ -2220,7 +2220,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   border: 'none',
                   background: 'transparent',
-                  color: '#94a3b8',
+                  color: 'var(--dm-text-muted)',
                   cursor: 'pointer',
                   padding: 4,
                   display: 'flex',
@@ -2234,15 +2234,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
             {/* Body */}
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ margin: 0, fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
                 Bạn có chắc chắn muốn <strong>từ chối</strong> yêu cầu chi viện vật tư từ đội cứu hộ?
               </p>
 
               {pendingSupplies.length > 0 && (
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 10,
                     padding: '10px 14px',
                     display: 'flex',
@@ -2250,7 +2250,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     gap: 6,
                   }}
                 >
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase' }}>
                     Vật tư đội đang yêu cầu (chờ duyệt):
                   </span>
                   {pendingSupplies.map((req: any, idx: number) => (
@@ -2262,14 +2262,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         justifyContent: 'space-between',
                         gap: 12,
                         fontSize: 12.5,
-                        color: '#0f172a',
+                        color: 'var(--dm-text-strong)',
                       }}
                     >
                       <span style={{ fontWeight: 600, flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
                       <span
                         style={{
                           fontWeight: 800,
-                          color: '#dc2626',
+                          color: 'var(--dm-red-text)',
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                         }}
@@ -2283,7 +2283,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
               {/* Ghi chú lý do từ chối (tùy chọn) */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--dm-text-secondary)', marginBottom: 5 }}>
                   Lý do từ chối (tùy chọn):
                 </label>
                 <input
@@ -2297,7 +2297,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     padding: '9px 12px',
                     fontSize: 13,
                     borderRadius: 8,
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--dm-border-strong)',
                     outline: 'none',
                     boxSizing: 'border-box',
                   }}
@@ -2309,8 +2309,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '14px 20px',
-                background: '#f8fafc',
-                borderTop: '1px solid #e2e8f0',
+                background: 'var(--dm-surface-subtle)',
+                borderTop: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
@@ -2324,9 +2324,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   padding: '8px 16px',
                   borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -2387,13 +2387,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               width: '100%',
               maxWidth: 440,
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 16,
               boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--dm-border)',
               animation: 'modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2402,8 +2402,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '16px 20px',
-                background: '#fff7ed',
-                borderBottom: '1px solid #ffedd5',
+                background: 'var(--dm-orange-bg)',
+                borderBottom: '1px solid var(--dm-orange-border)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
@@ -2414,21 +2414,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   width: 40,
                   height: 40,
                   borderRadius: '50%',
-                  background: '#ffedd5',
+                  background: 'var(--dm-orange-bg)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#ea580c',
+                  color: 'var(--dm-orange-text)',
                   flexShrink: 0,
                 }}
               >
                 <AlertTriangle size={20} />
               </div>
               <div style={{ flex: 1 }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#9a3412' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-orange-text)' }}>
                   Hủy phân công xe đón bờ
                 </h3>
-                <p style={{ margin: 0, fontSize: 12, color: '#c2410c', marginTop: 2 }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-orange-text)', marginTop: 2 }}>
                   Xác nhận hủy điều động phương tiện tiếp nhận ven bờ
                 </p>
               </div>
@@ -2439,7 +2439,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   border: 'none',
                   background: 'none',
-                  color: '#94a3b8',
+                  color: 'var(--dm-text-muted)',
                   cursor: 'pointer',
                   padding: 4,
                   borderRadius: 6,
@@ -2454,7 +2454,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
             {/* Body */}
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ margin: 0, fontSize: 13.5, color: '#334155', lineHeight: 1.55 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.55 }}>
                 Bạn có chắc chắn muốn hủy phân công phương tiện đón bờ này để chọn lại phương tiện khác?
               </p>
 
@@ -2462,8 +2462,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               {selectedSos?.shoreHandoff?.assignedVehicleName && (
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 10,
                     padding: '12px 14px',
                     display: 'flex',
@@ -2473,7 +2473,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Ambulance size={15} color="#0284c7" />
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                       {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
                     </span>
                     {selectedSos.shoreHandoff.assignedVehiclePlate && (
@@ -2481,11 +2481,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         style={{
                           fontSize: 11,
                           fontWeight: 800,
-                          color: '#0369a1',
-                          background: '#e0f2fe',
+                          color: 'var(--dm-blue-text)',
+                          background: 'var(--dm-blue-bg)',
                           padding: '1px 6px',
                           borderRadius: 4,
-                          border: '1px solid #bae6fd',
+                          border: '1px solid var(--dm-blue-border)',
                         }}
                       >
                         {selectedSos.shoreHandoff.assignedVehiclePlate}
@@ -2493,7 +2493,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     )}
                   </div>
                   {selectedSos.shoreHandoff.assignedDriverName && (
-                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                    <div style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                       Tài xế: <strong>{selectedSos.shoreHandoff.assignedDriverName}</strong>
                       {selectedSos.shoreHandoff.assignedDriverPhone ? ` • ${selectedSos.shoreHandoff.assignedDriverPhone}` : ''}
                     </div>
@@ -2504,8 +2504,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               <div
                 style={{
                   fontSize: 12,
-                  color: '#64748b',
-                  background: '#f1f5f9',
+                  color: 'var(--dm-text-muted)',
+                  background: 'var(--dm-surface-muted)',
                   padding: '10px 12px',
                   borderRadius: 8,
                   lineHeight: 1.5,
@@ -2519,8 +2519,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '14px 20px',
-                background: '#f8fafc',
-                borderTop: '1px solid #e2e8f0',
+                background: 'var(--dm-surface-subtle)',
+                borderTop: '1px solid var(--dm-border)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: 10,
@@ -2533,9 +2533,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   padding: '8px 16px',
                   borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -2591,10 +2591,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               width: '100%',
               height: 44,
               padding: '0 16px',
-              background: '#fef2f2',
-              border: '1.5px solid #fecaca',
+              background: 'var(--dm-red-bg)',
+              border: '1.5px solid var(--dm-red-border)',
               borderRadius: 10,
-              color: '#dc2626',
+              color: 'var(--dm-red-text)',
               fontSize: 13.5,
               fontWeight: 800,
               cursor: 'pointer',
@@ -2617,10 +2617,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               width: '100%',
               height: 44,
               padding: '0 16px',
-              background: '#f0fdf4',
-              border: '1.5px solid #86efac',
+              background: 'var(--dm-green-bg)',
+              border: '1.5px solid var(--dm-green-border)',
               borderRadius: 10,
-              color: '#15803d',
+              color: 'var(--dm-green-text)',
               fontSize: 13.5,
               fontWeight: 800,
               display: 'flex',
@@ -2641,10 +2641,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               width: '100%',
               minHeight: 44,
               padding: '8px 14px',
-              background: '#fffbeb',
-              border: '1.5px solid #fcd34d',
+              background: 'var(--dm-amber-bg)',
+              border: '1.5px solid var(--dm-amber-border)',
               borderRadius: 10,
-              color: '#b45309',
+              color: 'var(--dm-amber-text)',
               fontSize: 12.5,
               fontWeight: 800,
               display: 'flex',

@@ -233,7 +233,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
           opacity: disabled ? 0.65 : 1,
           borderColor: open ? '#0ea5e9' : undefined,
           boxShadow: open ? '0 0 0 3px rgba(14, 165, 233, 0.14)' : undefined,
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--dm-surface)',
         }}
       >
         <span
@@ -241,7 +241,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            color: selectedOption ? '#0f172a' : '#64748b',
+            color: selectedOption ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)',
             fontWeight: 500,
           }}
         >
@@ -251,7 +251,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
           size={15}
           style={{
             flexShrink: 0,
-            color: '#475569',
+            color: 'var(--dm-text-secondary)',
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.15s ease',
           }}
@@ -271,8 +271,8 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
               bottom: menuStyle.bottom !== undefined ? `${menuStyle.bottom}px` : undefined,
               maxHeight: `${menuStyle.maxHeight}px`,
               zIndex: 1000010,
-              backgroundColor: '#ffffff',
-              border: '1px solid #cbd5e1',
+              backgroundColor: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border-strong)',
               borderRadius: '12px',
               boxShadow: '0 14px 36px -6px rgba(15, 23, 42, 0.22), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
               display: 'flex',
@@ -283,15 +283,15 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
             <div
               style={{
                 padding: '10px 12px',
-                borderBottom: '1px solid #e2e8f0',
-                backgroundColor: '#f8fafc',
+                borderBottom: '1px solid var(--dm-border)',
+                backgroundColor: 'var(--dm-surface-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 flexShrink: 0,
               }}
             >
-              <Search size={15} style={{ color: '#64748b', flexShrink: 0 }} />
+              <Search size={15} style={{ color: 'var(--dm-text-muted)', flexShrink: 0 }} />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -304,13 +304,13 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                   outline: 'none',
                   background: 'transparent',
                   fontSize: '13.5px',
-                  color: '#0f172a',
+                  color: 'var(--dm-text-strong)',
                 }}
               />
               <span
                 style={{
                   fontSize: '11.5px',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
@@ -324,7 +324,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                   style={{
                     border: 'none',
                     background: 'transparent',
-                    color: '#94a3b8',
+                    color: 'var(--dm-text-muted)',
                     cursor: 'pointer',
                     padding: 0,
                     display: 'flex',
@@ -348,7 +348,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                   style={{
                     padding: '18px 12px',
                     fontSize: '13px',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     textAlign: 'center',
                   }}
                 >
@@ -374,8 +374,8 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                         padding: '9px 12px',
                         border: 'none',
                         borderRadius: '8px',
-                        backgroundColor: isSelected ? '#eff6ff' : 'transparent',
-                        color: isSelected ? '#0369a1' : '#0f172a',
+                        backgroundColor: isSelected ? 'var(--dm-blue-bg)' : 'transparent',
+                        color: isSelected ? 'var(--dm-blue-text)' : 'var(--dm-text-strong)',
                         cursor: 'pointer',
                         textAlign: 'left',
                         fontSize: '13.5px',
@@ -397,7 +397,7 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                       >
                         {opt.label}
                         {opt.subLabel ? (
-                          <span style={{ color: '#64748b', fontWeight: 400, marginLeft: 4 }}>
+                          <span style={{ color: 'var(--dm-text-muted)', fontWeight: 400, marginLeft: 4 }}>
                             ({opt.subLabel})
                           </span>
                         ) : null}
@@ -417,15 +417,15 @@ const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
                               fontSize: '11px',
                               padding: '2px 7px',
                               borderRadius: '999px',
-                              backgroundColor: opt.isCurrent ? '#dbeafe' : '#f1f5f9',
-                              color: opt.isCurrent ? '#1d4ed8' : '#475569',
+                              backgroundColor: opt.isCurrent ? 'var(--dm-blue-bg)' : 'var(--dm-surface-muted)',
+                              color: opt.isCurrent ? 'var(--dm-blue-text)' : 'var(--dm-text-secondary)',
                               fontWeight: 600,
                             }}
                           >
                             {opt.badgeText}
                           </span>
                         )}
-                        {isSelected && <Check size={14} style={{ color: '#0284c7' }} />}
+                        {isSelected && <Check size={14} style={{ color: 'var(--dm-blue-text)' }} />}
                       </span>
                     </button>
                   );
@@ -1182,7 +1182,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             border: 'none',
                             padding: 0,
                             textAlign: 'left',
-                            color: '#0284c7',
+                            color: 'var(--dm-blue-text)',
                             fontSize: '11.5px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -1217,7 +1217,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           <button
                             type="button"
                             className="auth-drawer-inline-edit-btn"
-                            style={{ color: '#64748b' }}
+                            style={{ color: 'var(--dm-text-muted)' }}
                             onClick={() => setIsDetailEditing(false)}
                           >
                             <X size={13} />
@@ -1229,9 +1229,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       {editAuthError && (
                         <div
                           style={{
-                            backgroundColor: '#fee2e2',
-                            border: '1px solid #fca5a5',
-                            color: '#b91c1c',
+                            backgroundColor: 'var(--dm-red-bg)',
+                            border: '1px solid var(--dm-red-border)',
+                            color: 'var(--dm-red-text)',
                             padding: '10px 14px',
                             borderRadius: '8px',
                             fontSize: '13px',
@@ -1245,9 +1245,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       {editAuthSuccess && (
                         <div
                           style={{
-                            backgroundColor: '#dcfce7',
-                            border: '1px solid #86efac',
-                            color: '#15803d',
+                            backgroundColor: 'var(--dm-green-bg)',
+                            border: '1px solid var(--dm-green-border)',
+                            color: 'var(--dm-green-text)',
                             padding: '10px 14px',
                             borderRadius: '8px',
                             fontSize: '13px',
@@ -1296,14 +1296,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                               {detailMapState.officeAddress ? (
                                 <span>{detailMapState.officeAddress} </span>
                               ) : (
-                                <span style={{ color: '#64748b', fontWeight: 500 }}>Chưa cập nhật </span>
+                                <span style={{ color: 'var(--dm-text-muted)', fontWeight: 500 }}>Chưa cập nhật </span>
                               )}
                               {detailMapState.mapUrl && (
                                 <a
                                   href={detailMapState.mapUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ color: '#0284c7', textDecoration: 'none', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                  style={{ color: 'var(--dm-blue-text)', textDecoration: 'none', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}
                                 >
                                   <span>Mở Maps</span>
                                   <ExternalLink size={12} />
@@ -1449,7 +1449,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                                   transform: 'translateY(-50%)',
                                   background: 'none',
                                   border: 'none',
-                                  color: '#0284c7',
+                                  color: 'var(--dm-blue-text)',
                                   cursor: 'pointer',
                                   padding: 4,
                                 }}
@@ -1579,7 +1579,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       </div>
                       <div>
                         <h3 className="executive-modal-title">Tạo Tài Khoản Cán Bộ & Gán Địa Bàn</h3>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                           Cấp tài khoản điều hành tác chiến theo địa bàn hành chính tại Thành phố Đà Nẵng
                         </p>
                       </div>
@@ -1596,9 +1596,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   {authSubmitError && (
                     <div
                       style={{
-                        backgroundColor: '#fee2e2',
-                        border: '1px solid #fca5a5',
-                        color: '#b91c1c',
+                        backgroundColor: 'var(--dm-red-bg)',
+                        border: '1px solid var(--dm-red-border)',
+                        color: 'var(--dm-red-text)',
                         padding: '10px 14px',
                         borderRadius: '8px',
                         fontSize: '13px',
@@ -1611,7 +1611,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                   <form onSubmit={handleCreateAuthorityUser}>
                     <div className="executive-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#0284c7', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--dm-blue-text)', letterSpacing: '0.5px' }}>
                         1. Thông Tin Tài Khoản Đăng Nhập
                       </div>
 
@@ -1678,7 +1678,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                                 transform: 'translateY(-50%)',
                                 background: 'none',
                                 border: 'none',
-                                color: '#0284c7',
+                                color: 'var(--dm-blue-text)',
                                 cursor: 'pointer',
                                 padding: 4,
                               }}
@@ -1690,14 +1690,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         </div>
                       </div>
 
-                      <div style={{ borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
+                      <div style={{ borderTop: '1px solid var(--dm-border)', margin: '4px 0' }} />
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#0284c7', letterSpacing: '0.5px' }}>
+                        <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--dm-blue-text)', letterSpacing: '0.5px' }}>
                           2. Phạm Vi Địa Bàn Quản Lý (TP. Đà Nẵng)
                         </div>
                         {modalSubUnitsLoading && (
-                          <span style={{ fontSize: '11px', color: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: '11px', color: 'var(--dm-blue-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <Loader2 size={12} className="animate-spin" /> Đang nạp xã/phường...
                           </span>
                         )}
@@ -1713,8 +1713,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             readOnly
                             disabled
                             style={{
-                              backgroundColor: '#f8fafc',
-                              color: '#0f172a',
+                              backgroundColor: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-strong)',
                               fontWeight: 600,
                               cursor: 'not-allowed',
                               opacity: 1,
@@ -1814,9 +1814,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   width: 48,
                   height: 48,
                   borderRadius: '50%',
-                  backgroundColor: '#dcfce7',
-                  border: '1px solid #86efac',
-                  color: '#15803d',
+                  backgroundColor: 'var(--dm-green-bg)',
+                  border: '1px solid var(--dm-green-border)',
+                  color: 'var(--dm-green-text)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1825,17 +1825,17 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 <CheckCircle2 size={28} />
               </div>
 
-              <h4 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
+              <h4 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                 Tạo Tài Khoản Cán Bộ Thành Công!
               </h4>
-              <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--dm-text-muted)' }}>
                 Tài khoản điều phối tác chiến đã được khởi tạo và sẵn sàng bàn giao cho cán bộ.
               </p>
 
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: 8,
                   padding: 12,
                   width: '100%',
@@ -1904,14 +1904,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 flexDirection: 'column',
               }}
             >
-              <div className="executive-modal-header" style={{ padding: '14px 22px', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <div className="executive-modal-header" style={{ padding: '14px 22px', borderBottom: '1px solid var(--dm-border)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div className="metric-icon-box blue" style={{ width: 36, height: 36, borderRadius: 10 }}>
                     <MapIcon size={18} />
                   </div>
                   <div>
                     <h4 className="executive-modal-title" style={{ fontSize: '15px', fontWeight: 800 }}>Bản Đồ Địa Bàn Phụ Trách</h4>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b', marginTop: 1 }}>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: 1 }}>
                       {officerArea}
                     </p>
                   </div>
@@ -1949,7 +1949,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     height: '100%',
                     borderRadius: 12,
                     overflow: 'hidden',
-                    border: '1px solid #cbd5e1',
+                    border: '1px solid var(--dm-border-strong)',
                     position: 'relative',
                   }}
                 >
@@ -1980,9 +1980,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   {/* Hộp trên: Avatar, Tên, Chức vụ & Trạng thái */}
                   <div
                     style={{
-                      background: '#ffffff',
+                      background: 'var(--dm-surface)',
                       borderRadius: 12,
-                      border: '1px solid #e2e8f0',
+                      border: '1px solid var(--dm-border)',
                       padding: '12px 16px',
                       boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
                       display: 'flex',
@@ -2002,8 +2002,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           fontSize: '17px',
                           fontWeight: 800,
                           background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
-                          border: '1.5px solid #7dd3fc',
-                          color: '#0369a1',
+                          border: '1.5px solid var(--dm-blue-border)',
+                          color: 'var(--dm-blue-text)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2014,30 +2014,30 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '15px', letterSpacing: '-0.2px' }}>
+                          <span style={{ fontWeight: 800, color: 'var(--dm-text-strong)', fontSize: '15px', letterSpacing: '-0.2px' }}>
                             {selectedMapOfficer.fullName}
                           </span>
                           <span
                             style={{
                               fontSize: '10.5px',
                               fontWeight: 700,
-                              background: '#f0f9ff',
-                              color: '#0284c7',
+                              background: 'var(--dm-blue-bg)',
+                              color: 'var(--dm-blue-text)',
                               padding: '2px 7px',
                               borderRadius: 5,
-                              border: '1px solid #bae6fd',
+                              border: '1px solid var(--dm-blue-border)',
                               whiteSpace: 'nowrap',
                             }}
                           >
                             {selectedMapOfficer.role === 'LOCAL_AUTHORITY' ? 'Chỉ huy địa phương' : (selectedMapOfficer.role || 'Cán bộ PCTT')}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {selectedMapOfficer.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'}
                           </span>
                           <span>•</span>
-                          <span style={{ fontWeight: 600, color: '#334155', flexShrink: 0 }}>{selectedMapOfficer.phone || '--'}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--dm-text-secondary)', flexShrink: 0 }}>{selectedMapOfficer.phone || '--'}</span>
                         </div>
                       </div>
                     </div>
@@ -2051,9 +2051,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         borderRadius: 20,
                         fontSize: '11px',
                         fontWeight: 700,
-                        background: isOfficerActive ? '#f0fdf4' : '#f8fafc',
-                        color: isOfficerActive ? '#15803d' : '#64748b',
-                        border: `1px solid ${isOfficerActive ? '#bbf7d0' : '#e2e8f0'}`,
+                        background: isOfficerActive ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                        color: isOfficerActive ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
+                        border: `1px solid ${isOfficerActive ? 'var(--dm-green-border)' : 'var(--dm-border)'}`,
                         whiteSpace: 'nowrap',
                         flexShrink: 0,
                       }}
@@ -2085,10 +2085,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 1: Liên hệ trực ban */}
                     <div
                       style={{
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                         padding: '10px 12px',
                         borderRadius: 10,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--dm-border)',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
@@ -2096,11 +2096,11 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         minWidth: 0,
                       }}
                     >
-                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: 'var(--dm-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Liên hệ trực ban
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0f172a', fontWeight: 700 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 700 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Phone size={11} color="#0284c7" />
                         </div>
                         <a href={`tel:${selectedMapOfficer.phone}`} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -2113,18 +2113,18 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           alignItems: 'center',
                           gap: 7,
                           fontSize: '11.5px',
-                          color: '#334155',
+                          color: 'var(--dm-text-secondary)',
                           overflow: 'hidden',
                         }}
                         title={selectedMapOfficer.email}
                       >
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Mail size={11} color="#0284c7" />
                         </div>
                         <a
                           href={`mailto:${selectedMapOfficer.email}`}
                           style={{
-                            color: '#0284c7',
+                            color: 'var(--dm-blue-text)',
                             textDecoration: 'none',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2140,10 +2140,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 2: Cơ quan & Chức vụ */}
                     <div
                       style={{
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                         padding: '10px 12px',
                         borderRadius: 10,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--dm-border)',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
@@ -2151,19 +2151,19 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         minWidth: 0,
                       }}
                     >
-                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: 'var(--dm-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Cơ quan & Chức vụ
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0f172a', fontWeight: 700, minWidth: 0 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 700, minWidth: 0 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-amber-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Building2 size={11} color="#d97706" />
                         </div>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}>
                           {selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11.5px', color: '#475569', minWidth: 0 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11.5px', color: 'var(--dm-text-secondary)', minWidth: 0 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-surface-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Briefcase size={11} color="#64748b" />
                         </div>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
@@ -2175,10 +2175,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 3: Địa bàn phụ trách */}
                     <div
                       style={{
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                         padding: '10px 12px',
                         borderRadius: 10,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--dm-border)',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
@@ -2186,20 +2186,20 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         minWidth: 0,
                       }}
                     >
-                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: 'var(--dm-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Địa bàn phụ trách
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0369a1', fontWeight: 700 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: 'var(--dm-blue-text)', fontWeight: 700 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <MapPin size={11} color="#0284c7" />
                         </div>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={officerArea}>
                           {officerArea}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: '11px', color: '#64748b' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: '11px', color: 'var(--dm-text-muted)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                          <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-surface-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Navigation size={11} color="#64748b" />
                           </div>
                           <span
@@ -2220,7 +2220,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 4,
-                              color: '#2563eb',
+                              color: 'var(--dm-blue-text)',
                               fontWeight: 700,
                               textDecoration: 'none',
                               whiteSpace: 'nowrap',
@@ -2237,10 +2237,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 4: Hệ thống & Cấp phép */}
                     <div
                       style={{
-                        background: '#f8fafc',
+                        background: 'var(--dm-surface-subtle)',
                         padding: '10px 12px',
                         borderRadius: 10,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--dm-border)',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'center',
@@ -2248,17 +2248,17 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         minWidth: 0,
                       }}
                     >
-                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 800, color: 'var(--dm-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Hệ thống & Cấp phép
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0f172a', fontWeight: 700 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 700 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <ShieldCheck size={11} color="#16a34a" />
                         </div>
                         <span>Mã CB: #{selectedMapOfficer._id ? selectedMapOfficer._id.slice(-6).toUpperCase() : '--'}</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11px', color: '#64748b' }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11px', color: 'var(--dm-text-muted)' }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--dm-surface-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Calendar size={11} color="#64748b" />
                         </div>
                         <span>Ngày tạo: {selectedMapOfficer.createdAt ? new Date(selectedMapOfficer.createdAt).toLocaleDateString('vi-VN') : 'Hệ thống'}</span>

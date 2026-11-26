@@ -343,7 +343,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           <div>
             <span
               className="coordination-status-pill rejected"
-              style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+              style={{ background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}
             >
               <XCircle size={12} /> Đội Từ Chối
             </span>
@@ -461,18 +461,18 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               {loading && filteredMissions.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
-                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
-                    <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu điều phối tác chiến...</p>
+                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
+                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu điều phối tác chiến...</p>
                   </td>
                 </tr>
               ) : filteredMissions.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
                     <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--dm-text-strong)' }}>
                       Không có nhiệm vụ cứu nạn nào trong danh sách điều phối
                     </p>
-                    <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748B' }}>
+                    <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--dm-text-muted)' }}>
                       Hãy vào tab "Tiếp nhận &amp; Xác minh SOS" để phê duyệt hoặc chuyển sang tab "Tất cả"
                     </p>
                   </td>
@@ -512,7 +512,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                             </span>
                           </div>
                           {sos.description && (
-                            <span style={{ fontSize: 12.5, color: '#475569', marginLeft: 21, fontWeight: 500 }} className="line-clamp-1">
+                            <span style={{ fontSize: 12.5, color: 'var(--dm-text-secondary)', marginLeft: 21, fontWeight: 500 }} className="line-clamp-1">
                               {sos.description}
                             </span>
                           )}
@@ -539,7 +539,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                                   gap: 8,
                                 }}
                               >
-                                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#92400e', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-amber-text)', display: 'flex', alignItems: 'center', gap: 5 }}>
                                   <span>📦</span>
                                   <span>Cần chi viện: <strong>{pending.map((p: any) => `${p.name} (${p.quantity})`).join(', ')}</strong></span>
                                 </div>
@@ -586,10 +586,10 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                                     }}
                                     style={{
                                       padding: '3px 8px',
-                                      background: '#fee2e2',
-                                      border: '1px solid #fca5a5',
+                                      background: 'var(--dm-red-bg)',
+                                      border: '1px solid var(--dm-red-border)',
                                       borderRadius: 4,
-                                      color: '#dc2626',
+                                      color: 'var(--dm-red-text)',
                                       fontSize: 11,
                                       fontWeight: 800,
                                       cursor: 'pointer',
@@ -622,7 +622,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                                         height: 38,
                                         borderRadius: 6,
                                         overflow: 'hidden',
-                                        border: '1.5px solid #CBD5E1',
+                                        border: '1.5px solid var(--dm-border-strong)',
                                         cursor: 'pointer',
                                         boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                                         flexShrink: 0,
@@ -767,7 +767,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             style={{
               maxWidth: 750,
               width: '100%',
-              background: '#FFFFFF',
+              background: 'var(--dm-surface)',
               borderRadius: 16,
               overflow: 'hidden',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
@@ -782,19 +782,19 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 18px',
-                borderBottom: '1px solid #E2E8F0',
-                background: '#F8FAFC',
+                borderBottom: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Camera size={18} color="#0284C7" />
-                <span style={{ fontWeight: 800, fontSize: 13.5, color: '#0F172A' }}>
+                <span style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--dm-text-strong)' }}>
                   ẢNH HIỆN TRƯỜNG TỪ NGƯỜI DÂN
                 </span>
-                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                   ({previewPhotos.activeIndex + 1}/{previewPhotos.images.length})
                 </span>
-                <span style={{ fontSize: 12, color: '#0284C7', fontWeight: 600, marginLeft: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--dm-blue-text)', fontWeight: 600, marginLeft: 6 }}>
                   • {previewPhotos.title}
                 </span>
               </div>
@@ -808,7 +808,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   cursor: 'pointer',
                   padding: 4,
                   borderRadius: 6,
-                  color: '#64748B',
+                  color: 'var(--dm-text-muted)',
                 }}
               >
                 <X size={20} />
@@ -907,8 +907,8 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   display: 'flex',
                   gap: 8,
                   padding: '10px 16px',
-                  background: '#F1F5F9',
-                  borderTop: '1px solid #E2E8F0',
+                  background: 'var(--dm-surface-muted)',
+                  borderTop: '1px solid var(--dm-border)',
                   overflowX: 'auto',
                 }}
               >
@@ -925,10 +925,9 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                       borderRadius: 6,
                       overflow: 'hidden',
                       padding: 0,
-                      border:
-                        i === previewPhotos.activeIndex
+                      border: i === previewPhotos.activeIndex
                           ? '2.5px solid #0284C7'
-                          : '1px solid #CBD5E1',
+                          : '1px solid var(--dm-border-strong)',
                       opacity: i === previewPhotos.activeIndex ? 1 : 0.6,
                       cursor: 'pointer',
                       flexShrink: 0,

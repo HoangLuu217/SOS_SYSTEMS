@@ -473,7 +473,7 @@ export const AdminMapContent = ({
   wardAreas,
   selectedWard,
   showWardBoundaries,
-  theme = 'light',
+  theme: _theme = 'light',
   sosList,
   selectedSos,
   onSelectSos,
@@ -605,14 +605,14 @@ export const AdminMapContent = ({
 
   return (
     <>
-      {/* Chỉ làm mờ phần đất liền bên ngoài ranh giới TP. Đà Nẵng (giữ nguyên biển Đông & Hoàng Sa sáng rõ) */}
+      {/* Chỉ làm mờ phần đất liền bên ngoài ranh giới TP. Đà Nẵng (giữ nguyên biển Đông & Hoàng Sa sáng rõ, đồng nhất cả chế độ sáng và tối) */}
       <Polygon
         positions={DANANG_EXTERIOR_LAND_MASK}
         interactive={false}
         pathOptions={{
           stroke: false,
-          fillColor: theme === 'dark' ? '#020617' : '#e2e8f0',
-          fillOpacity: theme === 'dark' ? 0.72 : 0.66,
+          fillColor: '#e2e8f0',
+          fillOpacity: 0.66,
         }}
       />
 
@@ -623,7 +623,7 @@ export const AdminMapContent = ({
           positions={line}
           interactive={false}
           pathOptions={{
-            color: theme === 'dark' ? '#38bdf8' : '#0369a1',
+            color: '#0369a1',
             weight: 2.6,
             opacity: 0.92,
             lineJoin: 'round',
@@ -663,7 +663,7 @@ export const AdminMapContent = ({
           key={ward.key}
           positions={ward.positions}
           pathOptions={{
-            color: theme === 'dark' ? '#7dd3fc' : '#60a5fa',
+            color: '#60a5fa',
             weight: 1.7,
             opacity: selectedWard ? 0.3 : 0.78,
             dashArray: '2, 5',
@@ -684,7 +684,7 @@ export const AdminMapContent = ({
           key={ward.key}
           positions={ward.positions}
           pathOptions={{
-            color: theme === 'dark' ? '#38bdf8' : '#1d4ed8',
+            color: '#1d4ed8',
             weight: 2.6,
             opacity: 0.94,
             dashArray: '3, 5',

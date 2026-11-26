@@ -534,19 +534,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     const getShelterStatusBadge = (status: string, currentOccupancy = 0, capacity = 0) => {
       if (status === 'MAINTENANCE') {
-        return { label: 'Đang bảo trì', bg: '#fffbeb', color: '#b45309', border: '#fef3c7', dot: '#d97706' };
+        return { label: 'Đang bảo trì', bg: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: 'var(--dm-amber-border)', dot: '#d97706' };
       }
       if (status === 'INACTIVE') {
-        return { label: 'Tạm ngưng', bg: '#f8fafc', color: '#475569', border: '#e2e8f0', dot: '#94a3b8' };
+        return { label: 'Tạm ngưng', bg: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: 'var(--dm-border)', dot: '#94a3b8' };
       }
       const { isOverloaded, isFull } = getShelterOccupancyMetrics(currentOccupancy, capacity);
       if (isOverloaded) {
-        return { label: 'Quá tải', bg: '#fef2f2', color: '#991b1b', border: '#fca5a5', dot: '#b91c1c' };
+        return { label: 'Quá tải', bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)', dot: '#b91c1c' };
       }
       if (isFull || status === 'FULL') {
-        return { label: 'Đã đầy', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca', dot: '#dc2626' };
+        return { label: 'Đã đầy', bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)', dot: '#dc2626' };
       }
-      return { label: 'Sẵn sàng', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd', dot: '#0284c7' };
+      return { label: 'Sẵn sàng', bg: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: 'var(--dm-blue-border)', dot: '#0284c7' };
     };
 
     const formatShelterTime = (iso?: string) => {
@@ -777,12 +777,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     const renderSortIcon = (field: typeof shelterSortField) => {
       if (shelterSortField !== field) {
-        return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: '6px', opacity: 0.6 }} />;
+        return <ArrowUpDown size={12} style={{ color: 'var(--dm-text-muted)', marginLeft: '6px', opacity: 0.6 }} />;
       }
       return shelterSortOrder === 'asc' ? (
-        <ArrowUp size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+        <ArrowUp size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
       ) : (
-        <ArrowDown size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+        <ArrowDown size={12} style={{ color: 'var(--dm-blue-text)', marginLeft: '6px' }} />
       );
     };
 
@@ -1385,8 +1385,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-              Sức chứa tối đa (người) <span style={{ color: '#dc2626' }}>*</span>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+              Sức chứa tối đa (người) <span style={{ color: 'var(--dm-red-text)' }}>*</span>
             </label>
             <input
               type="number"
@@ -1398,16 +1398,16 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 width: '100%',
                 padding: '8px 12px',
                 borderRadius: '6px',
-                border: errors.capacity ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                background: errors.capacity ? '#fff5f5' : '#ffffff',
+                border: errors.capacity ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                background: errors.capacity ? '#fff5f5' : 'var(--dm-surface)',
                 fontSize: '13px',
-                color: '#0f172a',
+                color: 'var(--dm-text-strong)',
                 boxSizing: 'border-box',
                 outline: 'none',
               }}
             />
             {errors.capacity && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                 <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                 <span>{errors.capacity}</span>
               </div>
@@ -1415,7 +1415,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
               {occupancyLabel}
             </label>
             <input
@@ -1428,21 +1428,21 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 width: '100%',
                 padding: '8px 12px',
                 borderRadius: '6px',
-                border: activeOccupancyErr ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                border: activeOccupancyErr ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
                 fontSize: '13px',
-                color: '#0f172a',
-                background: activeOccupancyErr ? '#fff5f5' : '#ffffff',
+                color: 'var(--dm-text-strong)',
+                background: activeOccupancyErr ? '#fff5f5' : 'var(--dm-surface)',
                 boxSizing: 'border-box',
                 outline: 'none',
               }}
             />
             {activeOccupancyErr ? (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                 <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: '2px' }} />
                 <span>{activeOccupancyErr}</span>
               </div>
             ) : capacity > 0 && metrics.isOverloaded ? (
-              <div style={{ marginTop: '4px', color: '#b45309', fontSize: '11.5px', fontWeight: 600 }}>
+              <div style={{ marginTop: '4px', color: 'var(--dm-amber-text)', fontSize: '11.5px', fontWeight: 600 }}>
                 Quá tải ({metrics.percent}% • vượt {metrics.overloadCount.toLocaleString()} người)
               </div>
             ) : null}
@@ -1459,9 +1459,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           style={{
             padding: '7px 12px',
             borderRadius: 8,
-            border: '1px solid #bbf7d0',
-            background: '#f0fdf4',
-            color: '#15803d',
+            border: '1px solid var(--dm-green-border)',
+            background: 'var(--dm-green-bg)',
+            color: 'var(--dm-green-text)',
             fontSize: '13px',
             display: 'inline-flex',
             alignItems: 'center',
@@ -1521,8 +1521,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '8px 14px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border-strong)',
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
               flexWrap: 'wrap',
@@ -1531,10 +1531,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <MapPin size={16} color="#0284c7" />
-              <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+              <span style={{ color: 'var(--dm-text-muted)', fontWeight: 500, fontSize: '13.5px' }}>
                 Phạm vi quản trị:
               </span>
-              <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+              <strong style={{ color: 'var(--dm-text-strong)', fontWeight: 700, fontSize: '14px' }}>
                 {daNangProvince?.name || 'Thành phố Đà Nẵng'}
               </strong>
             </div>
@@ -1561,7 +1561,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '2px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
                   Phường / Xã:
                 </span>
                 <SearchableSelect
@@ -1576,9 +1576,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     padding: '4px 10px',
                     fontSize: '12px',
                     borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
+                    border: '1px solid var(--dm-border-strong)',
+                    backgroundColor: 'var(--dm-surface)',
+                    color: 'var(--dm-text-strong)',
                     fontWeight: 500,
                     minWidth: '215px',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
@@ -1609,9 +1609,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     style={{
                       padding: '5px 10px',
                       fontSize: '12px',
-                      color: '#0284c7',
-                      backgroundColor: '#f0f9ff',
-                      border: '1px solid #bae6fd',
+                      color: 'var(--dm-blue-text)',
+                      backgroundColor: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       borderRadius: '5px',
                       cursor: 'pointer',
                       fontWeight: 600,
@@ -1673,7 +1673,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             {/* Lọc theo Loại cơ sở */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Loại:</span>
+              <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>Loại:</span>
               <select
                 className="sos-clean-sort-select"
                 value={shelterTypeFilter}
@@ -1710,7 +1710,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     setShelterSearchText('');
                     setShelterPage(1);
                   }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dm-text-muted)' }}
                 >
                   <X size={14} />
                 </button>
@@ -1735,8 +1735,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
             <div
               style={{
                 padding: '10px 16px',
-                backgroundColor: '#f0fdf4',
-                borderBottom: '1px solid #bbf7d0',
+                backgroundColor: 'var(--dm-green-bg)',
+                borderBottom: '1px solid var(--dm-green-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1745,7 +1745,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: 600, color: '#166534', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--dm-green-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CheckCircle2 size={16} color="#16a34a" />
                   <span>Đã chọn <strong>{selectedShelterIds.length}</strong> cơ sở an toàn</span>
                 </span>
@@ -1755,7 +1755,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     fontSize: '12px',
                     cursor: 'pointer',
                     textDecoration: 'underline',
@@ -1928,7 +1928,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <tbody>
                 {totalShelterItems === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                       <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm trú ẩn an toàn nào trong danh mục này.</div>
                       <button
@@ -1938,9 +1938,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           marginTop: '12px',
                           padding: '6px 14px',
                           fontSize: '12px',
-                          color: '#0284c7',
-                          background: '#f0f9ff',
-                          border: '1px solid #bae6fd',
+                          color: 'var(--dm-blue-text)',
+                          background: 'var(--dm-blue-bg)',
+                          border: '1px solid var(--dm-blue-border)',
                           borderRadius: '6px',
                           cursor: 'pointer',
                           fontWeight: 600,
@@ -2005,8 +2005,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                 width: 30,
                                 height: 30,
                                 borderRadius: '6px',
-                                backgroundColor: '#f0fdf4',
-                                border: '1px solid #bbf7d0',
+                                backgroundColor: 'var(--dm-green-bg)',
+                                border: '1px solid var(--dm-green-border)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -2022,7 +2022,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                 title="Nhấn để xem chi tiết điểm trú ẩn"
                                 style={{
                                   fontWeight: 700,
-                                  color: '#2563eb',
+                                  color: 'var(--dm-blue-text)',
                                   fontSize: '12.5px',
                                   lineHeight: '1.3',
                                   cursor: 'pointer',
@@ -2037,7 +2037,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                   gap: '4px',
                                   fontSize: '11px',
                                   fontWeight: 500,
-                                  color: '#64748b',
+                                  color: 'var(--dm-text-muted)',
                                   marginTop: '2px',
                                 }}
                               >
@@ -2054,7 +2054,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             style={{
                               fontSize: '12px',
                               fontWeight: isLocal ? 600 : 500,
-                              color: isLocal ? '#0284c7' : '#475569',
+                              color: isLocal ? 'var(--dm-blue-text)' : 'var(--dm-text-secondary)',
                             }}
                             title={`Địa bàn quản lý: ${districtName}`}
                           >
@@ -2066,14 +2066,14 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                              <span style={{ color: '#0f172a', fontWeight: 600 }}>
+                              <span style={{ color: 'var(--dm-text-strong)', fontWeight: 600 }}>
                                 <strong>{occupancy.toLocaleString()}</strong> / {capacity.toLocaleString()} người
                               </span>
                               <span
                                 style={{
                                   fontSize: '11px',
                                   fontWeight: 700,
-                                  color: isOverloaded ? '#991b1b' : percent >= 90 ? '#b91c1c' : percent >= 60 ? '#b45309' : '#0284c7',
+                                  color: isOverloaded ? 'var(--dm-red-text)' : percent >= 90 ? 'var(--dm-red-text)' : percent >= 60 ? 'var(--dm-amber-text)' : 'var(--dm-blue-text)',
                                   whiteSpace: 'nowrap',
                                 }}
                               >
@@ -2084,7 +2084,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               style={{
                                 width: '100%',
                                 height: 6,
-                                background: '#e2e8f0',
+                                background: 'var(--dm-surface-hover)',
                                 borderRadius: 3,
                                 overflow: 'hidden',
                               }}
@@ -2108,7 +2108,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             title={sh.address}
                             style={{
                               fontSize: '12px',
-                              color: '#1e293b',
+                              color: 'var(--dm-text-body)',
                               fontWeight: 500,
                               lineHeight: '1.35',
                               display: '-webkit-box',
@@ -2123,10 +2123,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                         {/* 5. Thời gian cập nhật & Người phụ trách */}
                         <td>
-                          <div style={{ fontSize: '11.5px', color: '#0f172a', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: '11.5px', color: 'var(--dm-text-strong)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             {formatShelterTime(sh.createdAt)}
                           </div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
                             {typeof sh.createdBy === 'object' ? (sh.createdBy?.fullName || 'Ban chỉ huy PCTT') : 'Ban chỉ huy PCTT'}
                           </div>
                         </td>
@@ -2158,7 +2158,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 'Không có dữ liệu'
               ) : (
                 <>
-                  Hiển thị <strong style={{ color: '#0f172a' }}>{shelterStartIndex + 1}</strong> – <strong style={{ color: '#0f172a' }}>{Math.min(shelterStartIndex + SHELTER_PAGE_SIZE, totalShelterItems)}</strong> trên tổng số <strong style={{ color: '#0284c7' }}>{totalShelterItems}</strong> cơ sở an toàn
+                  Hiển thị <strong style={{ color: 'var(--dm-text-strong)' }}>{shelterStartIndex + 1}</strong> – <strong style={{ color: 'var(--dm-text-strong)' }}>{Math.min(shelterStartIndex + SHELTER_PAGE_SIZE, totalShelterItems)}</strong> trên tổng số <strong style={{ color: 'var(--dm-blue-text)' }}>{totalShelterItems}</strong> cơ sở an toàn
                 </>
               )}
             </div>
@@ -2203,7 +2203,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   return pages.map((p, idx) => {
                     if (p === '...') {
                       return (
-                        <span key={`dots-sh-${idx}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: '13px' }}>
+                        <span key={`dots-sh-${idx}`} style={{ padding: '0 4px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                           ...
                         </span>
                       );
@@ -2242,7 +2242,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                 {/* Ô NHẬP SỐ TRANG TRỰC TIẾP */}
                 <div className="sos-pagination-jump">
-                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Đến trang:</span>
+                  <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>Đến trang:</span>
                   <input
                     type="number"
                     min={1}
@@ -2306,7 +2306,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           >
             <div
               style={{
-                background: '#ffffff',
+                background: 'var(--dm-surface)',
                 borderRadius: 0,
                 width: '680px',
                 maxWidth: '94vw',
@@ -2315,7 +2315,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
-                borderLeft: '1px solid #cbd5e1',
+                borderLeft: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -2324,11 +2324,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2337,8 +2337,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       width: 32,
                       height: 32,
                       borderRadius: '6px',
-                      backgroundColor: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
+                      backgroundColor: 'var(--dm-green-bg)',
+                      border: '1px solid var(--dm-green-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2347,10 +2347,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     <ShelterTypeIcon type={detailShelter.type} size={18} color="#16a34a" />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                       {detailShelter.name}
                     </h3>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: '1px' }}>
                       Mã: {detailShelter._id} • Cập nhật: {formatShelterTime(detailShelter.createdAt)}
                     </div>
                   </div>
@@ -2362,7 +2362,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     cursor: 'pointer',
                     padding: '4px',
                   }}
@@ -2384,8 +2384,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               >
                 {/* Cột 1: Thông tin năng lực & Quản lý */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                  <div style={{ background: 'var(--dm-surface-subtle)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
                       Phân loại &amp; Địa phương
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2396,11 +2396,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           gap: '6px',
                           padding: '4px 10px',
                           borderRadius: '6px',
-                          background: '#ffffff',
-                          color: '#0f172a',
+                          background: 'var(--dm-surface)',
+                          color: 'var(--dm-text-strong)',
                           fontWeight: 600,
                           fontSize: '12.5px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                         }}
                       >
                         <ShelterTypeIcon type={detailShelter.type} size={15} color="#16a34a" />
@@ -2414,11 +2414,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           gap: '5px',
                           padding: '4px 10px',
                           borderRadius: '6px',
-                          background: '#f8fafc',
-                          color: '#0f172a',
+                          background: 'var(--dm-surface-subtle)',
+                          color: 'var(--dm-text-strong)',
                           fontWeight: 600,
                           fontSize: '12px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                         }}
                       >
                         <MapPin size={13} color="#2563eb" />
@@ -2462,28 +2462,28 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       overloadCount,
                     } = getShelterOccupancyMetrics(detailShelter.currentOccupancy, detailShelter.capacity);
                     return (
-                      <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
                           Năng lực tiếp nhận &amp; Lưu trú an toàn
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
-                          <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>Sức chứa tối đa</div>
-                            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                          <div style={{ background: 'var(--dm-surface-subtle)', padding: '10px', borderRadius: '6px', border: '1px solid var(--dm-border)', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>Sức chứa tối đa</div>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)', marginTop: '2px' }}>
                               {cap.toLocaleString()}
                             </div>
                           </div>
-                          <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>Đang lưu trú</div>
-                            <div style={{ fontSize: '16px', fontWeight: 700, color: isOverloaded ? '#b91c1c' : '#b45309', marginTop: '2px' }}>
+                          <div style={{ background: 'var(--dm-surface-subtle)', padding: '10px', borderRadius: '6px', border: '1px solid var(--dm-border)', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>Đang lưu trú</div>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: isOverloaded ? 'var(--dm-red-text)' : 'var(--dm-amber-text)', marginTop: '2px' }}>
                               {occ.toLocaleString()}
                             </div>
                           </div>
-                          <div style={{ background: isOverloaded ? '#fef2f2' : '#f8fafc', padding: '10px', borderRadius: '6px', border: `1px solid ${isOverloaded ? '#fecaca' : '#e2e8f0'}`, textAlign: 'center' }}>
-                            <div style={{ fontSize: '11px', color: isOverloaded ? '#b91c1c' : '#64748b' }}>
+                          <div style={{ background: isOverloaded ? 'var(--dm-red-bg)' : 'var(--dm-surface-subtle)', padding: '10px', borderRadius: '6px', border: `1px solid ${isOverloaded ? 'var(--dm-red-border)' : 'var(--dm-border)'}`, textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: isOverloaded ? 'var(--dm-red-text)' : 'var(--dm-text-muted)' }}>
                               {isOverloaded ? 'Vượt sức chứa' : 'Chỗ còn trống'}
                             </div>
-                            <div style={{ fontSize: '16px', fontWeight: 700, color: isOverloaded ? '#b91c1c' : '#0284c7', marginTop: '2px' }}>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: isOverloaded ? 'var(--dm-red-text)' : 'var(--dm-blue-text)', marginTop: '2px' }}>
                               {isOverloaded ? `+${overloadCount.toLocaleString()}` : remaining.toLocaleString()}
                             </div>
                           </div>
@@ -2492,12 +2492,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         {/* Thanh tỷ lệ % */}
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                            <span style={{ color: '#64748b' }}>Tỷ lệ tiếp nhận:</span>
-                            <strong style={{ color: isOverloaded ? '#991b1b' : pct >= 90 ? '#b91c1c' : pct >= 60 ? '#b45309' : '#0284c7' }}>
+                            <span style={{ color: 'var(--dm-text-muted)' }}>Tỷ lệ tiếp nhận:</span>
+                            <strong style={{ color: isOverloaded ? 'var(--dm-red-text)' : pct >= 90 ? 'var(--dm-red-text)' : pct >= 60 ? 'var(--dm-amber-text)' : 'var(--dm-blue-text)' }}>
                               {pct}%{isOverloaded ? ' (Quá tải)' : ''}
                             </strong>
                           </div>
-                          <div style={{ width: '100%', height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: '100%', height: 8, background: 'var(--dm-surface-hover)', borderRadius: 4, overflow: 'hidden' }}>
                             <div
                               style={{
                                 width: `${barPercent}%`,
@@ -2512,25 +2512,25 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     );
                   })()}
 
-                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
                       Địa chỉ cụ thể
                     </div>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', lineHeight: '1.4' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dm-text-strong)', lineHeight: '1.4' }}>
                       {detailShelter.address}
                     </div>
 
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginTop: '12px', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginTop: '12px', marginBottom: '4px' }}>
                       Đơn vị quản lý cơ sở
                     </div>
-                    <div style={{ fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--dm-text-secondary)', lineHeight: '1.5' }}>
                       {typeof detailShelter.createdBy === 'object' ? (detailShelter.createdBy?.fullName || 'Ban chỉ huy PCTT địa phương') : 'Ban chỉ huy PCTT địa phương'}
                     </div>
                   </div>
 
                   {detailShelter.images && detailShelter.images.length > 0 && (
-                    <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                    <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
                         Hình ảnh địa điểm ({detailShelter.images.length})
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px' }}>
@@ -2549,7 +2549,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               borderRadius: '6px',
                               overflow: 'hidden',
                               cursor: 'pointer',
-                              border: '1px solid #cbd5e1',
+                              border: '1px solid var(--dm-border-strong)',
                             }}
                             title="Bấm để xem ảnh phóng to"
                           >
@@ -2563,13 +2563,13 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                 {/* Cột 2: Bản đồ nhỏ hiển thị vị trí */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ background: 'var(--dm-surface)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)', display: 'flex', flexDirection: 'column', height: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                         Vị trí trên bản đồ
                       </span>
                       {detailShelter.location?.coordinates && (
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>
                           [{detailShelter.location.coordinates[1].toFixed(5)}, {detailShelter.location.coordinates[0].toFixed(5)}]
                         </span>
                       )}
@@ -2584,7 +2584,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           type={detailShelter.type}
                         />
                       ) : (
-                        <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#94a3b8' }}>
+                        <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-muted)' }}>
                           Chưa có dữ liệu tọa độ
                         </div>
                       )}
@@ -2624,8 +2624,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -2714,7 +2714,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--dm-surface)',
                 borderRadius: '12px',
                 width: '100%',
                 maxWidth: '960px',
@@ -2722,7 +2722,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -2731,11 +2731,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2744,8 +2744,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       width: '36px',
                       height: '36px',
                       borderRadius: '8px',
-                      backgroundColor: '#e0f2fe',
-                      color: '#0284c7',
+                      backgroundColor: 'var(--dm-blue-bg)',
+                      color: 'var(--dm-blue-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2754,10 +2754,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     <PlusCircle size={20} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                       Khởi Tạo Điểm Trú Ẩn / Trạm An Toàn Mới
                     </h3>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                       {isAdmin
                         ? 'Quản trị viên thiết lập cơ sở sơ tán và chọn khu vực hành chính trên toàn hệ thống.'
                         : `Cán bộ địa phương ${accountAreaDisplayName} thiết lập cơ sở sơ tán và công bố phục vụ ứng cứu thiên tai.`}
@@ -2772,7 +2772,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     padding: '4px',
                   }}
                   title="Đóng"
@@ -2795,19 +2795,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 {createShelterErrors.general && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      color: '#b91c1c',
+                      color: 'var(--dm-red-text)',
                       fontSize: '12.5px',
                       fontWeight: 500,
                     }}
                   >
-                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
                     <span>{createShelterErrors.general}</span>
                   </div>
                 )}
@@ -2823,8 +2823,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* 1. Tên cơ sở */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Tên điểm trú ẩn / cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tên điểm trú ẩn / cơ sở an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -2840,16 +2840,16 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: createShelterErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createShelterErrors.name ? '#fff5f5' : '#ffffff',
+                          border: createShelterErrors.name ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: createShelterErrors.name ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {createShelterErrors.name && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{createShelterErrors.name}</span>
                         </div>
@@ -2858,8 +2858,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* 2. CHỌN LOẠI CƠ SỞ (DROPDOWN) */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-                        Phân loại cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Phân loại cơ sở an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <select
                         value={createShelterType}
@@ -2868,10 +2868,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                         }}
                       >
@@ -2886,12 +2886,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     {/* 3. Khu vực hành chính & Trạng thái ban đầu */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                           Khu vực quản lý
                         </label>
                         {isAdmin ? (
                           <div>
-                            <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '3px' }}>
                               Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                             </div>
                             <SearchableSelect
@@ -2909,10 +2909,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                 width: '100%',
                                 padding: '8px 10px',
                                 borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
+                                border: '1px solid var(--dm-border-strong)',
                                 fontSize: '12.5px',
-                                color: '#0f172a',
-                                background: '#ffffff',
+                                color: 'var(--dm-text-strong)',
+                                background: 'var(--dm-surface)',
                               }}
                               options={[
                                 {
@@ -2935,8 +2935,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               width: '100%',
                               padding: '8px 12px',
                               borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#f8fafc',
+                              border: '1px solid var(--dm-border-strong)',
+                              background: 'var(--dm-surface-subtle)',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '8px',
@@ -2945,7 +2945,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             }}
                           >
                             <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                               {accountAreaDisplayName}
                             </span>
                           </div>
@@ -2953,7 +2953,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                           Trạng thái ban đầu
                         </label>
                         <select
@@ -2963,10 +2963,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             width: '100%',
                             padding: '8px 10px',
                             borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
+                            border: '1px solid var(--dm-border-strong)',
                             fontSize: '12.5px',
-                            color: '#0f172a',
-                            background: '#ffffff',
+                            color: 'var(--dm-text-strong)',
+                            background: 'var(--dm-surface)',
                             boxSizing: 'border-box',
                           }}
                         >
@@ -3005,8 +3005,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* 4. Địa chỉ cụ thể */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Địa chỉ cụ thể cơ sở <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ cụ thể cơ sở <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3022,16 +3022,16 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: createShelterErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createShelterErrors.address ? '#fff5f5' : '#ffffff',
+                          border: createShelterErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: createShelterErrors.address ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {createShelterErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{createShelterErrors.address}</span>
                         </div>
@@ -3078,7 +3078,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* Ghi chú cơ sở vật chất / Hướng dẫn */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                         Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
                       </label>
                       <textarea
@@ -3090,10 +3090,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                           resize: 'vertical',
                         }}
@@ -3107,8 +3107,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   alignItems: 'center',
@@ -3167,7 +3167,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           >
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--dm-surface)',
                 borderRadius: '12px',
                 width: '100%',
                 maxWidth: '960px',
@@ -3175,7 +3175,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid #cbd5e1',
+                border: '1px solid var(--dm-border-strong)',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -3184,18 +3184,18 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '14px 20px',
-                  borderBottom: '1px solid #e2e8f0',
+                  borderBottom: '1px solid var(--dm-border)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                     Chỉnh Sửa &amp; Cập Nhật Thông Tin Điểm Trú Ẩn
                   </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
                     Cập nhật chuẩn hóa thông tin cơ sở, sức chứa và vị trí địa lý trên bản đồ tác chiến.
                   </p>
                 </div>
@@ -3207,7 +3207,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     padding: '4px',
                   }}
                   title="Đóng"
@@ -3230,19 +3230,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 {editShelterErrors.general && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      color: '#b91c1c',
+                      color: 'var(--dm-red-text)',
                       fontSize: '12.5px',
                       fontWeight: 500,
                     }}
                   >
-                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
                     <span>{editShelterErrors.general}</span>
                   </div>
                 )}
@@ -3258,8 +3258,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* Tên cơ sở */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Tên điểm trú ẩn chuẩn hóa <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tên điểm trú ẩn chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3274,16 +3274,16 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: editShelterErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: editShelterErrors.name ? '#fff5f5' : '#ffffff',
+                          border: editShelterErrors.name ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editShelterErrors.name ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {editShelterErrors.name && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{editShelterErrors.name}</span>
                         </div>
@@ -3292,8 +3292,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* Phân loại cơ sở */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
-                        Phân loại cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Phân loại cơ sở an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <select
                         value={editShelterType}
@@ -3302,10 +3302,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                         }}
                       >
@@ -3320,7 +3320,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     {/* Khu vực & Trạng thái */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                           Khu vực quản lý
                         </label>
                         {isAdmin ? (
@@ -3350,10 +3350,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                   width: '100%',
                                   padding: '8px 10px',
                                   borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
+                                  border: '1px solid var(--dm-border-strong)',
                                   fontSize: '12.5px',
-                                  color: '#0f172a',
-                                  background: '#ffffff',
+                                  color: 'var(--dm-text-strong)',
+                                  background: 'var(--dm-surface)',
                                 }}
                                 options={[
                                   daNangProvinceId
@@ -3391,8 +3391,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               width: '100%',
                               padding: '8px 12px',
                               borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#f8fafc',
+                              border: '1px solid var(--dm-border-strong)',
+                              background: 'var(--dm-surface-subtle)',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '8px',
@@ -3401,7 +3401,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             }}
                           >
                             <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
                               {accountAreaDisplayName}
                             </span>
                           </div>
@@ -3409,7 +3409,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                           Trạng thái hoạt động
                         </label>
                         <select
@@ -3419,10 +3419,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             width: '100%',
                             padding: '8px 10px',
                             borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
+                            border: '1px solid var(--dm-border-strong)',
                             fontSize: '12.5px',
-                            color: '#0f172a',
-                            background: '#ffffff',
+                            color: 'var(--dm-text-strong)',
+                            background: 'var(--dm-surface)',
                             boxSizing: 'border-box',
                           }}
                         >
@@ -3461,8 +3461,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* Địa chỉ cụ thể */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Địa chỉ cụ thể <span style={{ color: '#dc2626' }}>*</span>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ cụ thể <span style={{ color: 'var(--dm-red-text)' }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -3477,16 +3477,16 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '8px 12px',
                           borderRadius: '6px',
-                          border: editShelterErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: editShelterErrors.address ? '#fff5f5' : '#ffffff',
+                          border: editShelterErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editShelterErrors.address ? '#fff5f5' : 'var(--dm-surface)',
                           fontSize: '13px',
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           boxSizing: 'border-box',
                           outline: 'none',
                         }}
                       />
                       {editShelterErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
                           <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                           <span>{editShelterErrors.address}</span>
                         </div>
@@ -3535,7 +3535,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                     {/* Ghi chú */}
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
                         Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
                       </label>
                       <textarea
@@ -3547,10 +3547,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
+                          border: '1px solid var(--dm-border-strong)',
                           fontSize: '12.5px',
-                          color: '#0f172a',
-                          background: '#ffffff',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
                           boxSizing: 'border-box',
                           resize: 'vertical',
                         }}
@@ -3564,8 +3564,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <div
                 style={{
                   padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  borderTop: '1px solid var(--dm-border)',
+                  background: 'var(--dm-surface-subtle)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   alignItems: 'center',

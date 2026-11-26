@@ -480,9 +480,9 @@ export const IncidentFeed = ({
                         fontWeight: 900,
                         padding: '1.5px 5px',
                         borderRadius: 4,
-                        background: '#fff7ed',
-                        color: '#c2410c',
-                        border: '1px solid #fed7aa',
+                        background: 'var(--dm-orange-bg)',
+                        color: 'var(--dm-orange-text)',
+                        border: '1px solid var(--dm-orange-border)',
                       }}
                       title="AI chưa phân loại; cán bộ cần xem xét"
                     >

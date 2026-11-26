@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { CustomizerProvider } from '@/kit/customizer/CustomizerProvider';
 
 export type Language = 'vi' | 'en';
 export type Theme = 'light' | 'dark';
@@ -26,7 +27,7 @@ const STORAGE_MAP_MODE = 'rescuesos_map_mode_v1';
 export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   vi: {
     // Top Navigation
-    'nav.brandTitle': 'RescueSOS',
+    'nav.brandTitle': 'Cứu Hộ Cứu Nạn',
     'nav.brandSubtitle': 'Trung Tâm Chỉ Huy Tác Chiến',
     'nav.territorial': 'Quản Trị Địa Bàn',
     'nav.dispatch': 'Tác Chiến Điều Phối',
@@ -138,7 +139,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
   en: {
     // Top Navigation
-    'nav.brandTitle': 'RescueSOS',
+    'nav.brandTitle': 'Cứu Hộ Cứu Nạn',
     'nav.brandSubtitle': 'Operations Console',
     'nav.territorial': 'Territorial Governance',
     'nav.dispatch': 'Mission Dispatch',
@@ -288,6 +289,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.setAttribute('data-lang', lang);
   }, [theme, lang]);
 
@@ -344,7 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         t,
       }}
     >
-      {children}
+      <CustomizerProvider>{children}</CustomizerProvider>
     </AppContext.Provider>
   );
 };

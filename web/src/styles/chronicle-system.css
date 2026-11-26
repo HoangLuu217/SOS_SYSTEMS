@@ -1,0 +1,584 @@
+/* ==========================================================================
+   CHRONICLE (shadcnstore/shadcn-dashboard-landing-template) UNIFIED SYSTEM
+   Harmonizes all existing feature views (tables, KPI strips, segmented tabs,
+   toolbars, search bars, buttons, badges, pagination & modals) to Chronicle's
+   OKLCH Cool Slate & Cobalt design system across Light, Dark & all 5 presets.
+   ========================================================================== */
+
+/* 1. GLOBAL TYPOGRAPHY & CANVAS INSIDE CHRONICLE SHELL */
+.ch-app-shell,
+.ch-app-shell table,
+.ch-app-shell input,
+.ch-app-shell select,
+.ch-app-shell textarea,
+.ch-app-shell button {
+  font-family: var(--font-sans);
+}
+
+.ch-app-shell .sos-page-body {
+  background: var(--background);
+}
+
+.ch-app-shell .safety-check-view-container,
+.ch-app-shell .rpt-page {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.ch-app-shell .sos-views-container.warm-executive-theme {
+  margin: 0 !important;
+  gap: 16px !important;
+}
+
+/* ==========================================================================
+   2. CHRONICLE CARDS & CONTAINERS (ELEVATED --card + --surface-shadow)
+   ========================================================================== */
+.ch-app-shell .executive-overview-container,
+.ch-app-shell .executive-table-card,
+.ch-app-shell .sos-view-card,
+.ch-app-shell .sos-clean-table-container,
+.ch-app-shell .sos-clean-toolbar,
+.ch-app-shell .sc-header-card,
+.ch-app-shell .weather-header,
+.ch-app-shell .weather-tabs-container,
+.ch-app-shell .weather-table-card,
+.ch-app-shell .weather-toolbar,
+.ch-app-shell .weather-card,
+.ch-app-shell .ra-header,
+.ch-app-shell .ra-table-card,
+.ch-app-shell .ra-toolbar,
+.ch-app-shell .rpt-bar,
+.ch-app-shell .rpt-box,
+.ch-app-shell .rpt-strip,
+.ch-app-shell .administrative-areas-card,
+.ch-app-shell .sos-settings-card,
+.ch-app-shell .sos-detail-section,
+.ch-app-shell .sos-chat-container {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) * 1.3) !important;
+  box-shadow: var(--surface-shadow) !important;
+  color: var(--card-foreground);
+}
+
+.ch-app-shell .executive-overview-container {
+  padding: 16px 20px !important;
+  margin-bottom: 0 !important;
+}
+
+.ch-app-shell .ra-header,
+.ch-app-shell .weather-header,
+.ch-app-shell .sc-header-card {
+  padding: 14px 18px !important;
+}
+
+.ch-app-shell .executive-table-card,
+.ch-app-shell .administrative-areas-card {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.ch-app-shell .executive-table-toolbar,
+.ch-app-shell .administrative-areas-card .sos-view-card-header {
+  padding: 14px 18px !important;
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--card) !important;
+}
+
+/* ==========================================================================
+   3. CHRONICLE KPI STAT CARDS (MATCHING overview.webp TOP METRIC STRIP)
+   ========================================================================== */
+.ch-app-shell .executive-metric-card,
+.ch-app-shell .rescuer-kpi-card,
+.ch-app-shell .ra-stat-card,
+.ch-app-shell .sos-flat-stat-card,
+.ch-app-shell .sos-audit-stat-card,
+.ch-app-shell .weather-metric-card,
+.ch-app-shell .sos-stat-box,
+.ch-app-shell .operational-kpi-card {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) * 1.2) !important;
+  box-shadow: var(--surface-shadow) !important;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease !important;
+}
+
+.ch-app-shell .executive-metric-card:hover,
+.ch-app-shell .rescuer-kpi-card:hover,
+.ch-app-shell .ra-stat-card:hover,
+.ch-app-shell .sos-flat-stat-card:hover,
+.ch-app-shell .sos-audit-stat-card:hover {
+  border-color: var(--sos-primary-border) !important;
+  box-shadow: var(--surface-shadow-raised) !important;
+  transform: translateY(-1px);
+}
+
+.ch-app-shell .executive-metric-card.active,
+.ch-app-shell .rescuer-kpi-card.active,
+.ch-app-shell .ra-stat-card.active {
+  border-color: var(--primary) !important;
+  background: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--primary) !important;
+}
+
+.ch-app-shell .executive-metric-card .metric-card-main,
+.ch-app-shell .rescuer-kpi-value,
+.ch-app-shell .ra-stat-value,
+.ch-app-shell .sos-flat-stat-value,
+.ch-app-shell .sos-audit-stat-value,
+.ch-app-shell .rpt-strip-val,
+.ch-app-shell .sos-stat-value,
+.ch-app-shell .kpi-card-number {
+  color: var(--foreground) !important;
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+}
+
+.ch-app-shell .executive-title-text,
+.ch-app-shell .ra-header-title,
+.ch-app-shell .weather-header-info h2,
+.ch-app-shell .rpt-box-title,
+.ch-app-shell .sos-view-card-title,
+.ch-app-shell .team-title-bold,
+.ch-app-shell .leader-title-bold {
+  color: var(--foreground) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em;
+}
+
+.ch-app-shell .code-mono-bold {
+  color: var(--foreground) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.ch-app-shell .executive-subtitle-text,
+.ch-app-shell .ra-header-desc,
+.ch-app-shell .weather-header-info p,
+.ch-app-shell .rpt-box-desc,
+.ch-app-shell .rpt-strip-top,
+.ch-app-shell .rpt-strip-sub,
+.ch-app-shell .rescuer-kpi-label,
+.ch-app-shell .sos-stat-label,
+.ch-app-shell .sos-audit-stat-label {
+  color: var(--muted-foreground) !important;
+}
+
+.ch-app-shell .rpt-strip-cell {
+  border-right-color: var(--border) !important;
+}
+
+.ch-app-shell .rpt-strip-cell:hover {
+  background: var(--sos-table-hover) !important;
+}
+
+/* ==========================================================================
+   4. SIGNATURE CHRONICLE DATA TABLES (MATCHING users.webp)
+      Pure --card header • Calm Sentence-Case 12.5px muted headings
+      • Zero vertical grid lines • Generous row height • Hairline dividers
+   ========================================================================== */
+.ch-app-shell .executive-table-scroll,
+.ch-app-shell .executive-table-wrapper,
+.ch-app-shell .administrative-areas-table-wrapper,
+.ch-app-shell .weather-table-responsive,
+.ch-app-shell .sos-table-wrapper {
+  border: none !important;
+  border-radius: 0 !important;
+  background: var(--card) !important;
+  box-shadow: none !important;
+}
+
+.ch-app-shell .sos-view-card .sos-table-wrapper {
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) * 1.1) !important;
+}
+
+.ch-app-shell table.executive-table,
+.ch-app-shell table.sos-clean-table,
+.ch-app-shell table.ra-table,
+.ch-app-shell table.weather-table,
+.ch-app-shell table.sos-table,
+.ch-app-shell .administrative-areas-table-wrapper table {
+  width: 100%;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  background: var(--card) !important;
+}
+
+.ch-app-shell table.executive-table thead th,
+.ch-app-shell table.sos-clean-table thead th,
+.ch-app-shell table.ra-table thead th,
+.ch-app-shell table.weather-table thead th,
+.ch-app-shell table.sos-table thead th,
+.ch-app-shell .administrative-areas-table-wrapper table thead th {
+  background: var(--card) !important;
+  color: var(--muted-foreground) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  padding: 12px 16px !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+
+.ch-app-shell table.executive-table tbody td,
+.ch-app-shell table.sos-clean-table tbody td,
+.ch-app-shell table.ra-table tbody td,
+.ch-app-shell table.weather-table tbody td,
+.ch-app-shell table.sos-table tbody td,
+.ch-app-shell .administrative-areas-table-wrapper table tbody td {
+  padding: 13px 16px !important;
+  font-size: 13.5px !important;
+  color: var(--foreground) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: transparent !important;
+  vertical-align: middle;
+}
+
+.ch-app-shell table.executive-table tbody tr:last-child td,
+.ch-app-shell table.sos-clean-table tbody tr:last-child td,
+.ch-app-shell table.ra-table tbody tr:last-child td,
+.ch-app-shell table.weather-table tbody tr:last-child td,
+.ch-app-shell table.sos-table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+.ch-app-shell table.executive-table tbody tr:hover td,
+.ch-app-shell table.sos-clean-table tbody tr:hover td,
+.ch-app-shell table.ra-table tbody tr:hover td,
+.ch-app-shell table.weather-table tbody tr:hover td,
+.ch-app-shell table.sos-table tbody tr:hover td,
+.ch-app-shell .administrative-areas-table-wrapper table tbody tr:hover td {
+  background: var(--sos-table-hover) !important;
+}
+
+/* ==========================================================================
+   5. CHRONICLE SEGMENTED SAVED-VIEW TABS, SEARCH INPUTS & SELECTS
+   ========================================================================== */
+.ch-app-shell .sos-clean-tabs,
+.ch-app-shell .sos-scope-tabs,
+.ch-app-shell .weather-tabs-nav,
+.ch-app-shell .executive-triage-pills,
+.ch-app-shell .areas-triage-group,
+.ch-app-shell .executive-segmented-pill,
+.ch-app-shell .rpt-seg {
+  background: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) * 0.95) !important;
+  padding: 3px !important;
+  gap: 2px !important;
+}
+
+.ch-app-shell .sos-clean-tab,
+.ch-app-shell .sos-scope-tab,
+.ch-app-shell .weather-tab-btn,
+.ch-app-shell .triage-btn,
+.ch-app-shell .areas-triage-btn,
+.ch-app-shell .segment-btn,
+.ch-app-shell .rpt-seg-btn {
+  border-radius: calc(var(--radius) * 0.7) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--muted-foreground) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease !important;
+}
+
+.ch-app-shell .sos-clean-tab:hover,
+.ch-app-shell .sos-scope-tab:hover,
+.ch-app-shell .weather-tab-btn:hover,
+.ch-app-shell .triage-btn:hover,
+.ch-app-shell .areas-triage-btn:hover,
+.ch-app-shell .segment-btn:hover,
+.ch-app-shell .rpt-seg-btn:hover {
+  color: var(--foreground) !important;
+}
+
+.ch-app-shell .sos-clean-tab.active,
+.ch-app-shell .sos-scope-tab.active,
+.ch-app-shell .weather-tab-btn.active,
+.ch-app-shell .triage-btn.active,
+.ch-app-shell .areas-triage-btn.active,
+.ch-app-shell .segment-btn.active,
+.ch-app-shell .rpt-seg-btn.is-active {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-weight: 600 !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--surface-shadow) !important;
+}
+
+.ch-app-shell .sos-scope-tab .sos-scope-badge,
+.ch-app-shell .weather-tab-btn .weather-tab-badge {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.ch-app-shell .sos-scope-tab.active .sos-scope-badge,
+.ch-app-shell .weather-tab-btn.active .weather-tab-badge {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Unified Chronicle Search Inputs & Filter Dropdowns */
+.ch-app-shell .sos-clean-search,
+.ch-app-shell .weather-search-box {
+  height: 36px !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+  border: 1px solid var(--input) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease !important;
+}
+
+.ch-app-shell .sos-clean-search:focus-within,
+.ch-app-shell .weather-search-box:focus-within {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--sos-ring) !important;
+}
+
+.ch-app-shell .sos-clean-search input,
+.ch-app-shell .weather-search-box input {
+  height: 100% !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--foreground) !important;
+  font-size: 13px !important;
+}
+
+.ch-app-shell .executive-search-input-wrap input,
+.ch-app-shell .ra-search-input,
+.ch-app-shell .sos-citizen-search-input,
+.ch-app-shell .areas-search-input,
+.ch-app-shell .sos-audit-search-input,
+.ch-app-shell .sos-citizen-select,
+.ch-app-shell .ra-filter-select,
+.ch-app-shell .ra-page-size-select,
+.ch-app-shell .sos-clean-sort-select,
+.ch-app-shell .weather-select,
+.ch-app-shell .sos-status-filter-select,
+.ch-app-shell .sos-area-filter-select {
+  height: 36px !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+  border: 1px solid var(--input) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease !important;
+}
+
+.ch-app-shell .ra-page-size-select {
+  height: 30px !important;
+}
+
+.ch-app-shell select option {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+}
+
+.ch-app-shell .executive-search-input-wrap input:focus,
+.ch-app-shell .ra-search-input:focus,
+.ch-app-shell .sos-citizen-search-input:focus,
+.ch-app-shell .areas-search-input:focus,
+.ch-app-shell .sos-audit-search-input:focus,
+.ch-app-shell .sos-citizen-select:focus,
+.ch-app-shell .ra-filter-select:focus,
+.ch-app-shell .sos-clean-sort-select:focus,
+.ch-app-shell .weather-select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--sos-ring) !important;
+}
+
+.ch-app-shell .sos-citizen-filter-bar {
+  background: var(--card) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ==========================================================================
+   6. CHRONICLE BUTTONS & PAGINATION (DYNAMICALLY FOLLOWS 5 OKLCH PRESETS)
+   ========================================================================== */
+.ch-app-shell .executive-btn-primary,
+.ch-app-shell .btn-primary-weather,
+.ch-app-shell .btn-create-weather,
+.ch-app-shell .ra-btn-primary,
+.ch-app-shell .coordination-action-btn.primary,
+.ch-app-shell .sos-btn--primary,
+.sos-profile-btn-save,
+.sos-btn-verify-otp {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--primary) 26%, transparent) !important;
+}
+
+.ch-app-shell .executive-btn-primary:hover:not(:disabled),
+.ch-app-shell .btn-primary-weather:hover:not(:disabled),
+.ch-app-shell .btn-create-weather:hover:not(:disabled),
+.ch-app-shell .ra-btn-primary:hover:not(:disabled),
+.ch-app-shell .coordination-action-btn.primary:hover:not(:disabled),
+.ch-app-shell .sos-btn--primary:hover:not(:disabled),
+.sos-profile-btn-save:hover:not(:disabled) {
+  background: var(--primary-hover) !important;
+  border-color: var(--primary-hover) !important;
+}
+
+.ch-app-shell .executive-btn-outline,
+.ch-app-shell .btn-secondary-weather,
+.ch-app-shell .ra-btn-secondary,
+.ch-app-shell .ra-refresh-btn,
+.ch-app-shell .rpt-action-btn:not(.rpt-excel-btn),
+.ch-app-shell .sos-btn--outline,
+.ch-app-shell .sos-citizen-reset-btn {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 3%, transparent) !important;
+}
+
+.ch-app-shell .executive-btn-outline:hover:not(:disabled),
+.ch-app-shell .btn-secondary-weather:hover:not(:disabled),
+.ch-app-shell .ra-btn-secondary:hover:not(:disabled),
+.ch-app-shell .ra-refresh-btn:hover:not(:disabled),
+.ch-app-shell .rpt-action-btn:not(.rpt-excel-btn):hover:not(:disabled),
+.ch-app-shell .sos-citizen-reset-btn:hover:not(:disabled) {
+  background: var(--muted) !important;
+  color: var(--foreground) !important;
+}
+
+/* Pagination */
+.ch-app-shell .ra-pagination,
+.ch-app-shell .sos-clean-pagination,
+.ch-app-shell .weather-pagination-bar {
+  background: var(--card) !important;
+  border-top: 1px solid var(--border) !important;
+  padding: 12px 18px !important;
+  color: var(--muted-foreground) !important;
+}
+
+.ch-app-shell .ra-page-btn,
+.ch-app-shell .sos-pagination-btn,
+.ch-app-shell .btn-page-nav {
+  border-radius: calc(var(--radius) * 0.7) !important;
+  border: 1px solid var(--border) !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+.ch-app-shell .ra-page-btn.active,
+.ch-app-shell .sos-pagination-btn.active,
+.ch-app-shell .btn-page-nav.active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* ==========================================================================
+   7. CHRONICLE SOFT STATUS BADGES & MONOSPACE COUNTERS
+   ========================================================================== */
+.ch-app-shell .rescuer-status-badge,
+.ch-app-shell .areas-status-pill,
+.ch-app-shell .weather-status-pill,
+.ch-app-shell .table-progress-pill,
+.ch-app-shell .coordination-status-pill,
+.ch-app-shell .operational-status-pill,
+.ch-app-shell .verification-status-pill,
+.ch-app-shell .availability-status-pill,
+.ch-app-shell .resource-status-badge,
+.ch-app-shell .stock-status-pill {
+  border-radius: 9999px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0;
+}
+
+.ch-app-shell .leader-phone-pill,
+.ch-app-shell .member-badge-highlight,
+.ch-app-shell .executive-live-pill {
+  color: var(--primary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   8. UNIVERSAL OKLCH MODALS & DARK MODE COHESION ACROSS ALL FEATURES
+   ========================================================================== */
+.executive-modal-card,
+.sc-modal-card,
+.ra-modal-card,
+.weather-modal,
+.sos-detail-modal-card {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) * 1.4) !important;
+  color: var(--foreground) !important;
+  box-shadow: 0 28px 60px -16px rgba(10, 15, 29, 0.35) !important;
+}
+
+.executive-modal-header {
+  background: var(--card) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+.executive-modal-footer {
+  background: var(--muted) !important;
+  border-top-color: var(--border) !important;
+}
+
+.executive-modal-title,
+.executive-modal-label {
+  color: var(--foreground) !important;
+}
+
+.executive-modal-input,
+.executive-modal-select {
+  background: var(--background) !important;
+  border-color: var(--input) !important;
+  color: var(--foreground) !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+}
+
+.executive-modal-close {
+  background: var(--muted) !important;
+  border-color: var(--border) !important;
+  color: var(--muted-foreground) !important;
+}
+
+[data-theme="dark"] .ch-app-shell .sos-audit-card,
+[data-theme="dark"] .ch-app-shell .sos-timeline-item {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+[data-theme="dark"] .ch-app-shell .sos-audit-meta-grid {
+  background: var(--muted) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] .ch-app-shell .sos-audit-actor-name,
+[data-theme="dark"] .ch-app-shell .sos-audit-meta-val,
+[data-theme="dark"] .ch-app-shell .sos-timeline-text {
+  color: var(--foreground) !important;
+}

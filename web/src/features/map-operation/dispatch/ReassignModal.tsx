@@ -109,7 +109,7 @@ export const ReassignModal = ({
       >
         <div className="sos-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RefreshCw size={18} style={{ color: '#0f172a' }} />
+            <RefreshCw size={18} style={{ color: 'var(--dm-text-strong)' }} />
             <h3 className="sos-modal-title">Điều chỉnh đội cứu hộ</h3>
           </div>
           <button

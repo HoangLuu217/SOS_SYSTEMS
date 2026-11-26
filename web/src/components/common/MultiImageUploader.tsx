@@ -37,10 +37,10 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-        <label htmlFor={inputId} style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+        <label htmlFor={inputId} style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
           {label} ({totalCount} ảnh)
         </label>
-        <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+        <span style={{ fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>
           Chọn 1 hoặc nhiều ảnh (JPG, PNG, WEBP)
         </span>
       </div>
@@ -66,10 +66,10 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
           justifyContent: 'center',
           gap: '8px',
           padding: '10px 12px',
-          border: '1.5px dashed #cbd5e1',
+          border: '1.5px dashed var(--dm-border-strong)',
           borderRadius: '8px',
-          background: disabled ? '#f1f5f9' : '#f8fafc',
-          color: disabled ? '#94a3b8' : '#334155',
+          background: disabled ? 'var(--dm-surface-muted)' : 'var(--dm-surface-subtle)',
+          color: disabled ? 'var(--dm-text-muted)' : 'var(--dm-text-secondary)',
           fontSize: '12.5px',
           fontWeight: 500,
           cursor: disabled ? 'not-allowed' : 'pointer',
@@ -97,8 +97,8 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
                 aspectRatio: '1 / 1',
                 borderRadius: '6px',
                 overflow: 'hidden',
-                border: '1px solid #e2e8f0',
-                background: '#f8fafc',
+                border: '1px solid var(--dm-border)',
+                background: 'var(--dm-surface-subtle)',
               }}
             >
               <img
@@ -149,8 +149,8 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
                 aspectRatio: '1 / 1',
                 borderRadius: '6px',
                 overflow: 'hidden',
-                border: '1px solid #bae6fd',
-                background: '#f0f9ff',
+                border: '1px solid var(--dm-blue-border)',
+                background: 'var(--dm-blue-bg)',
               }}
             >
               <img

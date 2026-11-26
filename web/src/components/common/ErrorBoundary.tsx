@@ -56,7 +56,7 @@ export class ErrorBoundary extends Component<Props, State> {
             justifyContent: 'center',
             padding: '28px 20px',
             background: 'transparent',
-            color: '#1e293b',
+            color: 'var(--dm-text-body)',
             fontFamily: 'var(--font-sans, sans-serif)',
           }}
         >
@@ -64,8 +64,8 @@ export class ErrorBoundary extends Component<Props, State> {
             style={{
               maxWidth: '560px',
               width: '100%',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--dm-surface)',
+              border: '1px solid var(--dm-border)',
               borderRadius: '16px',
               padding: '32px 28px',
               boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
@@ -77,8 +77,8 @@ export class ErrorBoundary extends Component<Props, State> {
                 width: 56,
                 height: 56,
                 borderRadius: '50%',
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
+                background: 'var(--dm-red-bg)',
+                border: '1px solid var(--dm-red-border)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -89,24 +89,24 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle size={28} />
             </div>
 
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--dm-text-strong)', margin: '0 0 8px 0' }}>
               {this.props.fallbackTitle || 'Đã xảy ra sự cố khi tải dữ liệu giao diện'}
             </h2>
 
-            <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.6, margin: '0 0 18px 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--dm-text-muted)', lineHeight: 1.6, margin: '0 0 18px 0' }}>
               Hệ thống đã tự động bảo vệ phiên làm việc của bạn. Hãy nhấn nút thử lại hoặc tải lại trang để tiếp tục tác chiến.
             </p>
 
             {this.state.error && (
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  border: '1px solid var(--dm-border)',
                   borderRadius: '8px',
                   padding: '10px 12px',
                   fontSize: 12,
                   fontFamily: 'monospace',
-                  color: '#dc2626',
+                  color: 'var(--dm-red-text)',
                   textAlign: 'left',
                   marginBottom: 20,
                   maxHeight: '110px',
@@ -146,9 +146,9 @@ export class ErrorBoundary extends Component<Props, State> {
                 style={{
                   padding: '9px 16px',
                   borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#334155',
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -168,7 +168,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   borderRadius: 8,
                   border: '1px solid transparent',
                   background: 'transparent',
-                  color: '#64748b',
+                  color: 'var(--dm-text-muted)',
                   fontSize: 13,
                   cursor: 'pointer',
                   display: 'inline-flex',

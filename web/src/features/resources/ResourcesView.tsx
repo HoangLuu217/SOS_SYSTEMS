@@ -1995,7 +1995,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     const s = (status || 'READY').toUpperCase();
     if (s === 'READY' || s === 'AVAILABLE') {
       return (
-        <span className="ra-status-badge verified" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+        <span className="ra-status-badge verified" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: '1px solid var(--dm-green-border)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#10b981', borderRadius: '50%' }} />
           Sẵn sàng
         </span>
@@ -2003,7 +2003,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
     if (s === 'IN_USE' || s === 'ASSIGNED' || s === 'ON_MISSION') {
       return (
-        <span className="ra-status-badge in-review" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+        <span className="ra-status-badge in-review" style={{ background: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: '1px solid var(--dm-blue-border)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#3b82f6', borderRadius: '50%' }} />
           Đang sử dụng
         </span>
@@ -2011,7 +2011,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
     if (s === 'MAINTENANCE') {
       return (
-        <span className="ra-status-badge pending" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
+        <span className="ra-status-badge pending" style={{ background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: '1px solid var(--dm-amber-border)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#f59e0b', borderRadius: '50%' }} />
           Bảo trì
         </span>
@@ -2019,14 +2019,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
     if (s === 'DAMAGED' || s === 'BROKEN') {
       return (
-        <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+        <span className="ra-status-badge rejected" style={{ background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
           Hỏng hóc
         </span>
       );
     }
     return (
-      <span className="ra-status-badge rejected" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
+      <span className="ra-status-badge rejected" style={{ background: 'var(--dm-surface-muted)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}>
         <span className="live-dot" style={{ width: 6, height: 6, background: '#94a3b8', borderRadius: '50%' }} />
         Ngừng hoạt động
       </span>
@@ -2047,7 +2047,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       const s = (eq.status || 'AVAILABLE').toUpperCase();
       if (s === 'AVAILABLE' || s === 'READY') {
         return (
-          <span className="ra-status-badge verified" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+          <span className="ra-status-badge verified" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: '1px solid var(--dm-green-border)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#10b981', borderRadius: '50%' }} />
             Sẵn sàng
           </span>
@@ -2055,7 +2055,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       if (s === 'IN_USE' || s === 'ASSIGNED' || s === 'BORROWED') {
         return (
-          <span className="ra-status-badge in-review" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+          <span className="ra-status-badge in-review" style={{ background: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: '1px solid var(--dm-blue-border)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#3b82f6', borderRadius: '50%' }} />
             Đang sử dụng
           </span>
@@ -2063,7 +2063,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       if (s === 'MAINTENANCE') {
         return (
-          <span className="ra-status-badge pending" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
+          <span className="ra-status-badge pending" style={{ background: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: '1px solid var(--dm-amber-border)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#f59e0b', borderRadius: '50%' }} />
             Bảo trì
           </span>
@@ -2071,7 +2071,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       if (s === 'DAMAGED' || s === 'BROKEN' || s === 'LOST') {
         return (
-          <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+          <span className="ra-status-badge rejected" style={{ background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
             Hỏng hóc
           </span>
@@ -2079,7 +2079,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       if (s === 'EXPIRED') {
         return (
-          <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+          <span className="ra-status-badge rejected" style={{ background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
             Hết hạn
           </span>
@@ -2087,14 +2087,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       if (s === 'OUT_OF_STOCK') {
         return (
-          <span className="ra-status-badge rejected" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
+          <span className="ra-status-badge rejected" style={{ background: 'var(--dm-surface-muted)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}>
             <span className="live-dot" style={{ width: 6, height: 6, background: '#94a3b8', borderRadius: '50%' }} />
             Hết tồn kho
           </span>
         );
       }
       return (
-        <span className="ra-status-badge rejected" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
+        <span className="ra-status-badge rejected" style={{ background: 'var(--dm-surface-muted)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#94a3b8', borderRadius: '50%' }} />
           {s === 'INACTIVE' ? 'Ngừng sử dụng' : eq.status}
         </span>
@@ -2105,14 +2105,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     const isAvailable = (eq.quantity ?? 0) > 0 && eq.status !== 'EXPIRED';
     if (isAvailable) {
       return (
-        <span className="ra-status-badge verified" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+        <span className="ra-status-badge verified" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: '1px solid var(--dm-green-border)' }}>
           <span className="live-dot" style={{ width: 6, height: 6, background: '#10b981', borderRadius: '50%' }} />
           Khả dụng
         </span>
       );
     }
     return (
-      <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+      <span className="ra-status-badge rejected" style={{ background: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: '1px solid var(--dm-red-border)' }}>
         <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
         {eq.status === 'EXPIRED' ? 'Hết hạn' : 'Hết hàng'}
       </span>
@@ -2190,8 +2190,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     if (!isAdmin) return null;
     const activeStyle = (active: boolean) => ({
       borderColor: active ? '#0284c7' : undefined,
-      background: active ? '#f0f9ff' : undefined,
-      color: active ? '#0369a1' : undefined,
+      background: active ? 'var(--dm-blue-bg)' : undefined,
+      color: active ? 'var(--dm-blue-text)' : undefined,
     });
 
     return (
@@ -2242,47 +2242,47 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 </div>
                 <div className="resources-context-text">
                   <div className="resources-context-title-row">
-                    <h2 className="resources-context-title">Kho Phương tiện cơ động</h2>
+                    <h2 className="resources-context-title">Phương tiện cơ động</h2>
                     <span className="resources-context-stat vehicles">
-                      {rawVehicles.length} phương tiện
+                      {rawVehicles.length} xe / tàu
                     </span>
                   </div>
                   <p className="resources-context-desc">
-                    Ca-nô, xuồng máy vượt lũ, xe cứu thương và phương tiện cơ động đường bộ
+                    Ca-nô, xuồng máy, xe cứu thương và xe chuyên dụng
                   </p>
                 </div>
               </>
             ) : equipmentViewMode === 'DISPATCH_HISTORY' ? (
               <>
-                <div className="resources-context-icon supplies" style={{ background: '#ecfdf5', color: '#16a34a' }}>
+                <div className="resources-context-icon supplies" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)' }}>
                   <History size={18} />
                 </div>
                 <div className="resources-context-text">
                   <div className="resources-context-title-row">
-                    <h2 className="resources-context-title">Lịch sử Phiếu Xuất Kho &amp; Lệnh Điều Phối</h2>
-                    <span className="resources-context-stat supplies" style={{ background: '#dcfce7', color: '#15803d' }}>
-                      {dispatchHistorySummary.total} phiếu xuất cấp
+                    <h2 className="resources-context-title">Lịch sử xuất kho</h2>
+                    <span className="resources-context-stat supplies" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)' }}>
+                      {dispatchHistorySummary.total} phiếu
                     </span>
                   </div>
                   <p className="resources-context-desc">
-                    Theo dõi trạng thái tiếp tế, chứng từ bàn giao tại hiện trường và tự động hoàn kho khi Leader từ chối
+                    Theo dõi bàn giao hiện trường và hoàn kho tự động
                   </p>
                 </div>
               </>
             ) : (
               <>
-                <div className="resources-context-icon supplies" style={{ background: '#ecfdf5', color: '#16a34a' }}>
+                <div className="resources-context-icon supplies" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)' }}>
                   <Package size={18} />
                 </div>
                 <div className="resources-context-text">
                   <div className="resources-context-title-row">
-                    <h2 className="resources-context-title">Kho Thiết bị &amp; Hàng cứu trợ</h2>
-                    <span className="resources-context-stat supplies" style={{ background: '#dcfce7', color: '#15803d' }}>
+                    <h2 className="resources-context-title">Thiết bị &amp; Cứu trợ</h2>
+                    <span className="resources-context-stat supplies" style={{ background: 'var(--dm-green-bg)', color: 'var(--dm-green-text)' }}>
                       {equipments.length} mặt hàng
                     </span>
                   </div>
                   <p className="resources-context-desc">
-                    Áo phao, bộ đàm, đèn pin dã chiến, máy phát điện, lương thực, nước sạch và thuốc men cứu trợ
+                    Áo phao, bộ đàm, đèn pin, lương thực, nước sạch và thuốc men
                   </p>
                 </div>
               </>
@@ -2318,9 +2318,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 style={
                   equipmentViewMode === 'DISPATCH_HISTORY'
                     ? {
-                      borderColor: '#86efac',
-                      background: '#ecfdf5',
-                      color: '#15803d',
+                      borderColor: 'var(--dm-green-border)',
+                      background: 'var(--dm-green-bg)',
+                      color: 'var(--dm-green-text)',
                       fontWeight: 700,
                     }
                     : undefined
@@ -2336,9 +2336,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {equipmentViewMode === 'INVENTORY' && dispatchHistorySummary.rejectedCount > 0 && (
                   <span
                     style={{
-                      background: '#fef2f2',
-                      color: '#dc2626',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      color: 'var(--dm-red-text)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: 999,
                       padding: '0px 6px',
                       fontSize: 11,
@@ -2395,9 +2395,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   type="button"
                   className="coordination-action-btn outline"
                   style={{
-                    borderColor: selectedTableItemIds.length > 0 ? '#15803d' : '#86efac',
-                    color: selectedTableItemIds.length > 0 ? '#ffffff' : '#15803d',
-                    background: selectedTableItemIds.length > 0 ? '#15803d' : '#f0fdf4',
+                    borderColor: selectedTableItemIds.length > 0 ? '#15803d' : 'var(--dm-green-border)',
+                    color: selectedTableItemIds.length > 0 ? '#ffffff' : 'var(--dm-green-text)',
+                    background: selectedTableItemIds.length > 0 ? '#15803d' : 'var(--dm-green-bg)',
                     borderRadius: 8,
                     padding: '7px 14px',
                     height: 'auto',
@@ -2562,9 +2562,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       padding: '7px 12px',
                       fontSize: 12.5,
                       fontWeight: 600,
-                      color: '#dc2626',
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      color: 'var(--dm-red-text)',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: 8,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
@@ -2600,21 +2600,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 64,
                             height: 64,
                             borderRadius: '50%',
-                            background: '#eff6ff',
-                            color: '#0284c7',
+                            background: 'var(--dm-blue-bg)',
+                            color: 'var(--dm-blue-text)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             margin: '0 auto 16px',
-                            border: '1px solid #bae6fd',
+                            border: '1px solid var(--dm-blue-border)',
                           }}
                         >
                           <Truck size={32} />
                         </div>
-                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                           {filteredTeamObj.name} chưa có phương tiện
                         </h3>
-                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: 'var(--dm-text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
                           Đội cứu hộ này hiện chưa được biên chế phương tiện tác chiến nào. Bạn có thể cấp ngay phương tiện sẵn có từ Kho Tổng hoặc đăng ký mới cho đội.
                         </p>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -2702,11 +2702,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 fontFamily: 'monospace',
                                 fontWeight: 800,
                                 fontSize: 13.5,
-                                color: '#0f172a',
-                                background: '#f8fafc',
+                                color: 'var(--dm-text-strong)',
+                                background: 'var(--dm-surface-subtle)',
                                 padding: '3px 8px',
                                 borderRadius: 6,
-                                border: '1px solid #cbd5e1'
+                                border: '1px solid var(--dm-border-strong)'
                               }}>
                                 {v.plateNumber}
                               </span>
@@ -2720,15 +2720,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 width: 28,
                                 height: 28,
                                 borderRadius: 6,
-                                background: '#eff6ff',
-                                color: '#0284c7',
+                                background: 'var(--dm-blue-bg)',
+                                color: 'var(--dm-blue-text)',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
                               }}>
                                 {getVehicleIcon(v.type, 15)}
                               </span>
-                              <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--dm-text-strong)', fontSize: 13 }}>
                                 {typeLabel}
                               </span>
                             </div>
@@ -2740,11 +2740,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               <span style={{
                                 fontWeight: 700,
                                 fontSize: 13,
-                                color: isUnassigned ? '#d97706' : '#0f172a'
+                                color: isUnassigned ? 'var(--dm-amber-text)' : 'var(--dm-text-strong)'
                               }}>
                                 {teamName}
                               </span>
-                              <span style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <MapPin size={11} color="#0284c7" />
                                 {areaName}
                               </span>
@@ -2754,10 +2754,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           {/* Cột 4: Sức chở / tải trọng */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 700, color: '#0284c7', fontSize: 13 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--dm-blue-text)', fontSize: 13 }}>
                                 {v.capacity} Người / Cứu hộ
                               </span>
-                              <span style={{ fontSize: 11, color: '#64748b' }}>
+                              <span style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
                                 {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
                               </span>
                             </div>
@@ -2855,7 +2855,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         transform: 'translateY(-50%)',
                         background: 'none',
                         border: 'none',
-                        color: '#64748b',
+                        color: 'var(--dm-text-muted)',
                         cursor: 'pointer',
                       }}
                       title="Xóa từ khóa"
@@ -2944,106 +2944,106 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         PENDING: {
                           cls: 'pending',
                           label: 'Chờ nhận lệnh',
-                          bg: '#fffbeb',
-                          color: '#b45309',
-                          border: '#fde68a',
+                          bg: 'var(--dm-amber-bg)',
+                          color: 'var(--dm-amber-text)',
+                          border: 'var(--dm-amber-border)',
                           dot: '#f59e0b',
                         },
                         ACCEPTED: {
                           cls: 'in-review',
                           label: 'Đội đã nhận',
-                          bg: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '#bfdbfe',
+                          bg: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          border: 'var(--dm-blue-border)',
                           dot: '#3b82f6',
                         },
                         DISPATCHED: {
                           cls: 'in-review',
                           label: 'Đang xuất giao',
-                          bg: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '#bfdbfe',
+                          bg: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          border: 'var(--dm-blue-border)',
                           dot: '#3b82f6',
                         },
                         EN_ROUTE: {
                           cls: 'in-review',
                           label: 'Đang tiếp tế',
-                          bg: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '#bfdbfe',
+                          bg: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          border: 'var(--dm-blue-border)',
                           dot: '#3b82f6',
                         },
                         ON_THE_WAY: {
                           cls: 'in-review',
                           label: 'Đang tiếp tế',
-                          bg: '#eff6ff',
-                          color: '#1d4ed8',
-                          border: '#bfdbfe',
+                          bg: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          border: 'var(--dm-blue-border)',
                           dot: '#3b82f6',
                         },
                         ARRIVED: {
                           cls: 'verified',
                           label: 'Đã đến điểm',
-                          bg: '#ecfdf5',
-                          color: '#047857',
-                          border: '#a7f3d0',
+                          bg: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: 'var(--dm-green-border)',
                           dot: '#10b981',
                         },
                         IN_PROGRESS: {
                           cls: 'verified',
                           label: 'Đang bàn giao',
-                          bg: '#ecfdf5',
-                          color: '#047857',
-                          border: '#a7f3d0',
+                          bg: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: 'var(--dm-green-border)',
                           dot: '#10b981',
                         },
                         RESCUING: {
                           cls: 'verified',
                           label: 'Đang bàn giao',
-                          bg: '#ecfdf5',
-                          color: '#047857',
-                          border: '#a7f3d0',
+                          bg: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: 'var(--dm-green-border)',
                           dot: '#10b981',
                         },
                         COMPLETED: {
                           cls: 'verified',
                           label: 'Đã bàn giao',
-                          bg: '#ecfdf5',
-                          color: '#047857',
-                          border: '#a7f3d0',
+                          bg: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: 'var(--dm-green-border)',
                           dot: '#10b981',
                         },
                         DIRECT: {
                           cls: 'verified',
                           label: 'Xuất tại kho',
-                          bg: '#ecfdf5',
-                          color: '#047857',
-                          border: '#a7f3d0',
+                          bg: 'var(--dm-green-bg)',
+                          color: 'var(--dm-green-text)',
+                          border: 'var(--dm-green-border)',
                           dot: '#10b981',
                         },
                         REJECTED: {
                           cls: 'rejected',
                           label: 'Leader từ chối',
-                          bg: '#fef2f2',
-                          color: '#b91c1c',
-                          border: '#fecaca',
+                          bg: 'var(--dm-red-bg)',
+                          color: 'var(--dm-red-text)',
+                          border: 'var(--dm-red-border)',
                           dot: '#ef4444',
                         },
                         CANCELLED: {
                           cls: 'rejected',
                           label: 'Đã hủy lệnh',
-                          bg: '#fef2f2',
-                          color: '#b91c1c',
-                          border: '#fecaca',
+                          bg: 'var(--dm-red-bg)',
+                          color: 'var(--dm-red-text)',
+                          border: 'var(--dm-red-border)',
                           dot: '#ef4444',
                         },
                       };
                       const stMeta = statusBadgeMap[rec.status] || {
                         cls: 'pending',
                         label: rec.status || 'Không rõ',
-                        bg: '#f1f5f9',
-                        color: '#475569',
-                        border: '#cbd5e1',
+                        bg: 'var(--dm-surface-muted)',
+                        color: 'var(--dm-text-secondary)',
+                        border: 'var(--dm-border-strong)',
                         dot: '#94a3b8',
                       };
 
@@ -3085,7 +3085,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 style={{
                                   fontFamily: 'monospace',
                                   fontSize: 12.5,
-                                  color: '#0f172a',
+                                  color: 'var(--dm-text-strong)',
                                   fontWeight: 700,
                                 }}
                               >
@@ -3094,7 +3094,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               <span
                                 style={{
                                   fontSize: 10.5,
-                                  color: '#0284c7',
+                                  color: 'var(--dm-blue-text)',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4,
@@ -3112,9 +3112,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             {rec.mode === 'DIRECT' ? (
                               <span
                                 style={{
-                                  background: '#fef3c7',
-                                  color: '#b45309',
-                                  border: '1px solid #fde68a',
+                                  background: 'var(--dm-amber-bg)',
+                                  color: 'var(--dm-amber-text)',
+                                  border: '1px solid var(--dm-amber-border)',
                                   padding: '3px 8px',
                                   borderRadius: 6,
                                   fontSize: 11,
@@ -3131,9 +3131,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             ) : (
                               <span
                                 style={{
-                                  background: '#ecfdf5',
-                                  color: '#15803d',
-                                  border: '1px solid #bbf7d0',
+                                  background: 'var(--dm-green-bg)',
+                                  color: 'var(--dm-green-text)',
+                                  border: '1px solid var(--dm-green-border)',
                                   padding: '3px 8px',
                                   borderRadius: 6,
                                   fontSize: 11,
@@ -3157,7 +3157,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 style={{
                                   fontWeight: 700,
                                   fontSize: 13,
-                                  color: rec.teamName ? '#0f172a' : '#b45309',
+                                  color: rec.teamName ? 'var(--dm-text-strong)' : 'var(--dm-amber-text)',
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
@@ -3169,14 +3169,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               <span
                                 style={{
                                   fontSize: 11,
-                                  color: '#64748b',
+                                  color: 'var(--dm-text-muted)',
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                 }}
                                 title={rec.destination || ''}
                               >
-                                Đích: <span style={{ color: '#334155', fontWeight: 600 }}>{rec.destination || '—'}</span>
+                                Đích: <span style={{ color: 'var(--dm-text-secondary)', fontWeight: 600 }}>{rec.destination || '—'}</span>
                               </span>
                             </div>
                           </td>
@@ -3184,13 +3184,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           {/* Cột 4: Vật tư xuất cấp */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 290 }}>
-                              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13 }}>
+                              <span style={{ fontWeight: 800, color: 'var(--dm-text-strong)', fontSize: 13 }}>
                                 {itemSummaryHeadline}
                               </span>
                               <span
                                 style={{
                                   fontSize: 11,
-                                  color: '#64748b',
+                                  color: 'var(--dm-text-muted)',
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
@@ -3445,9 +3445,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       padding: '7px 12px',
                       fontSize: 12.5,
                       fontWeight: 600,
-                      color: '#dc2626',
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      color: 'var(--dm-red-text)',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: 8,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
@@ -3499,21 +3499,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               width: 64,
                               height: 64,
                               borderRadius: '50%',
-                              background: '#f8fafc',
-                              color: '#64748b',
+                              background: 'var(--dm-surface-subtle)',
+                              color: 'var(--dm-text-muted)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               margin: '0 auto 16px',
-                              border: '1px solid #e2e8f0',
+                              border: '1px solid var(--dm-border)',
                             }}
                           >
                             <Search size={32} />
                           </div>
-                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                             Không tìm thấy mặt hàng phù hợp của {filteredTeamObj.name}
                           </h3>
-                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: 'var(--dm-text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
                             Không có kết quả nào khớp với từ khóa tìm kiếm hoặc danh mục đã chọn trong biên chế của đội.
                           </p>
                           <button
@@ -3539,21 +3539,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               width: 64,
                               height: 64,
                               borderRadius: '50%',
-                              background: '#fffbeb',
-                              color: '#d97706',
+                              background: 'var(--dm-amber-bg)',
+                              color: 'var(--dm-amber-text)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               margin: '0 auto 16px',
-                              border: '1px solid #fde68a',
+                              border: '1px solid var(--dm-amber-border)',
                             }}
                           >
                             <Package size={32} />
                           </div>
-                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                             {filteredTeamObj.name} chưa có nhu yếu phẩm nào
                           </h3>
-                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: 'var(--dm-text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
                             Đội cứu hộ này hiện chưa được cấp hoặc lưu giữ nhu yếu phẩm cứu trợ nào. Bạn có thể cấp nhu yếu phẩm từ Kho Tổng cho đội hoặc tạo phiếu xuất điều phối tiếp tế ngay.
                           </p>
                           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -3589,8 +3589,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               }}
                               style={{
                                 borderColor: '#0284c7',
-                                color: '#0284c7',
-                                background: '#f0f9ff',
+                                color: 'var(--dm-blue-text)',
+                                background: 'var(--dm-blue-bg)',
                                 padding: '9px 18px',
                                 fontSize: 13.5,
                                 fontWeight: 700,
@@ -3616,21 +3616,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               width: 64,
                               height: 64,
                               borderRadius: '50%',
-                              background: '#ecfdf5',
-                              color: '#16a34a',
+                              background: 'var(--dm-green-bg)',
+                              color: 'var(--dm-green-text)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               margin: '0 auto 16px',
-                              border: '1px solid #bbf7d0',
+                              border: '1px solid var(--dm-green-border)',
                             }}
                           >
                             <LifeBuoy size={32} />
                           </div>
-                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                             {filteredTeamObj.name} chưa có thiết bị cứu hộ nào
                           </h3>
-                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: 'var(--dm-text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
                             Đội cứu hộ này hiện chưa được biên chế thiết bị cứu hộ nào. Bạn có thể cấp ngay trang thiết bị sẵn có từ Kho Tổng cho đội.
                           </p>
                           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -3671,21 +3671,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 64,
                             height: 64,
                             borderRadius: '50%',
-                            background: '#eff6ff',
-                            color: '#0284c7',
+                            background: 'var(--dm-blue-bg)',
+                            color: 'var(--dm-blue-text)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             margin: '0 auto 16px',
-                            border: '1px solid #bae6fd',
+                            border: '1px solid var(--dm-blue-border)',
                           }}
                         >
                           <Package size={32} />
                         </div>
-                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                           {filteredTeamObj.name} chưa có mặt hàng nào
                         </h3>
-                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: 'var(--dm-text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
                           Đội cứu hộ này hiện chưa được trang bị thiết bị cứu hộ hay lưu giữ nhu yếu phẩm nào. Bạn có thể cấp thiết bị hoặc nhu yếu phẩm từ Kho Tổng cho đội.
                         </p>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -3746,8 +3746,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             }}
                             style={{
                               borderColor: '#0284c7',
-                              color: '#0284c7',
-                              background: '#f0f9ff',
+                              color: 'var(--dm-blue-text)',
+                              background: 'var(--dm-blue-bg)',
                               padding: '9px 16px',
                               fontSize: 13,
                               fontWeight: 700,
@@ -3846,7 +3846,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           onClick={() => setSelectedEquipment(eq)}
                           style={{
                             cursor: 'pointer',
-                            background: isSelected ? '#f0f9ff' : undefined,
+                            background: isSelected ? 'var(--dm-blue-bg)' : undefined,
                             transition: 'background 0.15s ease',
                           }}
                           title="Bấm để xem chi tiết"
@@ -3887,11 +3887,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           {/* Cột 1: Tên mặt hàng */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
+                              <span style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--dm-text-strong)' }}>
                                 {eq.name}
                               </span>
-                              <span style={{ fontSize: 11, color: '#64748b' }}>
-                                Quy cách: <span style={{ color: '#334155', fontWeight: 600 }}>Quản lý theo lô nhập kho</span>
+                              <span style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
+                                Quy cách: <span style={{ color: 'var(--dm-text-secondary)', fontWeight: 600 }}>Quản lý theo lô nhập kho</span>
                               </span>
                             </div>
                           </td>
@@ -3901,9 +3901,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             {isDurable ? (
                               <span
                                 style={{
-                                  background: '#ecfdf5',
-                                  color: '#15803d',
-                                  border: '1px solid #bbf7d0',
+                                  background: 'var(--dm-green-bg)',
+                                  color: 'var(--dm-green-text)',
+                                  border: '1px solid var(--dm-green-border)',
                                   padding: '3px 8px',
                                   borderRadius: 6,
                                   fontSize: 11,
@@ -3920,9 +3920,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             ) : (
                               <span
                                 style={{
-                                  background: '#fef3c7',
-                                  color: '#b45309',
-                                  border: '1px solid #fde68a',
+                                  background: 'var(--dm-amber-bg)',
+                                  color: 'var(--dm-amber-text)',
+                                  border: '1px solid var(--dm-amber-border)',
                                   padding: '3px 8px',
                                   borderRadius: 6,
                                   fontSize: 11,
@@ -3941,7 +3941,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                           {/* Cột 3: Đơn vị quản lý / vị trí */}
                           <td>
-                            <span style={{ fontSize: 12.5, color: teamObj ? '#0f172a' : '#b45309', fontWeight: 600 }}>
+                            <span style={{ fontSize: 12.5, color: teamObj ? 'var(--dm-text-strong)' : 'var(--dm-amber-text)', fontWeight: 600 }}>
                               {teamObj ? teamName : '📦 Kho Tổng / Dự Trữ'}
                             </span>
                           </td>
@@ -3949,15 +3949,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           {/* Cột 4: Số lượng tồn */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5 }}>
+                              <span style={{ fontWeight: 800, color: 'var(--dm-text-strong)', fontSize: 13.5 }}>
                                 {eq.quantity} {eq.unit === 'cai' ? 'cái' : eq.unit}
                               </span>
                               {isDurable ? (
-                                <span style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
+                                <span style={{ fontSize: 11, color: 'var(--dm-green-text)', fontWeight: 600 }}>
                                   (Sẵn sàng: {eq.status === 'AVAILABLE' ? eq.quantity : 0})
                                 </span>
                               ) : (
-                                <span style={{ fontSize: 10.5, fontWeight: 700, color: isLow ? '#dc2626' : isWarning ? '#b45309' : '#15803d' }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: isLow ? 'var(--dm-red-text)' : isWarning ? 'var(--dm-amber-text)' : 'var(--dm-green-text)' }}>
                                   {isLow ? '🔴 Cạn kho' : isWarning ? '🟡 Sắp hết' : '🟢 Dồi dào'}
                                 </span>
                               )}
@@ -3970,12 +3970,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               <span style={{
                                 fontFamily: 'monospace',
                                 fontSize: 11.5,
-                                color: '#0f172a',
+                                color: 'var(--dm-text-strong)',
                                 fontWeight: 700,
                               }}>
                                 {eq.serialNumber || '—'}
                               </span>
-                              <span style={{ fontSize: 10.5, color: '#0284c7', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                              <span style={{ fontSize: 10.5, color: 'var(--dm-blue-text)', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
                                 <Calendar size={11} color="#0284c7" />
                                 {eq.receivedAt || eq.createdAt
                                   ? `Nhập: ${new Date(eq.receivedAt || eq.createdAt!).toLocaleDateString('vi-VN')}`
@@ -4029,24 +4029,24 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               .slice(-1)[0] || null
             : null);
         const statusLabelMap: Record<string, { label: string; bg: string; color: string; border: string; dot: string }> = {
-          PENDING: { label: 'Chờ đội nhận lệnh', bg: '#fffbeb', color: '#b45309', border: '#fde68a', dot: '#f59e0b' },
-          ACCEPTED: { label: 'Đội đã nhận lệnh', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6' },
-          DISPATCHED: { label: 'Đang xuất kho giao', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6' },
-          EN_ROUTE: { label: 'Đang tiếp tế', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6' },
-          ON_THE_WAY: { label: 'Đang tiếp tế', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6' },
-          ARRIVED: { label: 'Đã đến điểm tiếp nhận', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', dot: '#10b981' },
-          IN_PROGRESS: { label: 'Đang bàn giao', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', dot: '#10b981' },
-          RESCUING: { label: 'Đang bàn giao', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', dot: '#10b981' },
-          COMPLETED: { label: 'Đã bàn giao xong', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', dot: '#10b981' },
-          DIRECT: { label: 'Xuất trực tiếp tại kho', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0', dot: '#10b981' },
-          REJECTED: { label: 'Leader từ chối', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca', dot: '#ef4444' },
-          CANCELLED: { label: 'Đã hủy lệnh', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca', dot: '#ef4444' },
+          PENDING: { label: 'Chờ đội nhận lệnh', bg: 'var(--dm-amber-bg)', color: 'var(--dm-amber-text)', border: 'var(--dm-amber-border)', dot: '#f59e0b' },
+          ACCEPTED: { label: 'Đội đã nhận lệnh', bg: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: 'var(--dm-blue-border)', dot: '#3b82f6' },
+          DISPATCHED: { label: 'Đang xuất kho giao', bg: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: 'var(--dm-blue-border)', dot: '#3b82f6' },
+          EN_ROUTE: { label: 'Đang tiếp tế', bg: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: 'var(--dm-blue-border)', dot: '#3b82f6' },
+          ON_THE_WAY: { label: 'Đang tiếp tế', bg: 'var(--dm-blue-bg)', color: 'var(--dm-blue-text)', border: 'var(--dm-blue-border)', dot: '#3b82f6' },
+          ARRIVED: { label: 'Đã đến điểm tiếp nhận', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#10b981' },
+          IN_PROGRESS: { label: 'Đang bàn giao', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#10b981' },
+          RESCUING: { label: 'Đang bàn giao', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#10b981' },
+          COMPLETED: { label: 'Đã bàn giao xong', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#10b981' },
+          DIRECT: { label: 'Xuất trực tiếp tại kho', bg: 'var(--dm-green-bg)', color: 'var(--dm-green-text)', border: 'var(--dm-green-border)', dot: '#10b981' },
+          REJECTED: { label: 'Leader từ chối', bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)', dot: '#ef4444' },
+          CANCELLED: { label: 'Đã hủy lệnh', bg: 'var(--dm-red-bg)', color: 'var(--dm-red-text)', border: 'var(--dm-red-border)', dot: '#ef4444' },
         };
         const stMeta = statusLabelMap[rec.status] || {
           label: rec.status || 'Không rõ',
-          bg: '#f1f5f9',
-          color: '#475569',
-          border: '#cbd5e1',
+          bg: 'var(--dm-surface-muted)',
+          color: 'var(--dm-text-secondary)',
+          border: 'var(--dm-border-strong)',
           dot: '#94a3b8',
         };
 
@@ -4067,8 +4067,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      background: rec.mode === 'DIRECT' ? '#fef3c7' : '#dcfce7',
-                      color: rec.mode === 'DIRECT' ? '#d97706' : '#16a34a',
+                      background: rec.mode === 'DIRECT' ? 'var(--dm-amber-bg)' : 'var(--dm-green-bg)',
+                      color: rec.mode === 'DIRECT' ? 'var(--dm-amber-text)' : 'var(--dm-green-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -4079,7 +4079,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                         Phiếu {rec.dispatchCode}
                       </h3>
                       <span
@@ -4097,7 +4097,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         {stMeta.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 4 }}>
                       {rec.mode === 'DIRECT' ? 'Xuất trực tiếp tại kho' : 'Lệnh điều phối đội cứu hộ'} • Tạo lúc{' '}
                       {rec.createdAt ? new Date(rec.createdAt).toLocaleString('vi-VN') : '—'}
                     </div>
@@ -4118,8 +4118,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {isRejectedOrCancelled && (
                   <div
                     style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       borderRadius: 10,
                       padding: '12px 14px',
                       display: 'flex',
@@ -4128,12 +4128,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#b91c1c' }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-red-text)' }}>
                         {rec.status === 'REJECTED' ? 'Leader đội cứu hộ đã từ chối lệnh' : 'Lệnh điều phối đã bị hủy'}
                       </span>
                     </div>
                     {fallbackReason && (
-                      <div style={{ fontSize: 12.5, color: '#7f1d1d', lineHeight: 1.45 }}>
+                      <div style={{ fontSize: 12.5, color: 'var(--dm-red-text)', lineHeight: 1.45 }}>
                         <strong>Lý do:</strong> {fallbackReason}
                       </div>
                     )}
@@ -4146,38 +4146,38 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                     gap: 12,
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     borderRadius: 10,
                     padding: 14,
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase' }}>
                       Đơn vị vận chuyển
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 3 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-text-strong)', marginTop: 3 }}>
                       {rec.teamName || 'Kho Tổng / Xuất trực tiếp'}
                     </div>
                     {(rec.leaderName || rec.teamPhone) && (
-                      <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: 'var(--dm-text-secondary)', marginTop: 2 }}>
                         {[rec.leaderName, rec.teamPhone].filter(Boolean).join(' • ')}
                       </div>
                     )}
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase' }}>
                       Cán bộ lập phiếu
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 3 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-text-strong)', marginTop: 3 }}>
                       {rec.actorName || 'Cán bộ điều phối'}
                     </div>
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-text-muted)', textTransform: 'uppercase' }}>
                       Điểm tiếp nhận cứu trợ
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 3 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-text-strong)', marginTop: 3 }}>
                       {rec.destination || '—'}
                     </div>
                   </div>
@@ -4185,14 +4185,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                       {rec.recipientName && (
                         <div>
-                          <span style={{ fontSize: 11.5, color: '#64748b' }}>Người nhận dự kiến: </span>
-                          <strong style={{ fontSize: 12.5, color: '#0f172a' }}>{rec.recipientName}</strong>
+                          <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>Người nhận dự kiến: </span>
+                          <strong style={{ fontSize: 12.5, color: 'var(--dm-text-strong)' }}>{rec.recipientName}</strong>
                         </div>
                       )}
                       {rec.actualRecipient && (
                         <div>
-                          <span style={{ fontSize: 11.5, color: '#047857' }}>Ký nhận thực tế: </span>
-                          <strong style={{ fontSize: 12.5, color: '#047857' }}>
+                          <span style={{ fontSize: 11.5, color: 'var(--dm-green-text)' }}>Ký nhận thực tế: </span>
+                          <strong style={{ fontSize: 12.5, color: 'var(--dm-green-text)' }}>
                             {formatActualRecipientDisplay(rec.actualRecipient, rec.status)}
                           </strong>
                         </div>
@@ -4203,10 +4203,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                 {/* Bảng danh sách vật tư xuất cấp */}
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                     Danh mục hàng hóa xuất kho ({rec.items.length} mặt hàng)
                   </div>
-                  <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ border: '1px solid var(--dm-border)', borderRadius: 10, overflow: 'hidden' }}>
                     <table className="ra-table" style={{ margin: 0 }}>
                       <thead>
                         <tr>
@@ -4218,9 +4218,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       <tbody>
                         {rec.items.map((it, idx) => (
                           <tr key={`${rec.id}-detail-item-${idx}`}>
-                            <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{idx + 1}</td>
-                            <td style={{ fontWeight: 700, color: '#0f172a' }}>{it.name}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                            <td style={{ textAlign: 'center', color: 'var(--dm-text-muted)', fontWeight: 600 }}>{idx + 1}</td>
+                            <td style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>{it.name}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                               {it.quantity} {it.unit}
                             </td>
                           </tr>
@@ -4233,7 +4233,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {/* Ảnh chứng từ bàn giao nếu có */}
                 {Array.isArray(rec.proofImages) && rec.proofImages.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dm-text-strong)', marginBottom: 8 }}>
                       Ảnh chứng từ bàn giao ({rec.proofImages.length})
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
@@ -4247,20 +4247,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               style={{
                                 height: 110,
                                 borderRadius: 8,
-                                border: '1px dashed #cbd5e1',
-                                background: '#f8fafc',
+                                border: '1px dashed var(--dm-border-strong)',
+                                background: 'var(--dm-surface-subtle)',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 padding: 10,
                                 textAlign: 'center',
-                                color: '#64748b',
+                                color: 'var(--dm-text-muted)',
                                 fontSize: 11.5,
                                 gap: 4,
                               }}
                             >
-                              <span style={{ fontWeight: 700, color: '#475569' }}>Chứng từ {idx + 1}</span>
+                              <span style={{ fontWeight: 700, color: 'var(--dm-text-secondary)' }}>Chứng từ {idx + 1}</span>
                               <span>Ảnh lưu cục bộ trên thiết bị, chưa đồng bộ lên máy chủ</span>
                             </div>
                           );
@@ -4283,8 +4283,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               padding: 0,
                               borderRadius: 8,
                               overflow: 'hidden',
-                              border: '1px solid #e2e8f0',
-                              background: '#f8fafc',
+                              border: '1px solid var(--dm-border)',
+                              background: 'var(--dm-surface-subtle)',
                               cursor: 'pointer',
                             }}
                           >
@@ -4306,12 +4306,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               <div
                 style={{
                   padding: '14px 24px',
-                  borderTop: '1px solid #e2e8f0',
+                  borderTop: '1px solid var(--dm-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'flex-end',
                   gap: 10,
-                  background: '#f8fafc',
+                  background: 'var(--dm-surface-subtle)',
                 }}
               >
                 <button type="button" className="ra-refresh-btn" onClick={handleCloseDispatchDetail}>
@@ -4323,8 +4323,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   onClick={() => handlePrintDispatchVoucher(rec)}
                   style={{
                     borderColor: '#0284c7',
-                    color: '#0369a1',
-                    background: '#f0f9ff',
+                    color: 'var(--dm-blue-text)',
+                    background: 'var(--dm-blue-bg)',
                     fontWeight: 700,
                   }}
                 >
@@ -4374,7 +4374,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--dm-surface)',
               borderRadius: 16,
               maxWidth: 760,
               width: '100%',
@@ -4389,18 +4389,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <div
               style={{
                 padding: '14px 18px',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--dm-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
               <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                   {proofPreviewModal.title}
                 </div>
                 {proofPreviewModal.actualRecipient && (
-                  <div style={{ fontSize: 12.5, color: '#047857', fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--dm-green-text)', fontWeight: 600, marginTop: 2 }}>
                     Người ký nhận thực tế: {formatActualRecipientDisplay(proofPreviewModal.actualRecipient, 'COMPLETED')}
                   </div>
                 )}
@@ -4410,11 +4410,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 onClick={() => setProofPreviewModal(null)}
                 style={{
                   border: 'none',
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   borderRadius: 8,
                   padding: 6,
                   cursor: 'pointer',
-                  color: '#475569',
+                  color: 'var(--dm-text-secondary)',
                 }}
               >
                 <X size={18} />
@@ -4438,20 +4438,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         height: 220,
                         borderRadius: 10,
-                        border: '1px dashed #cbd5e1',
-                        background: '#f8fafc',
+                        border: '1px dashed var(--dm-border-strong)',
+                        background: 'var(--dm-surface-subtle)',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
                         padding: 16,
                         textAlign: 'center',
-                        color: '#64748b',
+                        color: 'var(--dm-text-muted)',
                         fontSize: 12.5,
                         gap: 6,
                       }}
                     >
-                      <strong style={{ color: '#475569' }}>Ảnh bàn giao {i + 1}</strong>
+                      <strong style={{ color: 'var(--dm-text-secondary)' }}>Ảnh bàn giao {i + 1}</strong>
                       <span>Ảnh này chỉ có đường dẫn nội bộ trên điện thoại nên không hiển thị được trên web.</span>
                     </div>
                   );
@@ -4469,8 +4469,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       display: 'block',
                       borderRadius: 10,
                       overflow: 'hidden',
-                      border: '1px solid #e2e8f0',
-                      background: '#f8fafc',
+                      border: '1px solid var(--dm-border)',
+                      background: 'var(--dm-surface-subtle)',
                     }}
                   >
                     <ProofImagePreview
@@ -4535,8 +4535,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      background: '#eff6ff',
-                      color: '#0284c7',
+                      background: 'var(--dm-blue-bg)',
+                      color: 'var(--dm-blue-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -4548,7 +4548,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                         {getVehicleTypeLabel(selectedVehicle.type)}
                       </h3>
                       <span
@@ -4556,9 +4556,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           fontFamily: 'monospace',
                           fontWeight: 800,
                           fontSize: 12.5,
-                          color: '#0369a1',
-                          background: '#e0f2fe',
-                          border: '1px solid #bae6fd',
+                          color: 'var(--dm-blue-text)',
+                          background: 'var(--dm-blue-bg)',
+                          border: '1px solid var(--dm-blue-border)',
                           padding: '2px 8px',
                           borderRadius: 6,
                         }}
@@ -4586,7 +4586,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         <span>{vStatusMeta.label}</span>
                       </span>
 
-                      <span style={{ fontSize: 12, color: '#64748b' }}>
+                      <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                         Mã tài sản: {selectedVehicle._id.slice(-8).toUpperCase()}
                       </span>
                     </div>
@@ -4661,7 +4661,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <span
                       className="rd-metric-val"
                       style={{
-                        color: assignedTeamObj ? '#0284c7' : '#d97706',
+                        color: assignedTeamObj ? 'var(--dm-blue-text)' : 'var(--dm-amber-text)',
                       }}
                     >
                       {assignedTeamObj ? 'Đã biên chế' : 'Kho Tổng'}
@@ -4682,12 +4682,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="rd-property-grid">
                     <div className="rd-property-item">
                       <span className="rd-property-label">Đội cứu hộ biên chế</span>
-                      <span className="rd-property-val" style={{ color: '#0369a1' }}>
+                      <span className="rd-property-val" style={{ color: 'var(--dm-blue-text)' }}>
                         {assignedTeamObj?.name || '📦 Kho Tổng Cứu Trợ (Chưa biên chế)'}
                       </span>
                       {teamLeaderName && (
-                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
-                          Chỉ huy: <strong style={{ color: '#1e293b' }}>{teamLeaderName}</strong>
+                        <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 500, marginTop: 2 }}>
+                          Chỉ huy: <strong style={{ color: 'var(--dm-text-body)' }}>{teamLeaderName}</strong>
                         </span>
                       )}
                     </div>
@@ -4702,7 +4702,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 6,
-                              color: '#0284c7',
+                              color: 'var(--dm-blue-text)',
                               textDecoration: 'none',
                               fontWeight: 800,
                               fontFamily: 'monospace',
@@ -4716,8 +4716,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               style={{
                                 fontSize: 10.5,
                                 fontWeight: 700,
-                                background: '#e0f2fe',
-                                color: '#0369a1',
+                                background: 'var(--dm-blue-bg)',
+                                color: 'var(--dm-blue-text)',
                                 padding: '1px 6px',
                                 borderRadius: 4,
                               }}
@@ -4726,7 +4726,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             </span>
                           </a>
                         ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 12.5 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--dm-text-muted)', fontSize: 12.5 }}>
                             <Phone size={13} />
                             <span>1800-1199 (Tổng đài SOS)</span>
                           </span>
@@ -4756,8 +4756,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             onClick={() => onOpenMap()}
                             style={{
                               border: 'none',
-                              background: '#eff6ff',
-                              color: '#0284c7',
+                              background: 'var(--dm-blue-bg)',
+                              color: 'var(--dm-blue-text)',
                               fontSize: 11,
                               fontWeight: 700,
                               padding: '2px 8px',
@@ -4799,7 +4799,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     type="button"
                     className="coordination-action-btn outline"
                     onClick={() => handleOpenEditVehicle(selectedVehicle)}
-                    style={{ color: '#0284c7', borderColor: '#bae6fd' }}
+                    style={{ color: 'var(--dm-blue-text)', borderColor: 'var(--dm-blue-border)' }}
                     title="Chỉnh sửa thông số kỹ thuật, tải trọng, biển số hoặc trang bị đi kèm"
                   >
                     <Pencil size={14} />
@@ -4822,7 +4822,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           teamName: tName,
                         });
                       }}
-                      style={{ color: '#d97706', borderColor: '#fde68a' }}
+                      style={{ color: 'var(--dm-amber-text)', borderColor: 'var(--dm-amber-border)' }}
                       title="Rút xe ra khỏi đội về Kho tổng dự trữ (Không xóa xe)"
                     >
                       <LogOut size={14} />
@@ -4842,7 +4842,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         ''
                       );
                     }}
-                    style={{ color: '#0284c7', borderColor: '#bae6fd' }}
+                    style={{ color: 'var(--dm-blue-text)', borderColor: 'var(--dm-blue-border)' }}
                     title="Điều chuyển hoặc biên chế xe"
                   >
                     <ArrowRightLeft size={14} />
@@ -4864,7 +4864,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         name: selectedVehicle.plateNumber,
                       })
                     }
-                    style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                    style={{ color: '#ef4444', borderColor: 'var(--dm-red-border)' }}
                     title="Xóa vĩnh viễn phương tiện (Thanh lý tài sản)"
                   >
                     <Trash2 size={14} />
@@ -4872,7 +4872,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--dm-border)', paddingTop: 8 }}>
                   <button
                     type="button"
                     className="coordination-action-btn primary"
@@ -4892,15 +4892,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       {editVehicleTarget && (
         <div className="executive-modal-backdrop" onClick={() => !isUpdatingVehicle && setEditVehicleTarget(null)}>
           <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
-            <div className="executive-modal-header" style={{ background: '#f0f9ff', borderBottom: '1px solid #bae6fd' }}>
+            <div className="executive-modal-header" style={{ background: 'var(--dm-blue-bg)', borderBottom: '1px solid var(--dm-blue-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div
                   style={{
                     width: 36,
                     height: 36,
                     borderRadius: 10,
-                    background: '#e0f2fe',
-                    color: '#0284c7',
+                    background: 'var(--dm-blue-bg)',
+                    color: 'var(--dm-blue-text)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -4909,10 +4909,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <Pencil size={18} />
                 </div>
                 <div>
-                  <h3 className="executive-modal-title" style={{ color: '#0369a1' }}>
+                  <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)' }}>
                     Chỉnh Sửa Hồ Sơ Phương Tiện
                   </h3>
-                  <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                     Cập nhật biển số, sức chở, trạng thái trực chiến và đơn vị biên chế
                   </p>
                 </div>
@@ -4966,7 +4966,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <span
                       style={{
                         fontSize: 11.5,
-                        color: showEditCapacityError ? '#dc2626' : '#64748b',
+                        color: showEditCapacityError ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                         fontWeight: showEditCapacityError ? 500 : 400,
                         marginTop: 4,
                         display: 'block',
@@ -5058,7 +5058,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <div className="executive-modal-header">
               <div>
                 <h3 className="executive-modal-title">Thêm Phương Tiện Cơ Động Mới</h3>
-                <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-text-muted)' }}>
                   Đăng ký phương tiện cứu hộ vào cơ số quản lý tác chiến
                 </p>
               </div>
@@ -5118,7 +5118,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <span
                       style={{
                         fontSize: 11.5,
-                        color: showNewCapacityError ? '#dc2626' : '#64748b',
+                        color: showNewCapacityError ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                         fontWeight: showNewCapacityError ? 500 : 400,
                         marginTop: 4,
                         display: 'block',
@@ -5191,14 +5191,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         <div className="executive-modal-backdrop" onClick={() => setIsCreateEquipmentOpen(false)}>
           <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
             <div className="executive-modal-header" style={{
-              background: '#f0f9ff',
-              borderBottom: '1px solid #bae6fd'
+              background: 'var(--dm-blue-bg)',
+              borderBottom: '1px solid var(--dm-blue-border)'
             }}>
               <div>
-                <h3 className="executive-modal-title" style={{ color: '#0369a1' }}>
+                <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)' }}>
                   {eqSupplyType === 'CONSUMABLE' ? '📦 Nhập Kho Nhu Yếu Phẩm' : '🛠️ Thêm Thiết Bị Cứu Hộ Mới'}
                 </h3>
-                <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                   {eqSupplyType === 'CONSUMABLE'
                     ? 'Nhập mới cơ số lương thực, nước sạch, dược phẩm, nhu yếu phẩm phục vụ cứu trợ'
                     : 'Nhập mới trang thiết bị cứu hộ chuyên dụng cho Đội hoặc lưu Kho tổng dự trữ'}
@@ -5218,11 +5218,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {/* 0. Chuyển đổi phân loại mặt hàng nhập kho */}
                 <div style={{
                   display: 'flex',
-                  background: '#f1f5f9',
+                  background: 'var(--dm-surface-muted)',
                   padding: 4,
                   borderRadius: 10,
                   gap: 6,
-                  border: '1px solid #e2e8f0'
+                  border: '1px solid var(--dm-border)'
                 }}>
                   <button
                     type="button"
@@ -5248,8 +5248,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      background: eqSupplyType !== 'CONSUMABLE' ? '#ffffff' : 'transparent',
-                      color: eqSupplyType !== 'CONSUMABLE' ? '#16a34a' : '#64748b',
+                      background: eqSupplyType !== 'CONSUMABLE' ? 'var(--dm-surface)' : 'transparent',
+                      color: eqSupplyType !== 'CONSUMABLE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
                       boxShadow: eqSupplyType !== 'CONSUMABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                       transition: 'all 0.15s ease',
                     }}
@@ -5283,8 +5283,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      background: eqSupplyType === 'CONSUMABLE' ? '#ffffff' : 'transparent',
-                      color: eqSupplyType === 'CONSUMABLE' ? '#d97706' : '#64748b',
+                      background: eqSupplyType === 'CONSUMABLE' ? 'var(--dm-surface)' : 'transparent',
+                      color: eqSupplyType === 'CONSUMABLE' ? 'var(--dm-amber-text)' : 'var(--dm-text-muted)',
                       boxShadow: eqSupplyType === 'CONSUMABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                       transition: 'all 0.15s ease',
                     }}
@@ -5315,7 +5315,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       </option>
                     ))}
                   </select>
-                  <p style={{ margin: '4px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
+                  <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--dm-text-muted)', lineHeight: 1.4 }}>
                     {eqSupplyType === 'CONSUMABLE'
                       ? '💡 Mặc định lưu Kho tổng để điều phối chung; chỉ chọn Đội nếu hàng cứu trợ được chuyển thẳng đến trạm dã chiến của đội đó.'
                       : '💡 Chọn Đội tiếp nhận trực tiếp hoặc lưu Kho tổng dự trữ để sẵn sàng điều chuyển khi có lệnh.'}
@@ -5444,7 +5444,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <span
                       style={{
                         fontSize: 11.5,
-                        color: showEqQuantityError ? '#dc2626' : '#64748b',
+                        color: showEqQuantityError ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                         fontWeight: showEqQuantityError ? 500 : 400,
                         marginTop: 4,
                         display: 'block',
@@ -5474,7 +5474,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       <span
                         style={{
                           fontSize: 11.5,
-                          color: showEqMinThresholdError ? '#dc2626' : '#64748b',
+                          color: showEqMinThresholdError ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                           fontWeight: showEqMinThresholdError ? 500 : 400,
                           marginTop: 4,
                           display: 'block',
@@ -5588,13 +5588,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <div
               className="executive-modal-header"
               style={{
-                borderBottom:
-                  deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                    ? '1px solid #fef3c7'
-                    : '1px solid #fee2e2',
-                background:
-                  deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                    ? '#fffbeb'
+                borderBottom: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                    ? '1px solid var(--dm-amber-border)'
+                    : '1px solid var(--dm-red-border)',
+                background: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                    ? 'var(--dm-amber-bg)'
                     : '#fff5f5',
               }}
             >
@@ -5604,21 +5602,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     width: 36,
                     height: 36,
                     borderRadius: '50%',
-                    background:
-                      deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                        ? '#fef3c7'
-                        : '#fef2f2',
-                    border:
-                      deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                        ? '1px solid #fde68a'
-                        : '1px solid #fecaca',
+                    background: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                        ? 'var(--dm-amber-bg)'
+                        : 'var(--dm-red-bg)',
+                    border: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                        ? '1px solid var(--dm-amber-border)'
+                        : '1px solid var(--dm-red-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color:
-                      deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                        ? '#b45309'
-                        : '#dc2626',
+                    color: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                        ? 'var(--dm-amber-text)'
+                        : 'var(--dm-red-text)',
                     flexShrink: 0,
                   }}
                 >
@@ -5632,10 +5627,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <h3
                     className="executive-modal-title"
                     style={{
-                      color:
-                        deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                          ? '#92400e'
-                          : '#991b1b',
+                      color: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                          ? 'var(--dm-amber-text)'
+                          : 'var(--dm-red-text)',
                       fontSize: 16,
                     }}
                   >
@@ -5651,10 +5645,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     style={{
                       margin: 0,
                       fontSize: 12,
-                      color:
-                        deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
-                          ? '#b45309'
-                          : '#b91c1c',
+                      color: deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
+                          ? 'var(--dm-amber-text)'
+                          : 'var(--dm-red-text)',
                     }}
                   >
                     {deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' || deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT'
@@ -5672,19 +5665,19 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               </button>
             </div>
 
-            <div className="executive-modal-body" style={{ padding: '20px 24px', fontSize: 13.5, color: '#334155', lineHeight: 1.6 }}>
+            <div className="executive-modal-body" style={{ padding: '20px 24px', fontSize: 13.5, color: 'var(--dm-text-secondary)', lineHeight: 1.6 }}>
               {deleteConfirmTarget.type === 'UNASSIGN_VEHICLE' ? (
                 <>
-                  Bạn có chắc chắn muốn rút phương tiện <strong style={{ color: '#0f172a' }}>"{deleteConfirmTarget.name}"</strong> ra khỏi {deleteConfirmTarget.teamName ? <strong>đội "{deleteConfirmTarget.teamName}"</strong> : 'đội cứu hộ'} không?
+                  Bạn có chắc chắn muốn rút phương tiện <strong style={{ color: 'var(--dm-text-strong)' }}>"{deleteConfirmTarget.name}"</strong> ra khỏi {deleteConfirmTarget.teamName ? <strong>đội "{deleteConfirmTarget.teamName}"</strong> : 'đội cứu hộ'} không?
                   <div
                     style={{
                       marginTop: 12,
                       padding: '10px 14px',
                       borderRadius: 8,
-                      background: '#fefce8',
-                      border: '1px solid #fef08a',
+                      background: 'var(--dm-amber-bg)',
+                      border: '1px solid var(--dm-amber-border)',
                       fontSize: 12,
-                      color: '#854d0e',
+                      color: 'var(--dm-amber-text)',
                       lineHeight: 1.5,
                     }}
                   >
@@ -5693,16 +5686,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 </>
               ) : deleteConfirmTarget.type === 'UNASSIGN_EQUIPMENT' ? (
                 <>
-                  Bạn có chắc chắn muốn thu hồi trang bị / vật tư <strong style={{ color: '#0f172a' }}>"{deleteConfirmTarget.name}"</strong> ra khỏi {deleteConfirmTarget.teamName ? <strong>đội "{deleteConfirmTarget.teamName}"</strong> : 'đội cứu hộ'} về Kho Tổng Cứu Trợ SOS không?
+                  Bạn có chắc chắn muốn thu hồi trang bị / vật tư <strong style={{ color: 'var(--dm-text-strong)' }}>"{deleteConfirmTarget.name}"</strong> ra khỏi {deleteConfirmTarget.teamName ? <strong>đội "{deleteConfirmTarget.teamName}"</strong> : 'đội cứu hộ'} về Kho Tổng Cứu Trợ SOS không?
                   <div
                     style={{
                       marginTop: 12,
                       padding: '10px 14px',
                       borderRadius: 8,
-                      background: '#fefce8',
-                      border: '1px solid #fef08a',
+                      background: 'var(--dm-amber-bg)',
+                      border: '1px solid var(--dm-amber-border)',
                       fontSize: 12,
-                      color: '#854d0e',
+                      color: 'var(--dm-amber-text)',
                       lineHeight: 1.5,
                     }}
                   >
@@ -5712,16 +5705,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               ) : (
                 <>
                   Bạn có chắc chắn muốn {deleteConfirmTarget.type === 'DELETE_VEHICLE' ? 'xóa vĩnh viễn phương tiện' : 'thanh lý và xóa vật tư'}{' '}
-                  <strong style={{ color: '#0f172a' }}>"{deleteConfirmTarget.name}"</strong> khỏi hệ thống?
+                  <strong style={{ color: 'var(--dm-text-strong)' }}>"{deleteConfirmTarget.name}"</strong> khỏi hệ thống?
                   <div
                     style={{
                       marginTop: 12,
                       padding: '10px 14px',
                       borderRadius: 8,
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
                       fontSize: 12,
-                      color: '#991b1b',
+                      color: 'var(--dm-red-text)',
                       lineHeight: 1.5,
                     }}
                   >
@@ -5731,7 +5724,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               )}
             </div>
 
-            <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+            <div className="executive-modal-footer" style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}>
               <button
                 type="button"
                 disabled={isDeleting}
@@ -5780,29 +5773,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       {transferVehicleTarget && (
         <div className="executive-modal-backdrop" onClick={() => !isTransferring && setTransferVehicleTarget(null)}>
           <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, borderRadius: 16 }}>
-            <div className="executive-modal-header" style={{ borderBottom: '1px solid #e0f2fe', background: '#f0f9ff' }}>
+            <div className="executive-modal-header" style={{ borderBottom: '1px solid #e0f2fe', background: 'var(--dm-blue-bg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div
                   style={{
                     width: 36,
                     height: 36,
                     borderRadius: '50%',
-                    background: '#e0f2fe',
-                    border: '1px solid #bae6fd',
+                    background: 'var(--dm-blue-bg)',
+                    border: '1px solid var(--dm-blue-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#0284c7',
+                    color: 'var(--dm-blue-text)',
                     flexShrink: 0,
                   }}
                 >
                   <ArrowRightLeft size={18} />
                 </div>
                 <div>
-                  <h3 className="executive-modal-title" style={{ color: '#0369a1', fontSize: 16 }}>
+                  <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)', fontSize: 16 }}>
                     Điều Chuyển / Biên Chế Phương Tiện
                   </h3>
-                  <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                     Xe: <strong>{transferVehicleTarget.plateNumber}</strong> ({transferVehicleTarget.type})
                   </p>
                 </div>
@@ -5819,7 +5812,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <form onSubmit={handleExecuteTransfer} noValidate>
               <div className="executive-modal-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="executive-modal-field">
-                  <label className="executive-modal-label" style={{ fontWeight: 700, color: transferVehicleError ? '#ef4444' : '#0f172a' }}>
+                  <label className="executive-modal-label" style={{ fontWeight: 700, color: transferVehicleError ? '#ef4444' : 'var(--dm-text-strong)' }}>
                     Đội cứu hộ tiếp nhận biên chế (*)
                   </label>
                   <select
@@ -5830,8 +5823,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       if (transferVehicleError) setTransferVehicleError('');
                     }}
                     style={{
-                      border: transferVehicleError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                      backgroundColor: transferVehicleError ? '#fef2f2' : '#ffffff',
+                      border: transferVehicleError ? '1.5px solid #ef4444' : '1px solid var(--dm-border-strong)',
+                      backgroundColor: transferVehicleError ? 'var(--dm-red-bg)' : 'var(--dm-surface)',
                       boxShadow: transferVehicleError ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : undefined,
                       transition: 'all 0.2s ease',
                     }}
@@ -5856,10 +5849,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   style={{
                     padding: '10px 14px',
                     borderRadius: 8,
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     fontSize: 12,
-                    color: '#64748b',
+                    color: 'var(--dm-text-muted)',
                     lineHeight: 1.5,
                   }}
                 >
@@ -5867,7 +5860,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 </div>
               </div>
 
-              <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+              <div className="executive-modal-footer" style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}>
                 <button
                   type="button"
                   disabled={isTransferring}
@@ -5921,7 +5914,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             >
               <div
                 className="executive-modal-header"
-                style={{ borderBottom: '1px solid #bbf7d0', background: '#f0fdf4' }}
+                style={{ borderBottom: '1px solid var(--dm-green-border)', background: 'var(--dm-green-bg)' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
@@ -5929,22 +5922,22 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       width: 38,
                       height: 38,
                       borderRadius: '50%',
-                      background: '#dcfce7',
-                      border: '1px solid #bbf7d0',
+                      background: 'var(--dm-green-bg)',
+                      border: '1px solid var(--dm-green-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#16a34a',
+                      color: 'var(--dm-green-text)',
                       flexShrink: 0,
                     }}
                   >
                     <ArrowRightLeft size={18} />
                   </div>
                   <div>
-                    <h3 className="executive-modal-title" style={{ color: '#166534', fontSize: 16 }}>
+                    <h3 className="executive-modal-title" style={{ color: 'var(--dm-green-text)', fontSize: 16 }}>
                       Biên Chế Phương Tiện Cho Đội Cứu Hộ
                     </h3>
-                    <p style={{ margin: 0, fontSize: 12, color: '#15803d' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-green-text)' }}>
                       Cấp phương tiện tác chiến sẵn có từ Kho Tổng Dự Trữ cho Đội cơ động
                     </p>
                   </div>
@@ -5965,7 +5958,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 >
                   {/* 1. Chọn Đội tiếp nhận */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                       Đội cứu hộ tiếp nhận biên chế (*)
                     </label>
                     <select
@@ -5974,7 +5967,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       onChange={(e) => setAssignTargetTeamId(e.target.value)}
                       style={{
                         fontWeight: 700,
-                        borderColor: '#cbd5e1',
+                        borderColor: 'var(--dm-border-strong)',
                       }}
                     >
                       <option value="">-- Chọn đội cứu hộ tiếp nhận xe --</option>
@@ -5989,7 +5982,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 2. Danh sách phương tiện tại Kho Tổng */}
                   <div className="executive-modal-field">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                      <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)', margin: 0 }}>
                         Chọn phương tiện từ Kho Tổng / Dự Trữ ({unassignedVehicles.length} xe sẵn có)
                       </label>
                       {unassignedVehicles.length > 0 && (
@@ -5999,7 +5992,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#0284c7',
+                            color: 'var(--dm-blue-text)',
                             fontSize: 12,
                             fontWeight: 700,
                             cursor: 'pointer',
@@ -6016,15 +6009,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           padding: '24px 16px',
                           borderRadius: 10,
-                          background: '#fefce8',
-                          border: '1px solid #fef08a',
+                          background: 'var(--dm-amber-bg)',
+                          border: '1px solid var(--dm-amber-border)',
                           textAlign: 'center',
-                          color: '#854d0e',
+                          color: 'var(--dm-amber-text)',
                           fontSize: 13,
                         }}
                       >
                         <p style={{ margin: 0, fontWeight: 700 }}>Kho Tổng hiện không còn phương tiện nào chưa phân công.</p>
-                        <p style={{ margin: '6px 0 12px', fontSize: 12, color: '#a16207' }}>
+                        <p style={{ margin: '6px 0 12px', fontSize: 12, color: 'var(--dm-amber-text)' }}>
                           Bạn có thể đăng ký phương tiện mới hoặc rút xe từ đội khác về kho trước khi biên chế.
                         </p>
                         <button
@@ -6051,13 +6044,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           maxHeight: 250,
                           overflowY: 'auto',
-                          border: '1px solid #e2e8f0',
+                          border: '1px solid var(--dm-border)',
                           borderRadius: 10,
                           padding: 6,
                           display: 'flex',
                           flexDirection: 'column',
                           gap: 6,
-                          background: '#f8fafc',
+                          background: 'var(--dm-surface-subtle)',
                         }}
                       >
                         {unassignedVehicles.map((veh) => {
@@ -6072,8 +6065,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 gap: 12,
                                 padding: '10px 14px',
                                 borderRadius: 8,
-                                background: isSelected ? '#f0fdf4' : '#ffffff',
-                                border: isSelected ? '1.5px solid #86efac' : '1px solid #e2e8f0',
+                                background: isSelected ? 'var(--dm-green-bg)' : 'var(--dm-surface)',
+                                border: isSelected ? '1.5px solid var(--dm-green-border)' : '1px solid var(--dm-border)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                               }}
@@ -6090,8 +6083,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   width: 28,
                                   height: 28,
                                   borderRadius: 6,
-                                  background: isSelected ? '#dcfce7' : '#eff6ff',
-                                  color: isSelected ? '#16a34a' : '#0284c7',
+                                  background: isSelected ? 'var(--dm-green-bg)' : 'var(--dm-blue-bg)',
+                                  color: isSelected ? 'var(--dm-green-text)' : 'var(--dm-blue-text)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -6107,26 +6100,26 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       fontFamily: 'monospace',
                                       fontWeight: 800,
                                       fontSize: 13,
-                                      color: '#0f172a',
-                                      background: '#f1f5f9',
+                                      color: 'var(--dm-text-strong)',
+                                      background: 'var(--dm-surface-muted)',
                                       padding: '1px 6px',
                                       borderRadius: 4,
                                     }}
                                   >
                                     {veh.plateNumber}
                                   </span>
-                                  <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                                  <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dm-text-secondary)' }}>
                                     {getVehicleTypeLabel(veh.type)}
                                   </span>
-                                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                                    • Sức chở: <strong style={{ color: '#0f172a' }}>{veh.capacity}</strong> người
+                                  <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                                    • Sức chở: <strong style={{ color: 'var(--dm-text-strong)' }}>{veh.capacity}</strong> người
                                   </span>
                                 </div>
                                 {veh.description && (
                                   <div
                                     style={{
                                       fontSize: 11.5,
-                                      color: '#64748b',
+                                      color: 'var(--dm-text-muted)',
                                       marginTop: 3,
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
@@ -6146,8 +6139,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                   {/* 3. Ghi chú điều chuyển / biên chế */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
-                      Lý do / Quyết định biên chế <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
+                      Lý do / Quyết định biên chế <span style={{ fontWeight: 400, color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                     </label>
                     <input
                       type="text"
@@ -6161,7 +6154,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                 <div
                   className="executive-modal-footer"
-                  style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
+                  style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}
                 >
                   <button
                     type="button"
@@ -6332,7 +6325,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 >
                   {/* 1. Chọn Đội tiếp nhận */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
                       Đội cứu hộ tiếp nhận bàn giao (*)
                     </label>
                     <select
@@ -6341,7 +6334,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       onChange={(e) => setAssignEquipTargetTeamId(e.target.value)}
                       style={{
                         fontWeight: 700,
-                        borderColor: '#cbd5e1',
+                        borderColor: 'var(--dm-border-strong)',
                       }}
                     >
                       <option value="">-- Chọn đội cứu hộ tiếp nhận bàn giao --</option>
@@ -6354,7 +6347,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
 
                   {/* 2. Bộ lọc phân loại nhanh trong Modal */}
-                  <div style={{ display: 'flex', gap: 6, background: '#f1f5f9', padding: 4, borderRadius: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, background: 'var(--dm-surface-muted)', padding: 4, borderRadius: 8 }}>
                     <button
                       type="button"
                       onClick={() => setAssignEquipSupplyType('ALL')}
@@ -6365,8 +6358,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         fontWeight: assignEquipSupplyType === 'ALL' ? 700 : 500,
                         borderRadius: 6,
                         border: 'none',
-                        background: assignEquipSupplyType === 'ALL' ? '#ffffff' : 'transparent',
-                        color: assignEquipSupplyType === 'ALL' ? '#0f172a' : '#64748b',
+                        background: assignEquipSupplyType === 'ALL' ? 'var(--dm-surface)' : 'transparent',
+                        color: assignEquipSupplyType === 'ALL' ? 'var(--dm-text-strong)' : 'var(--dm-text-muted)',
                         boxShadow: assignEquipSupplyType === 'ALL' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                         cursor: 'pointer',
                         display: 'flex',
@@ -6388,8 +6381,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         fontWeight: assignEquipSupplyType === 'DURABLE' ? 700 : 500,
                         borderRadius: 6,
                         border: 'none',
-                        background: assignEquipSupplyType === 'DURABLE' ? '#ffffff' : 'transparent',
-                        color: assignEquipSupplyType === 'DURABLE' ? '#166534' : '#64748b',
+                        background: assignEquipSupplyType === 'DURABLE' ? 'var(--dm-surface)' : 'transparent',
+                        color: assignEquipSupplyType === 'DURABLE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
                         boxShadow: assignEquipSupplyType === 'DURABLE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                         cursor: 'pointer',
                         display: 'flex',
@@ -6411,8 +6404,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         fontWeight: assignEquipSupplyType === 'CONSUMABLE' ? 700 : 500,
                         borderRadius: 6,
                         border: 'none',
-                        background: assignEquipSupplyType === 'CONSUMABLE' ? '#ffffff' : 'transparent',
-                        color: assignEquipSupplyType === 'CONSUMABLE' ? '#b45309' : '#64748b',
+                        background: assignEquipSupplyType === 'CONSUMABLE' ? 'var(--dm-surface)' : 'transparent',
+                        color: assignEquipSupplyType === 'CONSUMABLE' ? 'var(--dm-amber-text)' : 'var(--dm-text-muted)',
                         boxShadow: assignEquipSupplyType === 'CONSUMABLE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                         cursor: 'pointer',
                         display: 'flex',
@@ -6429,7 +6422,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 3. Danh sách mặt hàng tại Kho Tổng */}
                   <div className="executive-modal-field">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                      <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)', margin: 0 }}>
                         Chọn mặt hàng từ Kho Tổng ({activeDepotList.length} mặt hàng sẵn có)
                       </label>
                       {activeDepotList.length > 0 && (
@@ -6439,7 +6432,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#0284c7',
+                            color: 'var(--dm-blue-text)',
                             fontSize: 12,
                             fontWeight: 700,
                             cursor: 'pointer',
@@ -6456,17 +6449,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           padding: '24px 16px',
                           borderRadius: 10,
-                          background: '#fefce8',
-                          border: '1px solid #fef08a',
+                          background: 'var(--dm-amber-bg)',
+                          border: '1px solid var(--dm-amber-border)',
                           textAlign: 'center',
-                          color: '#854d0e',
+                          color: 'var(--dm-amber-text)',
                           fontSize: 13,
                         }}
                       >
                         <p style={{ margin: 0, fontWeight: 700 }}>
                           Kho Tổng hiện không còn {assignEquipSupplyType === 'CONSUMABLE' ? 'nhu yếu phẩm' : assignEquipSupplyType === 'DURABLE' ? 'thiết bị cứu hộ' : 'mặt hàng'} nào sẵn sàng bàn giao.
                         </p>
-                        <p style={{ margin: '6px 0 0', fontSize: 12, color: '#a16207' }}>
+                        <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--dm-amber-text)' }}>
                           Bạn có thể chuyển phân loại khác ở trên hoặc nhập thêm hàng mới vào kho.
                         </p>
                       </div>
@@ -6475,13 +6468,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           maxHeight: 280,
                           overflowY: 'auto',
-                          border: '1px solid #e2e8f0',
+                          border: '1px solid var(--dm-border)',
                           borderRadius: 10,
                           padding: 8,
                           display: 'flex',
                           flexDirection: 'column',
                           gap: 8,
-                          background: '#f8fafc',
+                          background: 'var(--dm-surface-subtle)',
                         }}
                       >
                         {activeDepotList.map((eq) => {
@@ -6499,8 +6492,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 gap: 12,
                                 padding: '10px 14px',
                                 borderRadius: 8,
-                                background: isSelected ? (isConsumable ? '#fffbeb' : '#f0fdf4') : '#ffffff',
-                                border: isSelected ? (isConsumable ? '1.5px solid #fde68a' : '1.5px solid #86efac') : '1px solid #e2e8f0',
+                                background: isSelected ? (isConsumable ? 'var(--dm-amber-bg)' : 'var(--dm-green-bg)') : 'var(--dm-surface)',
+                                border: isSelected ? (isConsumable ? '1.5px solid var(--dm-amber-border)' : '1.5px solid var(--dm-green-border)') : '1px solid var(--dm-border)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                               }}
@@ -6517,8 +6510,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   width: 32,
                                   height: 32,
                                   borderRadius: 6,
-                                  background: isSelected ? (isConsumable ? '#fef3c7' : '#dcfce7') : '#eff6ff',
-                                  color: isSelected ? (isConsumable ? '#d97706' : '#16a34a') : '#0284c7',
+                                  background: isSelected ? (isConsumable ? 'var(--dm-amber-bg)' : 'var(--dm-green-bg)') : 'var(--dm-blue-bg)',
+                                  color: isSelected ? (isConsumable ? 'var(--dm-amber-text)' : 'var(--dm-green-text)') : 'var(--dm-blue-text)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -6529,7 +6522,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
+                                  <span style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--dm-text-strong)' }}>
                                     {eq.name}
                                   </span>
                                   {isConsumable ? (
@@ -6537,9 +6530,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       style={{
                                         fontSize: 10.5,
                                         fontWeight: 700,
-                                        color: '#b45309',
-                                        background: '#fef3c7',
-                                        border: '1px solid #fde68a',
+                                        color: 'var(--dm-amber-text)',
+                                        background: 'var(--dm-amber-bg)',
+                                        border: '1px solid var(--dm-amber-border)',
                                         padding: '1px 6px',
                                         borderRadius: 4,
                                       }}
@@ -6551,9 +6544,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       style={{
                                         fontSize: 10.5,
                                         fontWeight: 700,
-                                        color: '#15803d',
-                                        background: '#ecfdf5',
-                                        border: '1px solid #bbf7d0',
+                                        color: 'var(--dm-green-text)',
+                                        background: 'var(--dm-green-bg)',
+                                        border: '1px solid var(--dm-green-border)',
                                         padding: '1px 6px',
                                         borderRadius: 4,
                                       }}
@@ -6566,8 +6559,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       style={{
                                         fontFamily: 'monospace',
                                         fontSize: 11.5,
-                                        color: '#475569',
-                                        background: '#f1f5f9',
+                                        color: 'var(--dm-text-secondary)',
+                                        background: 'var(--dm-surface-muted)',
                                         padding: '1px 6px',
                                         borderRadius: 4,
                                         fontWeight: 600,
@@ -6577,8 +6570,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                                  Kho sẵn có: <strong style={{ color: '#0284c7' }}>{eq.quantity} {eq.unit || 'chiếc'}</strong>
+                                <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
+                                  Kho sẵn có: <strong style={{ color: 'var(--dm-blue-text)' }}>{eq.quantity} {eq.unit || 'chiếc'}</strong>
                                   {' '}&bull; {getEquipmentCategoryName(eq.category)}
                                 </div>
                               </div>
@@ -6591,10 +6584,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 4,
-                                    background: '#ffffff',
+                                    background: 'var(--dm-surface)',
                                     padding: '2px 4px',
                                     borderRadius: 6,
-                                    border: '1px solid #cbd5e1',
+                                    border: '1px solid var(--dm-border-strong)',
                                   }}
                                 >
                                   <button
@@ -6607,13 +6600,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       width: 24,
                                       height: 24,
                                       borderRadius: 4,
-                                      border: '1px solid #e2e8f0',
-                                      background: '#f8fafc',
+                                      border: '1px solid var(--dm-border)',
+                                      background: 'var(--dm-surface-subtle)',
                                       cursor: 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      color: '#475569',
+                                      color: 'var(--dm-text-secondary)',
                                     }}
                                     title="Giảm 1"
                                   >
@@ -6643,7 +6636,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       fontSize: 12.5,
                                       border: 'none',
                                       outline: 'none',
-                                      color: '#0f172a',
+                                      color: 'var(--dm-text-strong)',
                                     }}
                                   />
                                   <button
@@ -6656,13 +6649,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       width: 24,
                                       height: 24,
                                       borderRadius: 4,
-                                      border: '1px solid #e2e8f0',
-                                      background: '#f8fafc',
+                                      border: '1px solid var(--dm-border)',
+                                      background: 'var(--dm-surface-subtle)',
                                       cursor: 'pointer',
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      color: '#475569',
+                                      color: 'var(--dm-text-secondary)',
                                     }}
                                     title="Tăng 1"
                                   >
@@ -6676,9 +6669,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 700,
-                                      color: '#0284c7',
-                                      background: '#eff6ff',
-                                      border: '1px solid #bfdbfe',
+                                      color: 'var(--dm-blue-text)',
+                                      background: 'var(--dm-blue-bg)',
+                                      border: '1px solid var(--dm-blue-border)',
                                       borderRadius: 4,
                                       padding: '2px 5px',
                                       cursor: 'pointer',
@@ -6699,8 +6692,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                   {/* 4. Ghi chú điều chuyển / bàn giao */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
-                      Lý do / Quyết định bàn giao <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
+                      Lý do / Quyết định bàn giao <span style={{ fontWeight: 400, color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                     </label>
                     <input
                       type="text"
@@ -6714,7 +6707,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                 <div
                   className="executive-modal-footer"
-                  style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
+                  style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}
                 >
                   <button
                     type="button"
@@ -6798,8 +6791,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      background: selectedEquipment.supplyType === 'CONSUMABLE' ? '#fef3c7' : '#dcfce7',
-                      color: selectedEquipment.supplyType === 'CONSUMABLE' ? '#d97706' : '#16a34a',
+                      background: selectedEquipment.supplyType === 'CONSUMABLE' ? 'var(--dm-amber-bg)' : 'var(--dm-green-bg)',
+                      color: selectedEquipment.supplyType === 'CONSUMABLE' ? 'var(--dm-amber-text)' : 'var(--dm-green-text)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -6815,7 +6808,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
                         {selectedEquipment.name}
                       </h3>
                       <span
@@ -6823,9 +6816,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           fontFamily: 'monospace',
                           fontWeight: 700,
                           fontSize: 12.5,
-                          color: '#475569',
-                          background: '#f1f5f9',
-                          border: '1px solid #cbd5e1',
+                          color: 'var(--dm-text-secondary)',
+                          background: 'var(--dm-surface-muted)',
+                          border: '1px solid var(--dm-border-strong)',
                           padding: '2px 8px',
                           borderRadius: 6,
                         }}
@@ -6837,7 +6830,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                       {renderEquipmentStatusBadge(selectedEquipment)}
 
-                      <span style={{ fontSize: 12, color: '#64748b' }}>
+                      <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
                         Phân loại: {selectedEquipment.supplyType === 'CONSUMABLE' ? 'Vật tư tiêu hao' : 'Trang thiết bị bền'}
                       </span>
                     </div>
@@ -6892,18 +6885,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             fontSize: 12.5,
                             fontWeight: 700,
                             borderRadius: 6,
-                            border:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '1px solid #86efac'
-                                : '1px solid #fecaca',
-                            background:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '#f0fdf4'
-                                : '#fef2f2',
-                            color:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '#15803d'
-                                : '#dc2626',
+                            border: selectedEquipment.status === 'AVAILABLE'
+                                ? '1px solid var(--dm-green-border)'
+                                : '1px solid var(--dm-red-border)',
+                            background: selectedEquipment.status === 'AVAILABLE'
+                                ? 'var(--dm-green-bg)'
+                                : 'var(--dm-red-bg)',
+                            color: selectedEquipment.status === 'AVAILABLE'
+                                ? 'var(--dm-green-text)'
+                                : 'var(--dm-red-text)',
                             cursor: 'pointer',
                             outline: 'none',
                             maxWidth: '100%',
@@ -6924,24 +6914,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             fontSize: 12.5,
                             fontWeight: 700,
                             borderRadius: 6,
-                            border:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '1px solid #86efac'
+                            border: selectedEquipment.status === 'AVAILABLE'
+                                ? '1px solid var(--dm-green-border)'
                                 : selectedEquipment.status === 'IN_USE'
-                                  ? '1px solid #fde68a'
-                                  : '1px solid #fecaca',
-                            background:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '#f0fdf4'
+                                  ? '1px solid var(--dm-amber-border)'
+                                  : '1px solid var(--dm-red-border)',
+                            background: selectedEquipment.status === 'AVAILABLE'
+                                ? 'var(--dm-green-bg)'
                                 : selectedEquipment.status === 'IN_USE'
-                                  ? '#fffbeb'
-                                  : '#fef2f2',
-                            color:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '#15803d'
+                                  ? 'var(--dm-amber-bg)'
+                                  : 'var(--dm-red-bg)',
+                            color: selectedEquipment.status === 'AVAILABLE'
+                                ? 'var(--dm-green-text)'
                                 : selectedEquipment.status === 'IN_USE'
-                                  ? '#b45309'
-                                  : '#dc2626',
+                                  ? 'var(--dm-amber-text)'
+                                  : 'var(--dm-red-text)',
                             cursor: 'pointer',
                             outline: 'none',
                             maxWidth: '100%',
@@ -6977,10 +6964,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="rd-alert-bar">
                     <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-amber-text)' }}>
                         Ngưỡng an toàn dự trữ: ≥ {selectedEquipment.minThreshold || 20} {selectedEquipment.unit}
                       </div>
-                      <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: 'var(--dm-amber-text)', marginTop: 2 }}>
                         {selectedEquipment.quantity <= (selectedEquipment.minThreshold || 20)
                           ? '⚠️ Lượng tồn kho đang chạm mức báo động tối thiểu, cần đề xuất bổ sung sớm!'
                           : 'Lượng tồn kho hiện tại đáp ứng tốt yêu cầu dự trữ khẩn cấp cho mùa mưa lũ.'}
@@ -7004,19 +6991,19 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                     <div className="rd-property-item">
                       <span className="rd-property-label">Đơn vị quản lý / Tiếp nhận</span>
-                      <span className="rd-property-val" style={{ color: '#0369a1' }}>
+                      <span className="rd-property-val" style={{ color: 'var(--dm-blue-text)' }}>
                         {eqTeamObj ? eqTeamObj.name : '📦 Kho Tổng Cứu Trợ SOS'}
                       </span>
                       {eqLeaderName ? (
-                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
-                          Chỉ huy / Phụ trách: <strong style={{ color: '#1e293b' }}>{eqLeaderName}</strong>
+                        <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 500, marginTop: 2 }}>
+                          Chỉ huy / Phụ trách: <strong style={{ color: 'var(--dm-text-body)' }}>{eqLeaderName}</strong>
                           {eqLeaderPhone && (
-                            <span style={{ marginLeft: 6, color: '#0284c7', fontWeight: 700 }}>({eqLeaderPhone})</span>
+                            <span style={{ marginLeft: 6, color: 'var(--dm-blue-text)', fontWeight: 700 }}>({eqLeaderPhone})</span>
                           )}
                         </span>
                       ) : (
-                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
-                          Thủ kho: <strong style={{ color: '#1e293b' }}>Ban Điều Hành Cứu Trợ SOS</strong>
+                        <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 500, marginTop: 2 }}>
+                          Thủ kho: <strong style={{ color: 'var(--dm-text-body)' }}>Ban Điều Hành Cứu Trợ SOS</strong>
                         </span>
                       )}
                     </div>
@@ -7038,9 +7025,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             fontWeight: 700,
                             padding: '2px 8px',
                             borderRadius: 6,
-                            background: isSafeStock ? '#dcfce7' : '#fef3c7',
-                            color: isSafeStock ? '#166534' : '#92400e',
-                            border: `1px solid ${isSafeStock ? '#bbf7d0' : '#fde68a'}`,
+                            background: isSafeStock ? 'var(--dm-green-bg)' : 'var(--dm-amber-bg)',
+                            color: isSafeStock ? 'var(--dm-green-text)' : 'var(--dm-amber-text)',
+                            border: `1px solid ${isSafeStock ? 'var(--dm-green-border)' : 'var(--dm-amber-border)'}`,
                           }}
                         >
                           Định mức: ≥ {selectedEquipment.minThreshold || 10} {selectedEquipment.unit}
@@ -7057,7 +7044,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                     <div className="rd-property-item">
                       <span className="rd-property-label">Trạng thái cấp phát</span>
-                      <span className="rd-property-val" style={{ color: selectedEquipment.status === 'AVAILABLE' ? '#16a34a' : selectedEquipment.status === 'IN_USE' ? '#d97706' : '#dc2626' }}>
+                      <span className="rd-property-val" style={{ color: selectedEquipment.status === 'AVAILABLE' ? 'var(--dm-green-text)' : selectedEquipment.status === 'IN_USE' ? 'var(--dm-amber-text)' : 'var(--dm-red-text)' }}>
                         {selectedEquipment.status === 'AVAILABLE'
                           ? 'Sẵn sàng điều phối'
                           : selectedEquipment.status === 'IN_USE'
@@ -7096,9 +7083,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             <div className="rd-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <History size={15} color="#0284c7" />
-                                <span style={{ color: '#0369a1' }}>Lịch Sử Luân Chuyển &amp; Biến Động Cơ Số</span>
+                                <span style={{ color: 'var(--dm-blue-text)' }}>Lịch Sử Luân Chuyển &amp; Biến Động Cơ Số</span>
                               </div>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '1px 8px', borderRadius: 10 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-blue-text)', background: 'var(--dm-blue-bg)', padding: '1px 8px', borderRadius: 10 }}>
                                 {logs.length} biến động
                               </span>
                             </div>
@@ -7115,12 +7102,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     style={{
                                       padding: '6px 4px',
                                       fontSize: 12.5,
-                                      color: '#334155',
+                                      color: 'var(--dm-text-secondary)',
                                       display: 'flex',
                                       alignItems: 'flex-start',
                                       gap: 10,
                                       lineHeight: 1.5,
-                                      borderBottom: idx < logs.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                      borderBottom: idx < logs.length - 1 ? '1px solid var(--dm-border)' : 'none',
                                     }}
                                   >
                                     <span
@@ -7154,7 +7141,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     type="button"
                     className="coordination-action-btn outline"
                     onClick={() => handleOpenRestock(selectedEquipment)}
-                    style={{ color: '#16a34a', borderColor: '#bbf7d0' }}
+                    style={{ color: 'var(--dm-green-text)', borderColor: 'var(--dm-green-border)' }}
                     title="Nhập bổ sung thêm số lượng vào kho"
                   >
                     <PlusCircle size={14} />
@@ -7173,7 +7160,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         setConsumeDestination('');
                         setConsumeNote('');
                       }}
-                      style={{ color: '#0284c7', borderColor: '#bae6fd' }}
+                      style={{ color: 'var(--dm-blue-text)', borderColor: 'var(--dm-blue-border)' }}
                       title="Xuất cấp vật tư cứu trợ cho nhân dân hoặc khu vực ngập lụt"
                     >
                       <Send size={14} />
@@ -7191,7 +7178,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         setTransferEquipmentTarget(currentEq);
                         setTransferEquipmentTeamId('');
                       }}
-                      style={{ color: '#0284c7', borderColor: '#bae6fd' }}
+                      style={{ color: 'var(--dm-blue-text)', borderColor: 'var(--dm-blue-border)' }}
                       title={
                         selectedEquipment.teamId
                           ? 'Điều chuyển thiết bị sang đội cứu hộ khác'
@@ -7217,7 +7204,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           teamName: tName,
                         });
                       }}
-                      style={{ color: '#d97706', borderColor: '#fde68a' }}
+                      style={{ color: 'var(--dm-amber-text)', borderColor: 'var(--dm-amber-border)' }}
                       title="Hoàn trả thiết bị về Kho Tổng khi kết thúc chiến dịch hoặc đến hạn bảo trì"
                     >
                       <LogOut size={14} />
@@ -7247,7 +7234,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         name: selectedEquipment.name,
                       });
                     }}
-                    style={{ color: '#dc2626', borderColor: '#fecaca' }}
+                    style={{ color: 'var(--dm-red-text)', borderColor: 'var(--dm-red-border)' }}
                     title="Thanh lý hoặc xóa vật tư khỏi danh mục"
                   >
                     <Trash2 size={14} />
@@ -7255,7 +7242,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--dm-border)', paddingTop: 8 }}>
                   <button
                     type="button"
                     className="coordination-action-btn primary"
@@ -7287,29 +7274,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         return (
           <div className="executive-modal-backdrop" onClick={() => !isTransferringEquipment && setTransferEquipmentTarget(null)}>
             <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, borderRadius: 16 }}>
-              <div className="executive-modal-header" style={{ borderBottom: '1px solid #e0f2fe', background: '#f0f9ff' }}>
+              <div className="executive-modal-header" style={{ borderBottom: '1px solid #e0f2fe', background: 'var(--dm-blue-bg)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
                       width: 38,
                       height: 38,
                       borderRadius: '50%',
-                      background: '#e0f2fe',
-                      border: '1px solid #bae6fd',
+                      background: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#0284c7',
+                      color: 'var(--dm-blue-text)',
                       flexShrink: 0,
                     }}
                   >
                     <ArrowRightLeft size={19} />
                   </div>
                   <div>
-                    <h3 className="executive-modal-title" style={{ color: '#0369a1', fontSize: 16 }}>
+                    <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)', fontSize: 16 }}>
                       Điều Chuyển / Bàn Giao Trang Thiết Bị
                     </h3>
-                    <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                       Trang thiết bị: <strong>{transferEquipmentTarget.name}</strong>
                     </p>
                   </div>
@@ -7329,11 +7316,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div
                     style={{
                       fontSize: 13,
-                      color: '#475569',
-                      background: '#f8fafc',
+                      color: 'var(--dm-text-secondary)',
+                      background: 'var(--dm-surface-subtle)',
                       padding: '10px 14px',
                       borderRadius: 8,
-                      border: '1px solid #e2e8f0',
+                      border: '1px solid var(--dm-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -7342,16 +7329,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     }}
                   >
                     <span>
-                      Đơn vị hiện tại: <strong style={{ color: '#0f172a' }}>{currentOwnerName}</strong>
+                      Đơn vị hiện tại: <strong style={{ color: 'var(--dm-text-strong)' }}>{currentOwnerName}</strong>
                     </span>
                     <span>
-                      Khả dụng: <strong style={{ color: '#0284c7', fontSize: 14 }}>{maxQty} {transferEquipmentTarget.unit}</strong>
+                      Khả dụng: <strong style={{ color: 'var(--dm-blue-text)', fontSize: 14 }}>{maxQty} {transferEquipmentTarget.unit}</strong>
                     </span>
                   </div>
 
                   {/* 1. Chọn đơn vị tiếp nhận */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, color: transferEquipmentErrors.team ? '#ef4444' : '#0f172a' }}>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, color: transferEquipmentErrors.team ? '#ef4444' : 'var(--dm-text-strong)' }}>
                       Đơn vị tiếp nhận (*)
                     </label>
                     <select
@@ -7364,8 +7351,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         }
                       }}
                       style={{
-                        border: transferEquipmentErrors.team ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                        backgroundColor: transferEquipmentErrors.team ? '#fef2f2' : '#ffffff',
+                        border: transferEquipmentErrors.team ? '1.5px solid #ef4444' : '1px solid var(--dm-border-strong)',
+                        backgroundColor: transferEquipmentErrors.team ? 'var(--dm-red-bg)' : 'var(--dm-surface)',
                         boxShadow: transferEquipmentErrors.team ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : undefined,
                         transition: 'all 0.2s ease',
                       }}
@@ -7393,11 +7380,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 2. Số lượng điều chuyển */}
                   <div className="executive-modal-field" style={{ gap: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, margin: 0, color: transferEquipmentErrors.quantity ? '#ef4444' : '#0f172a' }}>
+                      <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, margin: 0, color: transferEquipmentErrors.quantity ? '#ef4444' : 'var(--dm-text-strong)' }}>
                         Số lượng điều chuyển (*)
                       </label>
-                      <span style={{ fontSize: 12, color: '#64748b' }}>
-                        Tối đa: <strong style={{ color: '#0284c7' }}>{maxQty}</strong> {transferEquipmentTarget.unit}
+                      <span style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>
+                        Tối đa: <strong style={{ color: 'var(--dm-blue-text)' }}>{maxQty}</strong> {transferEquipmentTarget.unit}
                       </span>
                     </div>
 
@@ -7406,9 +7393,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        border: transferEquipmentErrors.quantity ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
+                        border: transferEquipmentErrors.quantity ? '1.5px solid #ef4444' : '1.5px solid var(--dm-border-strong)',
                         borderRadius: 10,
-                        background: transferEquipmentErrors.quantity ? '#fef2f2' : '#ffffff',
+                        background: transferEquipmentErrors.quantity ? 'var(--dm-red-bg)' : 'var(--dm-surface)',
                         boxShadow: transferEquipmentErrors.quantity ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : undefined,
                         padding: '4px 8px 4px 14px',
                         transition: 'all 0.15s ease',
@@ -7437,14 +7424,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           outline: 'none',
                           fontSize: 16,
                           fontWeight: 700,
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           background: 'transparent',
                           padding: '6px 0',
                           minWidth: 60,
                         }}
                       />
 
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginRight: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-text-muted)', marginRight: 12 }}>
                         {transferEquipmentTarget.unit}
                       </span>
 
@@ -7463,9 +7450,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 32,
                             height: 32,
                             borderRadius: 6,
-                            border: '1px solid #e2e8f0',
-                            background: selectedQty <= 1 ? '#f8fafc' : '#f1f5f9',
-                            color: selectedQty <= 1 ? '#cbd5e1' : '#334155',
+                            border: '1px solid var(--dm-border)',
+                            background: selectedQty <= 1 ? 'var(--dm-surface-subtle)' : 'var(--dm-surface-muted)',
+                            color: selectedQty <= 1 ? '#cbd5e1' : 'var(--dm-text-secondary)',
                             cursor: selectedQty <= 1 ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -7489,9 +7476,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 32,
                             height: 32,
                             borderRadius: 6,
-                            border: '1px solid #e2e8f0',
-                            background: selectedQty >= maxQty ? '#f8fafc' : '#f1f5f9',
-                            color: selectedQty >= maxQty ? '#cbd5e1' : '#334155',
+                            border: '1px solid var(--dm-border)',
+                            background: selectedQty >= maxQty ? 'var(--dm-surface-subtle)' : 'var(--dm-surface-muted)',
+                            color: selectedQty >= maxQty ? '#cbd5e1' : 'var(--dm-text-secondary)',
                             cursor: selectedQty >= maxQty ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -7515,9 +7502,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             borderRadius: 6,
                             fontSize: 11.5,
                             fontWeight: 700,
-                            border: selectedQty === maxQty ? '1px solid #0284c7' : '1px solid #bae6fd',
-                            background: selectedQty === maxQty ? '#0284c7' : '#e0f2fe',
-                            color: selectedQty === maxQty ? '#ffffff' : '#0369a1',
+                            border: selectedQty === maxQty ? '1px solid #0284c7' : '1px solid var(--dm-blue-border)',
+                            background: selectedQty === maxQty ? '#0284c7' : 'var(--dm-blue-bg)',
+                            color: selectedQty === maxQty ? '#ffffff' : 'var(--dm-blue-text)',
                             cursor: 'pointer',
                             marginLeft: 4,
                             transition: 'all 0.15s ease',
@@ -7537,11 +7524,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginTop: 2 }}>
-                      <span style={{ color: remainingQty === 0 ? '#b45309' : '#15803d', fontWeight: 600 }}>
+                      <span style={{ color: remainingQty === 0 ? 'var(--dm-amber-text)' : 'var(--dm-green-text)', fontWeight: 600 }}>
                         📦 Còn lại tại nguồn: <strong>{remainingQty} {transferEquipmentTarget.unit}</strong>
                       </span>
                       {maxQty > 1 && (
-                        <span style={{ color: '#64748b' }}>
+                        <span style={{ color: 'var(--dm-text-muted)' }}>
                           Bàn giao: <strong>{selectedQty}/{maxQty}</strong> {transferEquipmentTarget.unit}
                         </span>
                       )}
@@ -7551,7 +7538,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 3. Lý do điều chuyển */}
                   <div className="executive-modal-field">
                     <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13 }}>
-                      Lý do điều chuyển <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                      Lý do điều chuyển <span style={{ fontWeight: 400, color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                     </label>
                     <input
                       type="text"
@@ -7563,7 +7550,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
                 </div>
 
-                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}>
                   <button
                     type="button"
                     disabled={isTransferringEquipment}
@@ -7595,7 +7582,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <div className="executive-modal-header">
               <div>
                 <h3 className="executive-modal-title">Cập Nhật Thông Tin Trang Thiết Bị</h3>
-                <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-text-muted)' }}>
                   {editEquipmentTarget.name} ({editEquipmentTarget.serialNumber || 'Không có sê-ri'})
                 </p>
               </div>
@@ -7625,7 +7612,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <span
                       style={{
                         fontSize: 11.5,
-                        color: showEditEqQuantityError ? '#dc2626' : '#64748b',
+                        color: showEditEqQuantityError ? 'var(--dm-red-text)' : 'var(--dm-text-muted)',
                         fontWeight: showEditEqQuantityError ? 500 : 400,
                         marginTop: 4,
                         display: 'block',
@@ -7754,8 +7741,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               <div
                 className="executive-modal-header"
                 style={{
-                  borderBottom: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fecaca' : '#bae6fd') : '#dcfce7'}`,
-                  background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fff1f2' : '#f0f9ff') : '#f0fdf4',
+                  borderBottom: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-border)' : 'var(--dm-blue-border)') : '#dcfce7'}`,
+                  background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-bg)' : 'var(--dm-blue-bg)') : 'var(--dm-green-bg)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -7764,12 +7751,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       width: 38,
                       height: 38,
                       borderRadius: '50%',
-                      background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fee2e2' : '#e0f2fe') : '#dcfce7',
-                      border: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fecaca' : '#bae6fd') : '#bbf7d0'}`,
+                      background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-bg)' : 'var(--dm-blue-bg)') : 'var(--dm-green-bg)',
+                      border: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-border)' : 'var(--dm-blue-border)') : 'var(--dm-green-border)'}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#e11d48' : '#0284c7') : '#16a34a',
+                      color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-blue-text)') : 'var(--dm-green-text)',
                       flexShrink: 0,
                     }}
                   >
@@ -7778,7 +7765,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div>
                     <h3
                       className="executive-modal-title"
-                      style={{ color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#9f1239' : '#0369a1') : '#166534', fontSize: 16 }}
+                      style={{ color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#9f1239' : 'var(--dm-blue-text)') : 'var(--dm-green-text)', fontSize: 16 }}
                     >
                       {restockSourceType === 'DEPOT'
                         ? 'Cấp Bổ Sung Từ Kho Tổng SOS'
@@ -7788,7 +7775,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         margin: 0,
                         fontSize: 12,
-                        color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#be123c' : '#0284c7') : '#15803d',
+                        color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-blue-text)') : 'var(--dm-green-text)',
                       }}
                     >
                       {restockTarget.name} ({restockTarget.serialNumber || 'Khí tài SOS'})
@@ -7814,19 +7801,19 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       justifyContent: 'space-between',
                       padding: '12px 16px',
                       borderRadius: 10,
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1px solid var(--dm-border)',
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Tồn kho hiện tại của Đội</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>
-                        {restockTarget.quantity} <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>{restockTarget.unit}</span>
+                      <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Tồn kho hiện tại của Đội</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--dm-text-strong)', marginTop: 2 }}>
+                        {restockTarget.quantity} <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-text-muted)' }}>{restockTarget.unit}</span>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Đơn vị quản lý</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0284c7', marginTop: 2 }}>
+                      <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Đơn vị quản lý</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--dm-blue-text)', marginTop: 2 }}>
                         {isBelongingToTeam
                           ? (typeof restockTarget.teamId === 'object' && restockTarget.teamId
                             ? (restockTarget.teamId as any).name
@@ -7838,7 +7825,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                   {/* 1. Ô CHỌN NGUỒN NHẬP (Tiếp nhận tài trợ trực tiếp / Lấy từ Kho Tổng) */}
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
+                    <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13, color: 'var(--dm-text-strong)' }}>
                       Nguồn gốc nhập bổ sung (*)
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
@@ -7848,8 +7835,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           padding: '12px 14px',
                           borderRadius: 10,
-                          border: restockSourceType === 'DONATION' ? '2px solid #16a34a' : '1px solid #cbd5e1',
-                          background: restockSourceType === 'DONATION' ? '#f0fdf4' : '#ffffff',
+                          border: restockSourceType === 'DONATION' ? '2px solid #16a34a' : '1px solid var(--dm-border-strong)',
+                          background: restockSourceType === 'DONATION' ? 'var(--dm-green-bg)' : 'var(--dm-surface)',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
                           display: 'flex',
@@ -7865,11 +7852,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             onChange={() => setRestockSourceType('DONATION')}
                             style={{ accentColor: '#16a34a', cursor: 'pointer' }}
                           />
-                          <strong style={{ fontSize: 13, color: restockSourceType === 'DONATION' ? '#166534' : '#0f172a' }}>
+                          <strong style={{ fontSize: 13, color: restockSourceType === 'DONATION' ? 'var(--dm-green-text)' : 'var(--dm-text-strong)' }}>
                             Tiếp nhận tài trợ trực tiếp
                           </strong>
                         </div>
-                        <p style={{ margin: '0 0 0 24px', fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
+                        <p style={{ margin: '0 0 0 24px', fontSize: 11.5, color: 'var(--dm-text-muted)', lineHeight: 1.4 }}>
                           Nhận tài trợ / mua sắm tại chỗ. Cộng thẳng vào kho mà không trừ Kho Tổng.
                         </p>
                       </div>
@@ -7887,20 +7874,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           padding: '12px 14px',
                           borderRadius: 10,
-                          border:
-                            restockSourceType === 'DEPOT'
+                          border: restockSourceType === 'DEPOT'
                               ? isDepotEmpty
                                 ? '2px solid #ef4444'
                                 : '2px solid #0284c7'
-                              : '1px solid #cbd5e1',
-                          background:
-                            !isBelongingToTeam
-                              ? '#f8fafc'
+                              : '1px solid var(--dm-border-strong)',
+                          background: !isBelongingToTeam
+                              ? 'var(--dm-surface-subtle)'
                               : restockSourceType === 'DEPOT'
                                 ? isDepotEmpty
-                                  ? '#fff1f2'
-                                  : '#f0f9ff'
-                                : '#ffffff',
+                                  ? 'var(--dm-red-bg)'
+                                  : 'var(--dm-blue-bg)'
+                                : 'var(--dm-surface)',
                           cursor: !isBelongingToTeam ? 'not-allowed' : 'pointer',
                           opacity: !isBelongingToTeam ? 0.6 : 1,
                           transition: 'all 0.15s ease',
@@ -7924,7 +7909,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               }}
                               style={{ accentColor: isDepotEmpty ? '#ef4444' : '#0284c7', cursor: !isBelongingToTeam ? 'not-allowed' : 'pointer' }}
                             />
-                            <strong style={{ fontSize: 13, color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#991b1b' : '#0369a1') : '#0f172a' }}>
+                            <strong style={{ fontSize: 13, color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-blue-text)') : 'var(--dm-text-strong)' }}>
                               Lấy từ Kho Tổng SOS
                             </strong>
                           </div>
@@ -7935,9 +7920,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                 fontWeight: 700,
                                 padding: '2px 7px',
                                 borderRadius: 10,
-                                background: depotAvailableQty > 0 ? '#dcfce7' : '#fee2e2',
-                                color: depotAvailableQty > 0 ? '#15803d' : '#b91c1c',
-                                border: `1px solid ${depotAvailableQty > 0 ? '#bbf7d0' : '#fecaca'}`,
+                                background: depotAvailableQty > 0 ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+                                color: depotAvailableQty > 0 ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
+                                border: `1px solid ${depotAvailableQty > 0 ? 'var(--dm-green-border)' : 'var(--dm-red-border)'}`,
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 4,
@@ -7949,7 +7934,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             </span>
                           )}
                         </div>
-                        <p style={{ margin: '0 0 0 24px', fontSize: 11.5, color: isDepotEmpty ? '#b91c1c' : '#64748b', lineHeight: 1.4 }}>
+                        <p style={{ margin: '0 0 0 24px', fontSize: 11.5, color: isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-text-muted)', lineHeight: 1.4 }}>
                           {!isBelongingToTeam
                             ? 'Mặt hàng này hiện đã nằm ở Kho Tổng.'
                             : depotAvailableQty > 0
@@ -7966,8 +7951,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         padding: '12px 14px',
                         borderRadius: 10,
-                        background: '#fff1f2',
-                        border: '1px solid #fecdd3',
+                        background: 'var(--dm-red-bg)',
+                        border: '1px solid var(--dm-red-border)',
                         display: 'flex',
                         alignItems: 'flex-start',
                         gap: 10,
@@ -7978,7 +7963,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#9f1239' }}>
                           Kho Tổng hiện có 0 {restockTarget.unit} (Hết hàng trong cơ sở dữ liệu)
                         </div>
-                        <div style={{ fontSize: 12, color: '#be123c', marginTop: 3, lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 12, color: 'var(--dm-red-text)', marginTop: 3, lineHeight: 1.4 }}>
                           Hệ thống đã kiểm tra database: Kho Tổng SOS chưa có bản ghi dự trữ hoặc đã cấp phát hết mặt hàng này. Vui lòng chuyển sang <strong>"Tiếp nhận tài trợ trực tiếp"</strong> để tiếp nhận vào Đội, hoặc thực hiện nhập bổ sung vào Kho Tổng trước.
                         </div>
                       </div>
@@ -7996,7 +7981,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           style={{
                             fontSize: 12,
                             fontWeight: 700,
-                            color: depotAvailableQty > 0 ? '#0284c7' : '#dc2626',
+                            color: depotAvailableQty > 0 ? 'var(--dm-blue-text)' : 'var(--dm-red-text)',
                           }}
                         >
                           {depotAvailableQty > 0 ? (
@@ -8016,13 +8001,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           width: 38,
                           height: 38,
                           borderRadius: 8,
-                          border: '1px solid #cbd5e1',
-                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? '#f1f5f9' : '#fff',
+                          border: '1px solid var(--dm-border-strong)',
+                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
                           cursor: isDepotEmpty && restockSourceType === 'DEPOT' ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#475569',
+                          color: 'var(--dm-text-secondary)',
                         }}
                       >
                         <Minus size={16} />
@@ -8038,8 +8023,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           fontSize: 16,
                           fontWeight: 800,
                           flex: 1,
-                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? '#f1f5f9' : '#fff',
-                          color: isDepotEmpty && restockSourceType === 'DEPOT' ? '#94a3b8' : '#0f172a',
+                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
+                          color: isDepotEmpty && restockSourceType === 'DEPOT' ? 'var(--dm-text-muted)' : 'var(--dm-text-strong)',
                         }}
                         value={isDepotEmpty && restockSourceType === 'DEPOT' ? 0 : restockQuantity}
                         onChange={(e) => {
@@ -8066,13 +8051,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           width: 38,
                           height: 38,
                           borderRadius: 8,
-                          border: '1px solid #cbd5e1',
-                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? '#f1f5f9' : '#fff',
+                          border: '1px solid var(--dm-border-strong)',
+                          background: isDepotEmpty && restockSourceType === 'DEPOT' ? 'var(--dm-surface-muted)' : 'var(--dm-surface)',
                           cursor: isDepotEmpty && restockSourceType === 'DEPOT' ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#475569',
+                          color: 'var(--dm-text-secondary)',
                         }}
                       >
                         <Plus size={16} />
@@ -8104,9 +8089,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               fontSize: 12,
                               fontWeight: 700,
                               borderRadius: 6,
-                              border: '1px solid #e2e8f0',
-                              background: isOver ? '#f1f5f9' : '#f8fafc',
-                              color: isOver ? '#cbd5e1' : '#475569',
+                              border: '1px solid var(--dm-border)',
+                              background: isOver ? 'var(--dm-surface-muted)' : 'var(--dm-surface-subtle)',
+                              color: isOver ? '#cbd5e1' : 'var(--dm-text-secondary)',
                               cursor: isOver ? 'not-allowed' : 'pointer',
                             }}
                           >
@@ -8122,13 +8107,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     style={{
                       padding: '10px 14px',
                       borderRadius: 8,
-                      background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fff1f2' : '#f0f9ff') : '#f0fdf4',
-                      border: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#fecdd3' : '#bae6fd') : '#bbf7d0'}`,
+                      background: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-bg)' : 'var(--dm-blue-bg)') : 'var(--dm-green-bg)',
+                      border: `1px solid ${restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-border)' : 'var(--dm-blue-border)') : 'var(--dm-green-border)'}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       fontSize: 13,
-                      color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#be123c' : '#0369a1') : '#166534',
+                      color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-blue-text)') : 'var(--dm-green-text)',
                     }}
                   >
                     <span>
@@ -8142,7 +8127,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         fontSize: 15,
                         fontWeight: 800,
-                        color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? '#e11d48' : '#0284c7') : '#15803d',
+                        color: restockSourceType === 'DEPOT' ? (isDepotEmpty ? 'var(--dm-red-text)' : 'var(--dm-blue-text)') : 'var(--dm-green-text)',
                       }}
                     >
                       {newTotalQty} {restockTarget.unit}
@@ -8170,7 +8155,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
                 </div>
 
-                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}>
                   <button
                     type="button"
                     disabled={isRestocking}
@@ -8190,10 +8175,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             ? '#94a3b8'
                             : '#0284c7'
                           : '#16a34a',
-                      borderColor:
-                        restockSourceType === 'DEPOT'
+                      borderColor: restockSourceType === 'DEPOT'
                           ? isDepotEmpty
-                            ? '#94a3b8'
+                            ? 'var(--dm-border-strong)'
                             : '#0284c7'
                           : '#16a34a',
                       cursor: restockSourceType === 'DEPOT' && isDepotEmpty ? 'not-allowed' : 'pointer',
@@ -8229,29 +8213,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         return (
           <div className="executive-modal-backdrop" onClick={() => !isConsuming && setConsumeTarget(null)}>
             <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, borderRadius: 16 }}>
-              <div className="executive-modal-header" style={{ borderBottom: '1px solid #bae6fd', background: '#f0f9ff' }}>
+              <div className="executive-modal-header" style={{ borderBottom: '1px solid var(--dm-blue-border)', background: 'var(--dm-blue-bg)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
                       width: 38,
                       height: 38,
                       borderRadius: '50%',
-                      background: '#e0f2fe',
-                      border: '1px solid #bae6fd',
+                      background: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#0284c7',
+                      color: 'var(--dm-blue-text)',
                       flexShrink: 0,
                     }}
                   >
                     <Send size={18} />
                   </div>
                   <div>
-                    <h3 className="executive-modal-title" style={{ color: '#0369a1', fontSize: 16 }}>
+                    <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)', fontSize: 16 }}>
                       Xuất Cấp Cứu Trợ Dân Sinh Khẩn Cấp
                     </h3>
-                    <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                       Xuất kho trực tiếp cho người dân ngập lụt, cô lập hoặc điểm tập kết cứu nạn
                     </p>
                   </div>
@@ -8271,25 +8255,25 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div style={{
                     padding: '12px 16px',
                     borderRadius: 10,
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--dm-text-strong)' }}>
                         {consumeTarget.name}
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
-                        Lô hàng: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>{consumeTarget.serialNumber || 'Không có mã'}</span> • Kho: <strong>{ownerName}</strong>
+                      <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 3 }}>
+                        Lô hàng: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--dm-text-secondary)' }}>{consumeTarget.serialNumber || 'Không có mã'}</span> • Kho: <strong>{ownerName}</strong>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                      <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
                         Tồn kho khả dụng
                       </div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: '#0284c7' }}>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--dm-blue-text)' }}>
                         {maxQty} <span style={{ fontSize: 13, fontWeight: 600 }}>{consumeTarget.unit}</span>
                       </div>
                     </div>
@@ -8304,10 +8288,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        border: '1.5px solid #cbd5e1',
+                        border: '1.5px solid var(--dm-border-strong)',
                         borderRadius: 10,
                         padding: '4px 10px',
-                        background: '#ffffff',
+                        background: 'var(--dm-surface)',
                       }}
                     >
                       <input
@@ -8325,14 +8309,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           flex: 1,
                           fontSize: 16,
                           fontWeight: 800,
-                          color: '#0f172a',
+                          color: 'var(--dm-text-strong)',
                           background: 'transparent',
                           padding: '6px 0',
                           minWidth: 60,
                         }}
                       />
 
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginRight: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dm-text-muted)', marginRight: 12 }}>
                         {consumeTarget.unit}
                       </span>
 
@@ -8346,9 +8330,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 32,
                             height: 32,
                             borderRadius: 6,
-                            border: '1px solid #e2e8f0',
-                            background: currentQty <= 1 ? '#f8fafc' : '#f1f5f9',
-                            color: currentQty <= 1 ? '#cbd5e1' : '#334155',
+                            border: '1px solid var(--dm-border)',
+                            background: currentQty <= 1 ? 'var(--dm-surface-subtle)' : 'var(--dm-surface-muted)',
+                            color: currentQty <= 1 ? '#cbd5e1' : 'var(--dm-text-secondary)',
                             cursor: currentQty <= 1 ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -8367,9 +8351,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             width: 32,
                             height: 32,
                             borderRadius: 6,
-                            border: '1px solid #e2e8f0',
-                            background: currentQty >= maxQty ? '#f8fafc' : '#f1f5f9',
-                            color: currentQty >= maxQty ? '#cbd5e1' : '#334155',
+                            border: '1px solid var(--dm-border)',
+                            background: currentQty >= maxQty ? 'var(--dm-surface-subtle)' : 'var(--dm-surface-muted)',
+                            color: currentQty >= maxQty ? '#cbd5e1' : 'var(--dm-text-secondary)',
                             cursor: currentQty >= maxQty ? 'not-allowed' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -8390,9 +8374,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               borderRadius: 6,
                               fontSize: 11.5,
                               fontWeight: 700,
-                              border: currentQty === 10 ? '1px solid #0284c7' : '1px solid #e2e8f0',
-                              background: currentQty === 10 ? '#0284c7' : '#f1f5f9',
-                              color: currentQty === 10 ? '#ffffff' : '#334155',
+                              border: currentQty === 10 ? '1px solid #0284c7' : '1px solid var(--dm-border)',
+                              background: currentQty === 10 ? '#0284c7' : 'var(--dm-surface-muted)',
+                              color: currentQty === 10 ? '#ffffff' : 'var(--dm-text-secondary)',
                               cursor: 'pointer',
                             }}
                           >
@@ -8408,9 +8392,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               borderRadius: 6,
                               fontSize: 11.5,
                               fontWeight: 700,
-                              border: currentQty === 50 ? '1px solid #0284c7' : '1px solid #e2e8f0',
-                              background: currentQty === 50 ? '#0284c7' : '#f1f5f9',
-                              color: currentQty === 50 ? '#ffffff' : '#334155',
+                              border: currentQty === 50 ? '1px solid #0284c7' : '1px solid var(--dm-border)',
+                              background: currentQty === 50 ? '#0284c7' : 'var(--dm-surface-muted)',
+                              color: currentQty === 50 ? '#ffffff' : 'var(--dm-text-secondary)',
                               cursor: 'pointer',
                             }}
                           >
@@ -8426,9 +8410,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             borderRadius: 6,
                             fontSize: 11.5,
                             fontWeight: 700,
-                            border: currentQty === maxQty ? '1px solid #0284c7' : '1px solid #bae6fd',
-                            background: currentQty === maxQty ? '#0284c7' : '#f0f9ff',
-                            color: currentQty === maxQty ? '#ffffff' : '#0369a1',
+                            border: currentQty === maxQty ? '1px solid #0284c7' : '1px solid var(--dm-blue-border)',
+                            background: currentQty === maxQty ? '#0284c7' : 'var(--dm-blue-bg)',
+                            color: currentQty === maxQty ? '#ffffff' : 'var(--dm-blue-text)',
                             cursor: 'pointer',
                             marginLeft: 2,
                             transition: 'all 0.15s ease',
@@ -8441,10 +8425,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginTop: 4 }}>
-                      <span style={{ color: remainingQty === 0 ? '#dc2626' : remainingQty <= (consumeTarget.minThreshold || 20) ? '#d97706' : '#15803d', fontWeight: 600 }}>
+                      <span style={{ color: remainingQty === 0 ? 'var(--dm-red-text)' : remainingQty <= (consumeTarget.minThreshold || 20) ? 'var(--dm-amber-text)' : 'var(--dm-green-text)', fontWeight: 600 }}>
                         📦 Còn lại trong kho: <strong>{remainingQty} {consumeTarget.unit}</strong> {remainingQty === 0 ? '(Sẽ hết kho)' : remainingQty <= (consumeTarget.minThreshold || 20) ? '⚠️ (Dưới ngưỡng tồn)' : ''}
                       </span>
-                      <span style={{ color: '#64748b' }}>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>
                         Tỷ lệ xuất: <strong>{Math.round((currentQty / maxQty) * 100)}%</strong>
                       </span>
                     </div>
@@ -8468,7 +8452,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 3. Ghi chú điều phối / Biên bản bàn giao */}
                   <div className="executive-modal-field">
                     <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 13 }}>
-                      Ghi chú / Người đại diện nhận hàng <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                      Ghi chú / Người đại diện nhận hàng <span style={{ fontWeight: 400, color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                     </label>
                     <textarea
                       rows={2}
@@ -8480,7 +8464,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
                 </div>
 
-                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: 'var(--dm-surface-subtle)', borderTop: '1px solid var(--dm-border)' }}>
                   <button
                     type="button"
                     disabled={isConsuming}
@@ -8559,7 +8543,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--dm-text-muted)',
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
@@ -8589,29 +8573,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         return (
           <div className="executive-modal-backdrop" onClick={() => !isSubmittingBatchConsume && setIsBatchConsumeOpen(false)}>
             <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760, width: '96%', borderRadius: 16 }}>
-              <div className="executive-modal-header" style={{ borderBottom: '1px solid #bae6fd', background: '#f0f9ff', padding: '14px 22px' }}>
+              <div className="executive-modal-header" style={{ borderBottom: '1px solid var(--dm-blue-border)', background: 'var(--dm-blue-bg)', padding: '14px 22px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
                       width: 36,
                       height: 36,
                       borderRadius: 10,
-                      background: '#e0f2fe',
-                      border: '1px solid #bae6fd',
+                      background: 'var(--dm-blue-bg)',
+                      border: '1px solid var(--dm-blue-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#0284c7',
+                      color: 'var(--dm-blue-text)',
                       flexShrink: 0,
                     }}
                   >
                     <PackageCheck size={18} />
                   </div>
                   <div>
-                    <h3 className="executive-modal-title" style={{ color: '#0369a1', fontSize: 16 }}>
+                    <h3 className="executive-modal-title" style={{ color: 'var(--dm-blue-text)', fontSize: 16 }}>
                       Phiếu Xuất Kho &amp; Lệnh Điều Phối Tiếp Tế
                     </h3>
-                    <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--dm-blue-text)' }}>
                       Xuất cấp từ <strong>Kho Tổng / Dự Trữ</strong> cho Đội cứu hộ hoặc cấp trực tiếp tại kho
                     </p>
                   </div>
@@ -8630,10 +8614,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {/* 1. Chọn phương thức xuất cấp (Segmented Switcher 1 hàng siêu gọn) */}
                   <div style={{
                     display: 'flex',
-                    background: '#f1f5f9',
+                    background: 'var(--dm-surface-muted)',
                     padding: 3,
                     borderRadius: 10,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid var(--dm-border)',
                     gap: 4,
                   }}>
                     <button
@@ -8648,8 +8632,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         padding: '8px 14px',
                         borderRadius: 8,
                         border: 'none',
-                        background: batchDispatchMode === 'ASSIGN_TEAM' ? '#ffffff' : 'transparent',
-                        color: batchDispatchMode === 'ASSIGN_TEAM' ? '#0369a1' : '#64748b',
+                        background: batchDispatchMode === 'ASSIGN_TEAM' ? 'var(--dm-surface)' : 'transparent',
+                        color: batchDispatchMode === 'ASSIGN_TEAM' ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
                         fontWeight: batchDispatchMode === 'ASSIGN_TEAM' ? 700 : 500,
                         fontSize: 13,
                         boxShadow: batchDispatchMode === 'ASSIGN_TEAM' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
@@ -8672,8 +8656,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         padding: '8px 14px',
                         borderRadius: 8,
                         border: 'none',
-                        background: batchDispatchMode === 'DIRECT' ? '#ffffff' : 'transparent',
-                        color: batchDispatchMode === 'DIRECT' ? '#0369a1' : '#64748b',
+                        background: batchDispatchMode === 'DIRECT' ? 'var(--dm-surface)' : 'transparent',
+                        color: batchDispatchMode === 'DIRECT' ? 'var(--dm-blue-text)' : 'var(--dm-text-muted)',
                         fontWeight: batchDispatchMode === 'DIRECT' ? 700 : 500,
                         fontSize: 13,
                         boxShadow: batchDispatchMode === 'DIRECT' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
@@ -8691,8 +8675,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <div style={{
                       padding: '12px 14px',
                       borderRadius: 12,
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1px solid var(--dm-border)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 10,
@@ -8704,15 +8688,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         {/* Cột 1: Đội cứu hộ */}
                         <div className="executive-modal-field" style={{ minWidth: 0 }}>
                           <div style={{ height: 26, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, margin: 0 }}>
-                            <label style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                            <label style={{ fontWeight: 700, fontSize: 12, color: 'var(--dm-text-strong)', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                               <span>Đội cứu hộ nhận lệnh</span>
                               <span style={{ color: '#ef4444' }}>*</span>
                             </label>
                             <span style={{
                               fontSize: 11,
                               fontWeight: 600,
-                              color: activeRescueTeams.length > 0 ? '#0284c7' : '#d97706',
-                              background: activeRescueTeams.length > 0 ? '#e0f2fe' : '#fef3c7',
+                              color: activeRescueTeams.length > 0 ? 'var(--dm-blue-text)' : 'var(--dm-amber-text)',
+                              background: activeRescueTeams.length > 0 ? 'var(--dm-blue-bg)' : 'var(--dm-amber-bg)',
                               padding: '2px 8px',
                               borderRadius: 12,
                               display: 'inline-flex',
@@ -8732,7 +8716,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             value={batchTeamId}
                             onChange={(e) => setBatchTeamId(e.target.value)}
                             style={{
-                              background: '#ffffff',
+                              background: 'var(--dm-surface)',
                               fontWeight: 600,
                               width: '100%',
                               height: 38,
@@ -8740,8 +8724,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               maxHeight: 38,
                               boxSizing: 'border-box',
                               fontSize: 12.5,
-                              color: '#0f172a',
-                              border: '1px solid #cbd5e1',
+                              color: 'var(--dm-text-strong)',
+                              border: '1px solid var(--dm-border-strong)',
                               borderRadius: 8,
                               padding: '0 10px',
                             }}
@@ -8807,30 +8791,30 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                               <div style={{
                                 marginTop: 4,
                                 padding: '5px 8px',
-                                background: isInactive ? '#fef2f2' : isBusy ? '#fffbeb' : '#f0f9ff',
-                                border: isInactive ? '1px solid #fecaca' : isBusy ? '1px solid #fde68a' : '1px solid #bae6fd',
+                                background: isInactive ? 'var(--dm-red-bg)' : isBusy ? 'var(--dm-amber-bg)' : 'var(--dm-blue-bg)',
+                                border: isInactive ? '1px solid var(--dm-red-border)' : isBusy ? '1px solid var(--dm-amber-border)' : '1px solid var(--dm-blue-border)',
                                 borderRadius: 7,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 gap: 8,
                                 fontSize: 11,
-                                color: '#334155',
+                                color: 'var(--dm-text-secondary)',
                               }}>
                                 <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  <span style={{ fontWeight: 700, color: '#0369a1' }}>👤 {lName || 'Chưa chỉ định'}</span>
+                                  <span style={{ fontWeight: 700, color: 'var(--dm-blue-text)' }}>👤 {lName || 'Chưa chỉ định'}</span>
                                   {lPhone && (
-                                    <a href={`tel:${lPhone}`} style={{ color: '#0284c7', textDecoration: 'none', fontWeight: 600 }}>
+                                    <a href={`tel:${lPhone}`} style={{ color: 'var(--dm-blue-text)', textDecoration: 'none', fontWeight: 600 }}>
                                       ({lPhone})
                                     </a>
                                   )}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                                  {memberCount > 0 && <span style={{ color: '#64748b' }}>👥 {memberCount} QS</span>}
+                                  {memberCount > 0 && <span style={{ color: 'var(--dm-text-muted)' }}>👥 {memberCount} QS</span>}
                                   <span style={{
                                     fontWeight: 700,
                                     fontSize: 10,
-                                    color: isInactive ? '#dc2626' : isBusy ? '#d97706' : '#16a34a',
+                                    color: isInactive ? 'var(--dm-red-text)' : isBusy ? 'var(--dm-amber-text)' : 'var(--dm-green-text)',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 3,
@@ -8847,7 +8831,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         {/* Cột 2: Địa điểm tiếp tế / Vùng ngập */}
                         <div className="executive-modal-field" style={{ minWidth: 0 }}>
                           <div style={{ height: 26, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, margin: 0 }}>
-                            <label style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                            <label style={{ fontWeight: 700, fontSize: 12, color: 'var(--dm-text-strong)', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                               <span>Địa điểm tiếp tế / Vùng ngập</span>
                               <span style={{ color: '#ef4444' }}>*</span>
                             </label>
@@ -8903,7 +8887,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           {/* Gợi ý điểm sơ tán an toàn (nếu có điểm hợp lệ) */}
                           {suggestedSafeLocations.filter(isValidSafeLocationItem).length > 0 && (
                             <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Gợi ý:</span>
+                              <span style={{ fontSize: 10, color: 'var(--dm-text-muted)', fontWeight: 600 }}>Gợi ý:</span>
                               {suggestedSafeLocations
                                 .filter(isValidSafeLocationItem)
                                 .slice(0, 3)
@@ -8931,9 +8915,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                         fontSize: 10,
                                         padding: '2px 6px',
                                         borderRadius: 5,
-                                        background: isSelected ? '#e0f2fe' : '#ffffff',
-                                        border: isSelected ? '1px solid #0284c7' : '1px solid #cbd5e1',
-                                        color: isSelected ? '#0369a1' : '#334155',
+                                        background: isSelected ? 'var(--dm-blue-bg)' : 'var(--dm-surface)',
+                                        border: isSelected ? '1px solid #0284c7' : '1px solid var(--dm-border-strong)',
+                                        color: isSelected ? 'var(--dm-blue-text)' : 'var(--dm-text-secondary)',
                                         fontWeight: isSelected ? 700 : 500,
                                         cursor: 'pointer',
                                         display: 'inline-flex',
@@ -8956,8 +8940,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       {/* Hàng 2: Người liên hệ / SĐT tại điểm ngập */}
                       <div className="executive-modal-field">
                         <div style={{ height: 20, display: 'flex', alignItems: 'center', margin: 0 }}>
-                          <label style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', margin: 0 }}>
-                            Người liên hệ / SĐT tại điểm ngập <span style={{ color: '#94a3b8', fontWeight: 400 }}>(tùy chọn)</span>
+                          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--dm-text-secondary)', margin: 0 }}>
+                            Người liên hệ / SĐT tại điểm ngập <span style={{ color: 'var(--dm-text-muted)', fontWeight: 400 }}>(tùy chọn)</span>
                           </label>
                         </div>
                         <input
@@ -8967,13 +8951,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           value={batchRecipientName}
                           onChange={(e) => setBatchRecipientName(e.target.value)}
                           style={{
-                            background: '#ffffff',
+                            background: 'var(--dm-surface)',
                             width: '100%',
                             height: 36,
                             minHeight: 36,
                             maxHeight: 36,
                             borderRadius: 8,
-                            border: '1px solid #cbd5e1',
+                            border: '1px solid var(--dm-border-strong)',
                             padding: '0 10px',
                             fontSize: 12,
                             boxSizing: 'border-box',
@@ -8986,8 +8970,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <div style={{
                       padding: '12px 14px',
                       borderRadius: 12,
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--dm-surface-subtle)',
+                      border: '1px solid var(--dm-border)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 10,
@@ -8995,7 +8979,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       boxSizing: 'border-box',
                     }}>
                       <div className="executive-modal-field">
-                        <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', marginBottom: 4 }}>
+                        <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12, color: 'var(--dm-text-strong)', marginBottom: 4 }}>
                           Địa bàn / Điểm cần tiếp nhận cứu trợ <span style={{ color: '#ef4444' }}>*</span>
                         </label>
                         <DestinationAutocompleteInput
@@ -9023,8 +9007,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', boxSizing: 'border-box' }}>
                         <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 2 }}>
-                            Người đại diện nhận hàng <span style={{ color: '#94a3b8' }}>(tùy chọn)</span>
+                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 2 }}>
+                            Người đại diện nhận hàng <span style={{ color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                           </label>
                           <input
                             type="text"
@@ -9032,13 +9016,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             placeholder="VD: Nguyễn Văn A (Trưởng thôn)..."
                             value={batchRecipientName}
                             onChange={(e) => setBatchRecipientName(e.target.value)}
-                            style={{ background: '#ffffff', width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '7px 10px', fontSize: 12 }}
+                            style={{ background: 'var(--dm-surface)', width: '100%', borderRadius: 8, border: '1px solid var(--dm-border-strong)', padding: '7px 10px', fontSize: 12 }}
                           />
                         </div>
 
                         <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 2 }}>
-                            Số điện thoại liên hệ <span style={{ color: '#94a3b8' }}>(tùy chọn)</span>
+                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 2 }}>
+                            Số điện thoại liên hệ <span style={{ color: 'var(--dm-text-muted)' }}>(tùy chọn)</span>
                           </label>
                           <input
                             type="text"
@@ -9046,7 +9030,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             placeholder="VD: 0912.xxx.xxx..."
                             value={batchNote}
                             onChange={(e) => setBatchNote(e.target.value)}
-                            style={{ background: '#ffffff', width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '7px 10px', fontSize: 12 }}
+                            style={{ background: 'var(--dm-surface)', width: '100%', borderRadius: 8, border: '1px solid var(--dm-border-strong)', padding: '7px 10px', fontSize: 12 }}
                           />
                         </div>
                       </div>
@@ -9057,10 +9041,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dm-text-strong)' }}>
                           Danh mục mặt hàng xuất kho ({totalItemsCount})
                         </span>
-                        <span style={{ fontSize: 11, color: '#64748b' }}>
+                        <span style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
                           (Cả Thiết bị cứu hộ &amp; Nhu yếu phẩm)
                         </span>
                       </div>
@@ -9073,9 +9057,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           gap: 4,
                           fontSize: 11.5,
                           fontWeight: 700,
-                          color: '#0284c7',
-                          background: '#e0f2fe',
-                          border: '1px solid #bae6fd',
+                          color: 'var(--dm-blue-text)',
+                          background: 'var(--dm-blue-bg)',
+                          border: '1px solid var(--dm-blue-border)',
                           padding: '4px 10px',
                           borderRadius: 6,
                           cursor: 'pointer',
@@ -9092,9 +9076,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         style={{
                           padding: '28px 16px',
                           textAlign: 'center',
-                          background: '#ffffff',
+                          background: 'var(--dm-surface)',
                           borderRadius: 10,
-                          border: '1.5px dashed #cbd5e1',
+                          border: '1.5px dashed var(--dm-border-strong)',
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'center',
@@ -9102,20 +9086,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         }}
                       >
                         <Package size={32} color="#94a3b8" />
-                        <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--dm-text-secondary)' }}>
                           Chưa có mặt hàng nào trong phiếu xuất
                         </span>
-                        <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                        <span style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
                           Bấm nút <strong>"+ Thêm mặt hàng"</strong> ở trên, hoặc đóng phiếu để <strong>tích chọn nhanh từ bảng kho</strong> bên ngoài.
                         </span>
                       </div>
                     ) : (
                       <div
                         style={{
-                          border: '1px solid #e2e8f0',
+                          border: '1px solid var(--dm-border)',
                           borderRadius: 10,
                           overflow: 'hidden',
-                          background: '#ffffff',
+                          background: 'var(--dm-surface)',
                           boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                         }}
                       >
@@ -9127,11 +9111,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             gap: 8,
                             alignItems: 'center',
                             padding: '8px 12px',
-                            background: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
+                            background: 'var(--dm-surface-subtle)',
+                            borderBottom: '1px solid var(--dm-border)',
                             fontSize: 11,
                             fontWeight: 700,
-                            color: '#64748b',
+                            color: 'var(--dm-text-muted)',
                             textTransform: 'uppercase',
                             letterSpacing: '0.03em',
                           }}
@@ -9161,8 +9145,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   gap: 8,
                                   alignItems: 'center',
                                   padding: '7px 12px',
-                                  background: idx % 2 === 0 ? '#ffffff' : '#fafafa',
-                                  borderBottom: idx === batchItems.length - 1 ? 'none' : '1px solid #f1f5f9',
+                                  background: idx % 2 === 0 ? 'var(--dm-surface)' : '#fafafa',
+                                  borderBottom: idx === batchItems.length - 1 ? 'none' : '1px solid var(--dm-border)',
                                   transition: 'background 0.15s ease',
                                 }}
                               >
@@ -9171,8 +9155,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   width: 22,
                                   height: 22,
                                   borderRadius: 5,
-                                  background: '#f1f5f9',
-                                  color: '#475569',
+                                  background: 'var(--dm-surface-muted)',
+                                  color: 'var(--dm-text-secondary)',
                                   fontSize: 11,
                                   fontWeight: 800,
                                   display: 'flex',
@@ -9192,12 +9176,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       width: '100%',
                                       height: 33,
                                       borderRadius: 6,
-                                      border: '1px solid #cbd5e1',
-                                      background: '#ffffff',
+                                      border: '1px solid var(--dm-border-strong)',
+                                      background: 'var(--dm-surface)',
                                       padding: '0 8px',
                                       fontSize: 12.5,
                                       fontWeight: 600,
-                                      color: '#0f172a',
+                                      color: 'var(--dm-text-strong)',
                                       outline: 'none',
                                       cursor: 'pointer',
                                       boxSizing: 'border-box',
@@ -9231,9 +9215,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     textAlign: 'center',
                                     fontSize: 10.5,
                                     fontWeight: 700,
-                                    color: isDurable ? '#15803d' : '#b45309',
-                                    background: isDurable ? '#ecfdf5' : '#fef3c7',
-                                    border: '1px solid ' + (isDurable ? '#bbf7d0' : '#fde68a'),
+                                    color: isDurable ? 'var(--dm-green-text)' : 'var(--dm-amber-text)',
+                                    background: isDurable ? 'var(--dm-green-bg)' : 'var(--dm-amber-bg)',
+                                    border: '1px solid ' + (isDurable ? 'var(--dm-green-border)' : 'var(--dm-amber-border)'),
                                     padding: '3px 0',
                                     borderRadius: 5,
                                     whiteSpace: 'nowrap',
@@ -9249,7 +9233,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   style={{
                                     textAlign: 'center',
                                     fontSize: 11.5,
-                                    color: '#0f172a',
+                                    color: 'var(--dm-text-strong)',
                                     fontWeight: 600,
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
@@ -9257,8 +9241,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                   }}
                                   title={`${maxStock} ${unitName}`}
                                 >
-                                  <strong style={{ color: '#0284c7' }}>{maxStock}</strong>{' '}
-                                  <span style={{ color: '#64748b', fontSize: 11 }}>{unitName}</span>
+                                  <strong style={{ color: 'var(--dm-blue-text)' }}>{maxStock}</strong>{' '}
+                                  <span style={{ color: 'var(--dm-text-muted)', fontSize: 11 }}>{unitName}</span>
                                 </div>
 
                                 {/* Cột 5: Bộ điều khiển số lượng xuất (cố định 135px) */}
@@ -9267,9 +9251,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     style={{
                                       display: 'flex',
                                       alignItems: 'center',
-                                      border: '1px solid #cbd5e1',
+                                      border: '1px solid var(--dm-border-strong)',
                                       borderRadius: 6,
-                                      background: '#ffffff',
+                                      background: 'var(--dm-surface)',
                                       height: 29,
                                       padding: '0 2px',
                                       boxSizing: 'border-box',
@@ -9284,8 +9268,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                         height: 21,
                                         borderRadius: 4,
                                         border: 'none',
-                                        background: bi.quantity <= 1 ? 'transparent' : '#f1f5f9',
-                                        color: bi.quantity <= 1 ? '#cbd5e1' : '#334155',
+                                        background: bi.quantity <= 1 ? 'transparent' : 'var(--dm-surface-muted)',
+                                        color: bi.quantity <= 1 ? '#cbd5e1' : 'var(--dm-text-secondary)',
                                         cursor: bi.quantity <= 1 ? 'not-allowed' : 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -9311,7 +9295,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                         textAlign: 'center',
                                         fontWeight: 800,
                                         fontSize: 12,
-                                        color: '#0f172a',
+                                        color: 'var(--dm-text-strong)',
                                         background: 'transparent',
                                         padding: 0,
                                       }}
@@ -9326,8 +9310,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                         height: 21,
                                         borderRadius: 4,
                                         border: 'none',
-                                        background: bi.quantity >= maxStock ? 'transparent' : '#f1f5f9',
-                                        color: bi.quantity >= maxStock ? '#cbd5e1' : '#334155',
+                                        background: bi.quantity >= maxStock ? 'transparent' : 'var(--dm-surface-muted)',
+                                        color: bi.quantity >= maxStock ? '#cbd5e1' : 'var(--dm-text-secondary)',
                                         cursor: bi.quantity >= maxStock ? 'not-allowed' : 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -9345,9 +9329,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                       style={{
                                         fontSize: 10,
                                         fontWeight: 700,
-                                        color: bi.quantity === maxStock ? '#15803d' : '#0284c7',
-                                        background: bi.quantity === maxStock ? '#dcfce7' : '#f0f9ff',
-                                        border: bi.quantity === maxStock ? '1px solid #86efac' : '1px solid #bae6fd',
+                                        color: bi.quantity === maxStock ? 'var(--dm-green-text)' : 'var(--dm-blue-text)',
+                                        background: bi.quantity === maxStock ? 'var(--dm-green-bg)' : 'var(--dm-blue-bg)',
+                                        border: bi.quantity === maxStock ? '1px solid var(--dm-green-border)' : '1px solid var(--dm-blue-border)',
                                         borderRadius: 5,
                                         padding: '0 6px',
                                         height: 27,
@@ -9368,8 +9352,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                                     onClick={() => handleRemoveBatchItem(idx)}
                                     style={{
                                       border: 'none',
-                                      background: '#fee2e2',
-                                      color: '#dc2626',
+                                      background: 'var(--dm-red-bg)',
+                                      color: 'var(--dm-red-text)',
                                       borderRadius: 6,
                                       width: 26,
                                       height: 26,
@@ -9396,17 +9380,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {/* Footer với Tóm tắt số lượng & Nút hành động */}
                 <div className="executive-modal-footer" style={{
                   padding: '12px 22px',
-                  background: '#f8fafc',
-                  borderTop: '1px solid #e2e8f0',
+                  background: 'var(--dm-surface-subtle)',
+                  borderTop: '1px solid var(--dm-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#475569' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--dm-text-secondary)' }}>
                     <span>Tổng xuất:</span>
-                    <strong style={{ color: '#0369a1' }}>{totalItemsCount} mặt hàng</strong>
+                    <strong style={{ color: 'var(--dm-blue-text)' }}>{totalItemsCount} mặt hàng</strong>
                     <span>•</span>
-                    <strong style={{ color: '#16a34a' }}>{totalUnitsCount.toLocaleString('vi-VN')} đơn vị</strong>
+                    <strong style={{ color: 'var(--dm-green-text)' }}>{totalUnitsCount.toLocaleString('vi-VN')} đơn vị</strong>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -1632,14 +1632,14 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             style={{
               width: '100%',
               maxWidth: 440,
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--dm-surface)',
               borderRadius: 16,
               boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.8)',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
               animation: 'sosModalPopCenter 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-              border: '1.5px solid #e2e8f0',
+              border: '1.5px solid var(--dm-border)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -1651,8 +1651,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                   <div
                     style={{
                       padding: '16px 20px',
-                      background: isSuccess ? '#f0fdf4' : '#fef2f2',
-                      borderBottom: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`,
+                      background: isSuccess ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+                      borderBottom: `1px solid ${isSuccess ? 'var(--dm-green-border)' : 'var(--dm-red-border)'}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -1665,8 +1665,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                           width: 36,
                           height: 36,
                           borderRadius: 10,
-                          backgroundColor: isSuccess ? '#dcfce7' : '#fee2e2',
-                          color: isSuccess ? '#16a34a' : '#dc2626',
+                          backgroundColor: isSuccess ? 'var(--dm-green-bg)' : 'var(--dm-red-bg)',
+                          color: isSuccess ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -1681,7 +1681,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                             margin: 0,
                             fontSize: 15,
                             fontWeight: 800,
-                            color: isSuccess ? '#166534' : '#991b1b',
+                            color: isSuccess ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
                           }}
                         >
                           {isSuccess ? 'Thông Báo Tác Chiến' : 'Lưu Ý Điều Phối'}
@@ -1689,7 +1689,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                         <span
                           style={{
                             fontSize: 11.5,
-                            color: isSuccess ? '#15803d' : '#b91c1c',
+                            color: isSuccess ? 'var(--dm-green-text)' : 'var(--dm-red-text)',
                             fontWeight: 600,
                           }}
                         >
@@ -1704,7 +1704,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                       style={{
                         background: 'transparent',
                         border: 'none',
-                        color: '#64748b',
+                        color: 'var(--dm-text-muted)',
                         cursor: 'pointer',
                         padding: 6,
                         borderRadius: 6,
@@ -1724,7 +1724,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                       style={{
                         fontSize: 14,
                         lineHeight: 1.6,
-                        color: '#1e293b',
+                        color: 'var(--dm-text-body)',
                         fontWeight: 600,
                       }}
                     >

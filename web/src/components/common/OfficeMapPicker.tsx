@@ -216,7 +216,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
             disabled={readOnly}
             onChange={handleUrlInputChange}
             placeholder={readOnly ? 'Chưa cập nhật đường dẫn Google Maps' : 'https://www.google.com/maps?q=16.070975,108.192211'}
-            style={readOnly ? { background: '#f8fafc', color: '#475569', cursor: 'default' } : undefined}
+            style={readOnly ? { background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', cursor: 'default' } : undefined}
           />
           <button
             type="button"
@@ -235,7 +235,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
         <div ref={mapContainerRef} className="sos-office-map-canvas" />
         <div className="sos-office-map-footer">
           <div className="sos-office-map-address-row">
-            <i className="bi bi-geo-alt-fill" style={{ color: '#e11d48', flexShrink: 0 }} />
+            <i className="bi bi-geo-alt-fill" style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
             <span>
               {resolvingAddr
                 ? 'Đang xác định địa chỉ từ tọa độ...'
@@ -244,7 +244,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
           </div>
           <div className="sos-office-map-hint-row">
             <span className="sos-office-map-hint-text">
-              <i className={`bi ${readOnly ? 'bi-info-circle-fill' : 'bi-lightbulb-fill'}`} style={{ color: readOnly ? '#0284c7' : '#eab308', marginRight: 4 }} />
+              <i className={`bi ${readOnly ? 'bi-info-circle-fill' : 'bi-lightbulb-fill'}`} style={{ color: readOnly ? 'var(--dm-blue-text)' : '#eab308', marginRight: 4 }} />
               {readOnly
                 ? 'Vị trí trụ sở Ủy ban do cán bộ địa phương cập nhật (chỉ xem).'
                 : 'Bấm hoặc kéo ghim trên bản đồ để chọn chính xác.'}
