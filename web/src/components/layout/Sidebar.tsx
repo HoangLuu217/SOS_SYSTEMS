@@ -404,7 +404,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'chat',
           label: 'Trao đổi',
           icon: <MessageSquare size={18} className="sos-nav-icon" />,
-          badge: chatUnreadCount > 0 ? 'dot' : (activeKey !== 'chat' ? 'dot' : undefined),
+          badge: chatUnreadCount > 0 ? 'dot' : undefined,
           badgeType: 'danger',
         },
       ],

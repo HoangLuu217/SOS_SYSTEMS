@@ -600,11 +600,16 @@ class ChatService {
       const hasMessages = activeDirectSet.has(channel);
       const partnerRole = partner.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY';
 
+      // Nếu là cán bộ địa phương (không phải Admin): ẩn phần cán bộ nhắn với cán bộ,
+      // chỉ giữ Quản trị viên, Kênh Chỉ Huy Chung, Cứu hộ viên và Người dân.
+      if (isAuthority && !isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') {
+        continue;
+      }
+
       const isVisible =
         hasMessages ||
         partnerRole === 'ADMIN' ||
-        (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') ||
-        (isAuthority && partnerRole === 'LOCAL_AUTHORITY');
+        (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY');
 
       if (!isVisible) continue;
 
@@ -633,25 +638,21 @@ class ChatService {
       });
     }
 
-    // 9. Sắp xếp: Kênh tác chiến chung và kênh địa bàn ưu tiên trước, sau đó theo thời gian tin nhắn mới nhất
-    const channels = conversations.filter((c) => c.type === 'CHANNEL');
-    const directs = conversations.filter((c) => c.type === 'DIRECT');
+    // 9. Sắp xếp: Đưa Quản trị viên lên đầu, tiếp theo Kênh Chỉ Huy Chung, sau đó các cuộc hội thoại khác theo thời gian mới nhất
+    const getPriority = (c) => {
+      if (c.type === 'DIRECT' && c.role === 'ADMIN') return 0;
+      if (c.channel === 'COMMAND_GENERAL') return 1;
+      return 2;
+    };
 
-    const sortedChannels = channels.sort((a, b) => {
-      if (a.channel === 'COMMAND_GENERAL') return -1;
-      if (b.channel === 'COMMAND_GENERAL') return 1;
+    return conversations.sort((a, b) => {
+      const pA = getPriority(a);
+      const pB = getPriority(b);
+      if (pA !== pB) return pA - pB;
       const timeA = a.latestMessage ? new Date(a.latestMessage.createdAt).getTime() : 0;
       const timeB = b.latestMessage ? new Date(b.latestMessage.createdAt).getTime() : 0;
       return timeB - timeA;
     });
-
-    const sortedDirects = directs.sort((a, b) => {
-      const timeA = a.latestMessage ? new Date(a.latestMessage.createdAt).getTime() : 0;
-      const timeB = b.latestMessage ? new Date(b.latestMessage.createdAt).getTime() : 0;
-      return timeB - timeA;
-    });
-
-    return [...sortedChannels, ...sortedDirects];
   }
 
   /**

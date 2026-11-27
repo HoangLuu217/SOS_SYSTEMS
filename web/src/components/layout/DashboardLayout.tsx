@@ -55,12 +55,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         style={{
           overflow:
             activeNavKey === 'map' ||
-            activeNavKey === 'coordination' ||
-            activeNavKey === 'hazard_reports' ||
-            activeNavKey === 'shelters' ||
-            activeNavKey === 'notifications' ||
-            activeNavKey === 'alerts' ||
-            activeNavKey === 'chat'
+              activeNavKey === 'coordination' ||
+              activeNavKey === 'hazard_reports' ||
+              activeNavKey === 'shelters' ||
+              activeNavKey === 'notifications' ||
+              activeNavKey === 'alerts' ||
+              activeNavKey === 'chat'
               ? 'hidden'
               : 'auto',
           height: '100vh',
@@ -87,46 +87,48 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         ) : (
           /* Các màn hình quản trị nghiệp vụ khác */
           <>
-            <header className="sos-main-header">
-              <div className="sos-page-title-wrap">
-                <div>
-                  <h1 className="sos-page-title">{currentMeta.title}</h1>
-                  {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
-                {isAuthority && (
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      background: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderRadius: 8,
-                      padding: '6px 14px',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#1d4ed8',
-                      boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
-                    }}
-                    title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
-                  >
-                    <MapPin size={14} style={{ color: '#2563eb' }} />
-                    <span>
-                      Khu vực:{' '}
-                      {userAreaName
-                        ? userAreaName.includes('Đà Nẵng') || userAreaName.includes('Hà Nội') || userAreaName.includes('Hồ Chí Minh')
-                          ? userAreaName
-                          : `${userAreaName}, Thành phố Đà Nẵng`
-                        : 'Xã Xuân Phú, Thành phố Đà Nẵng'}
-                    </span>
+            {activeNavKey !== 'chat' && (
+              <header className="sos-main-header">
+                <div className="sos-page-title-wrap">
+                  <div>
+                    <h1 className="sos-page-title">{currentMeta.title}</h1>
+                    {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
                   </div>
-                )}
-              </div>
-            </header>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
+                  {isAuthority && (
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#1d4ed8',
+                        boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
+                      }}
+                      title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
+                    >
+                      <MapPin size={14} style={{ color: '#2563eb' }} />
+                      <span>
+                        Khu vực:{' '}
+                        {userAreaName
+                          ? userAreaName.includes('Đà Nẵng') || userAreaName.includes('Hà Nội') || userAreaName.includes('Hồ Chí Minh')
+                            ? userAreaName
+                            : `${userAreaName}, Thành phố Đà Nẵng`
+                          : 'Xã Xuân Phú, Thành phố Đà Nẵng'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </header>
+            )}
 
             <div
               className="sos-page-body"
@@ -137,19 +139,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 minHeight: 0,
                 overflow:
                   activeNavKey === 'hazard_reports' ||
-                  activeNavKey === 'shelters' ||
-                  activeNavKey === 'notifications' ||
-                  activeNavKey === 'alerts' ||
-                  activeNavKey === 'chat'
+                    activeNavKey === 'shelters' ||
+                    activeNavKey === 'notifications' ||
+                    activeNavKey === 'alerts' ||
+                    activeNavKey === 'chat'
                     ? 'hidden'
                     : 'auto',
                 padding:
-                  activeNavKey === 'hazard_reports' ||
-                  activeNavKey === 'shelters' ||
-                  activeNavKey === 'notifications' ||
-                  activeNavKey === 'alerts'
-                    ? '14px 20px 16px'
-                    : '12px 18px 14px',
+                  activeNavKey === 'chat'
+                    ? 0
+                    : activeNavKey === 'hazard_reports' ||
+                        activeNavKey === 'shelters' ||
+                        activeNavKey === 'notifications' ||
+                        activeNavKey === 'alerts'
+                      ? '14px 20px 16px'
+                      : '12px 18px 14px',
               }}
             >
               <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>

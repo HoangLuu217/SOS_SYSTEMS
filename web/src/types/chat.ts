@@ -57,7 +57,7 @@ export interface ChatConversationItem {
   email?: string;
   address?: string;
   avatarUrl?: string;
-  role: 'ADMIN' | 'LOCAL_AUTHORITY' | 'CITIZEN' | 'ALL';
+  role: 'ADMIN' | 'LOCAL_AUTHORITY' | 'CITIZEN' | 'RESCUER' | 'ALL';
   areaName?: string;
   position?: string;
   unreadCount: number;
