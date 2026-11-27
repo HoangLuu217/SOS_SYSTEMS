@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
 const { User, AdministrativeArea } = require('../models');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const ApiError = require('../utils/apiError');
 const { isValidPassword, isValidPhone, validatePasswordStrength } = require('../utils/validation.util');
 const cloudinary = require('../config/cloudinary');
@@ -586,6 +589,83 @@ class UserService {
     return {
       success: true,
       message: 'Xác thực số điện thoại thành công!',
+      user: user.toSafeObject(),
+    };
+  }
+
+  /**
+   * Liên kết tài khoản Google vào tài khoản hiện tại (dùng làm phương thức đăng nhập phụ)
+   */
+  async linkGoogleAccount(userId, { idToken, credential, googleId: inputGoogleId, email: inputEmail, avatarUrl }) {
+    let googleId = inputGoogleId;
+    let email = inputEmail;
+    let picture = avatarUrl;
+    const rawToken = idToken || credential;
+
+    if (rawToken && !email) {
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: rawToken,
+          audience: process.env.GOOGLE_CLIENT_ID || undefined,
+        });
+        const payload = ticket.getPayload();
+        googleId = payload.sub;
+        email = payload.email;
+        picture = picture || payload.picture;
+      } catch (err) {
+        if (!inputEmail) {
+          throw new ApiError(401, `Xác thực Google thất bại: ${err.message}`);
+        }
+      }
+    }
+
+    if (!email) {
+      throw new ApiError(400, 'Không tìm thấy địa chỉ email từ tài khoản Google.');
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const resolvedGoogleId = googleId ? String(googleId).trim() : normalizedEmail;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
+    }
+
+    // Kiểm tra Google ID hoặc Email này đã thuộc về tài khoản khác chưa
+    const conflictQuery = [{ email: normalizedEmail }];
+    if (resolvedGoogleId) {
+      conflictQuery.push({ googleId: resolvedGoogleId });
+    }
+    const existingOther = await User.findOne({
+      _id: { $ne: userId },
+      $or: conflictQuery,
+    });
+    if (existingOther) {
+      throw new ApiError(409, 'Tài khoản Google này đã được liên kết với một tài khoản khác.');
+    }
+
+    user.googleId = resolvedGoogleId;
+    if (!user.email) {
+      user.email = normalizedEmail;
+    }
+    if (!user.avatarUrl && picture) {
+      user.avatarUrl = picture;
+    }
+    user.isVerified = true;
+    await user.save();
+
+    await auditService.log({
+      actorId: user._id,
+      actorRole: user.roles?.[0] || 'USER',
+      action: 'UPDATE_PROFILE',
+      entityType: 'User',
+      entityId: user._id,
+      metadata: { linkedGoogle: normalizedEmail },
+    });
+
+    return {
+      success: true,
+      message: 'Liên kết tài khoản Google thành công!',
       user: user.toSafeObject(),
     };
   }

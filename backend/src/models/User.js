@@ -495,6 +495,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
  */
 userSchema.methods.toSafeObject = function () {
   const obj = this.toObject ? this.toObject() : { ...this };
+  obj.hasPassword = Boolean(this.passwordHash);
   delete obj.passwordHash;
   delete obj.sessions;
   delete obj.resetPasswordTokenHash;

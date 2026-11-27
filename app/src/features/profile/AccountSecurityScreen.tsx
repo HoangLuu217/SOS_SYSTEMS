@@ -27,14 +27,28 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
   onBack,
   onOpenForgotPassword,
 }) => {
-  const { user, supabaseUser, updateUserProfile } = useAuth();
+  const { user, supabaseUser, updateUserProfile, linkGoogleAccount } = useAuth();
 
-  // Xác định người dùng đăng nhập qua Google OAuth hay tài khoản mật khẩu (SĐT / Email)
+  // Xác định người dùng đã liên kết Google OAuth chưa
   const isGoogleUser = Boolean(
     user?.googleId ||
     supabaseUser?.app_metadata?.provider === 'google' ||
     supabaseUser?.identities?.some((id: any) => id.provider === 'google')
   );
+
+  // Kiểm tra tài khoản đã có mật khẩu chưa (Google-first user ban đầu chưa có mật khẩu)
+  const [hasPasswordOverride, setHasPasswordOverride] = useState<boolean | null>(null);
+  const hasPassword =
+    hasPasswordOverride !== null
+      ? hasPasswordOverride
+      : user?.hasPassword !== undefined
+      ? user.hasPassword
+      : !isGoogleUser;
+
+  // States liên kết tài khoản Google phụ
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [googleLinkError, setGoogleLinkError] = useState<string | null>(null);
+  const [googleLinkSuccess, setGoogleLinkSuccess] = useState<string | null>(null);
 
   // States cho tính năng xác thực Số điện thoại (SMS OTP)
   const [phoneInput, setPhoneInput] = useState(user?.phone || '');
@@ -171,6 +185,24 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
     setErrors({});
   };
 
+  const handleLinkGoogle = async () => {
+    setGoogleLinkError(null);
+    setGoogleLinkSuccess(null);
+    setIsLinkingGoogle(true);
+    try {
+      const res = await linkGoogleAccount();
+      if (res.success) {
+        setGoogleLinkSuccess(res.message || 'Liên kết tài khoản Google thành công!');
+      } else {
+        setGoogleLinkError(res.message || 'Không thể liên kết tài khoản Google.');
+      }
+    } catch (err: any) {
+      setGoogleLinkError(err?.message || 'Lỗi khi liên kết tài khoản Google.');
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
   const validate = () => {
     const newErrors: {
       currentPassword?: string;
@@ -178,7 +210,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
       confirmPassword?: string;
     } = {};
 
-    if (!currentPassword.trim()) {
+    if (hasPassword && !currentPassword.trim()) {
       newErrors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại';
     }
 
@@ -208,9 +240,14 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
     setSuccessMessage(null);
 
     try {
-      const res = await backendApi.changePassword(currentPassword, newPassword);
+      const res = await backendApi.changePassword(hasPassword ? currentPassword : '', newPassword);
       if (res.success) {
-        setSuccessMessage('Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới.');
+        setHasPasswordOverride(true);
+        setSuccessMessage(
+          hasPassword
+            ? 'Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới.'
+            : 'Thiết lập mật khẩu thành công! Bạn có thể dùng SĐT/Email và mật khẩu để đăng nhập.'
+        );
         handleResetForm();
       } else {
         const errorMsg = res.message || 'Không thể đổi mật khẩu';
@@ -312,63 +349,77 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
           )}
 
           {/* ========================================================
-              TRƯỜNG HỢP 1: TÀI KHOẢN GOOGLE
-              - Không có phần đổi mật khẩu
-              - Có card thông tin Google & Xác thực số điện thoại
+              CARD 1: LIÊN KẾT TÀI KHOẢN GOOGLE (ĐĂNG NHẬP PHỤ)
              ======================================================== */}
-          {isGoogleUser ? (
-            <>
-              {/* Card 1: Thông tin tài khoản Google (Không có phần đổi mật khẩu) */}
-              <View style={styles.card}>
-                <View style={styles.googleAccountHeader}>
-                  <View style={styles.googleIconBox}>
-                    <Ionicons name="logo-google" size={26} color="#4285F4" />
-                  </View>
-                  <View style={styles.googleHeaderTextWrap}>
-                    <Text style={styles.googleHeaderTitle}>Tài khoản liên kết Google</Text>
-                    <Text style={styles.googleEmailText}>
-                      {user?.email || supabaseUser?.email || ''}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.googleDivider} />
-
-                {/* Lời giải thích bắt buộc theo yêu cầu */}
-                <View style={styles.googleExplanationBox}>
-                  <View style={styles.googleNoticeIconWrap}>
-                    <Feather name="info" size={18} color="#0284C7" />
-                  </View>
-                  <Text style={styles.googleExplanationText}>
-                    Bạn đang đăng nhập bằng Google. Quản lý mật khẩu trong tài khoản Google của bạn.
-                  </Text>
-                </View>
-
-                {/* Thông tin phụ trợ bảo mật của Google */}
-                <View style={styles.googleFeaturesList}>
-                  <View style={styles.googleFeatureRow}>
-                    <Feather name="check-circle" size={16} color={PROFILE_THEME.colors.success} />
-                    <Text style={styles.googleFeatureText}>
-                      Đăng nhập an toàn một chạm qua OAuth2
-                    </Text>
-                  </View>
-                  <View style={styles.googleFeatureRow}>
-                    <Feather name="shield" size={16} color={PROFILE_THEME.colors.success} />
-                    <Text style={styles.googleFeatureText}>
-                      Bảo vệ bởi hệ thống chống xâm nhập Google Guard
-                    </Text>
-                  </View>
-                  <View style={styles.googleFeatureRow}>
-                    <Feather name="lock" size={16} color="#64748B" />
-                    <Text style={styles.googleFeatureTextMuted}>
-                      Không lưu trữ mật khẩu trực tiếp trên hệ thống cứu hộ cứu nạn
-                    </Text>
-                  </View>
-                </View>
+          <View style={styles.card}>
+            <View style={styles.googleAccountHeader}>
+              <View style={styles.googleIconBox}>
+                <Ionicons name="logo-google" size={24} color="#4285F4" />
               </View>
+              <View style={styles.googleHeaderTextWrap}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Text style={styles.googleHeaderTitle}>
+                    {isGoogleUser ? 'Đã liên kết Google' : 'Liên kết tài khoản Google'}
+                  </Text>
+                  {isGoogleUser && (
+                    <View style={styles.verifiedBadge}>
+                      <Feather name="check" size={12} color="#059669" />
+                      <Text style={styles.verifiedBadgeText}>Đã liên kết</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.googleEmailText}>
+                  {isGoogleUser
+                    ? user?.email || supabaseUser?.email || 'Đã kết nối Google OAuth'
+                    : 'Liên kết thêm Gmail để đăng nhập nhanh bằng Google'}
+                </Text>
+              </View>
+            </View>
 
-              {/* Card 2: Xác thực số điện thoại (Bổ sung cho tài khoản Google) */}
-              <View style={[styles.card, { marginTop: 16 }]}>
+            {googleLinkSuccess && (
+              <View style={[styles.phoneSuccessBanner, { marginTop: 12 }]}>
+                <Feather name="check-circle" size={16} color="#059669" />
+                <Text style={styles.phoneSuccessText}>{googleLinkSuccess}</Text>
+              </View>
+            )}
+
+            {googleLinkError && (
+              <View style={[styles.phoneErrorBanner, { marginTop: 12 }]}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.phoneErrorText}>{googleLinkError}</Text>
+              </View>
+            )}
+
+            {!isGoogleUser && (
+              <TouchableOpacity
+                style={[
+                  styles.verifySubmitBtn,
+                  { marginTop: 14, backgroundColor: '#2563EB' },
+                  isLinkingGoogle && styles.buttonDisabled,
+                ]}
+                onPress={handleLinkGoogle}
+                disabled={isLinkingGoogle}
+                activeOpacity={0.8}
+              >
+                {isLinkingGoogle ? (
+                  <View style={styles.buttonInner}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.primaryButtonText}>Đang liên kết Google...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.buttonInner}>
+                    <Ionicons name="logo-google" size={17} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryButtonText}>Liên kết tài khoản Google</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* ========================================================
+              CARD 2: XÁC THỰC SỐ ĐIỆN THOẠI (CHO TẤT CẢ TÀI KHOẢN)
+             ======================================================== */}
+          <View style={[styles.card, { marginTop: 16 }]}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={[styles.sectionIconWrap, { backgroundColor: '#F0F9FF' }]}>
                     <Feather name="phone-call" size={18} color="#0284C7" />
@@ -592,21 +643,29 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
                   </View>
                 )}
               </View>
-            </>
-          ) : (
-            /* ========================================================
-                TRƯỜNG HỢP 2: TÀI KHOẢN CÓ MẬT KHẨU (Đăng nhập SĐT hoặc Gmail)
-                Chỉ có duy nhất 1 tab là Đổi mật khẩu
-               ======================================================== */
-            <View style={styles.card}>
+
+            {/* ========================================================
+                CARD 3: THIẾT LẬP HOẶC ĐỔI MẬT KHẨU (MỌI TÀI KHOẢN)
+               ======================================================== */}
+            <View style={[styles.card, { marginTop: 16 }]}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionIconWrap}>
                   <Feather name="lock" size={18} color={PROFILE_THEME.colors.primary} />
                 </View>
-                <Text style={styles.sectionTitle}>Đổi mật khẩu</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>
+                    {hasPassword ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu'}
+                  </Text>
+                  {!hasPassword && (
+                    <Text style={styles.sectionSubtitle}>
+                      Đặt mật khẩu để đăng nhập bằng SĐT/Email song song với Google
+                    </Text>
+                  )}
+                </View>
               </View>
 
-              {/* 1. Mật khẩu hiện tại */}
+              {/* 1. Mật khẩu hiện tại (chỉ hiển thị khi đã có mật khẩu) */}
+              {hasPassword && (
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>
                   Mật khẩu hiện tại <Text style={styles.requiredStar}>*</Text>
@@ -652,6 +711,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
                   </View>
                 ) : null}
               </View>
+              )}
 
               {/* 2. Mật khẩu mới */}
               <View style={styles.inputGroup}>
@@ -772,24 +832,27 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
                 ) : (
                   <View style={styles.buttonInner}>
                     <Feather name="check-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.primaryButtonText}>Đổi mật khẩu</Text>
+                    <Text style={styles.primaryButtonText}>
+                      {hasPassword ? 'Đổi mật khẩu' : 'Lưu mật khẩu'}
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>
 
               {/* Liên kết phụ: Quên mật khẩu? */}
-              <View style={styles.forgotPasswordContainer}>
-                <TouchableOpacity
-                  onPress={handleOpenForgot}
-                  activeOpacity={0.7}
-                  style={styles.forgotPasswordButton}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-                </TouchableOpacity>
-              </View>
+              {hasPassword && (
+                <View style={styles.forgotPasswordContainer}>
+                  <TouchableOpacity
+                    onPress={handleOpenForgot}
+                    activeOpacity={0.7}
+                    style={styles.forgotPasswordButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-          )}
 
           {/* Khoảng cách đáy an toàn tránh đè lên Bottom Navbar */}
           <View style={{ height: 48 }} />

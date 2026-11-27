@@ -129,6 +129,18 @@ class UserController {
       next(error);
     }
   }
+
+  /**
+   * POST /users/me/link-google
+   */
+  async linkGoogle(req, res, next) {
+    try {
+      const result = await userService.linkGoogleAccount(req.user._id, req.body || {});
+      return sendSuccess(res, 200, result.message || 'Liên kết tài khoản Google thành công!', result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new UserController();

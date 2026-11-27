@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { CccdQrScannerModal } from '@/components/CccdQrScannerModal';
-import type { ParsedCccdData } from '@/utils/cccdHelper';
+import { validateRescuerAge, type ParsedCccdData } from '@/utils/cccdHelper';
 import {
   backendApi,
   provinceApi,
@@ -177,8 +177,23 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
     )
   );
   const [scannedCccdInfo, setScannedCccdInfo] = useState<ParsedCccdData | null>(null);
+  const [profileDob, setProfileDob] = useState<string>(() => userData?.dateOfBirth || '');
 
   const handleScanCccdSuccess = (data: ParsedCccdData) => {
+    const cccdDob = data.dateOfBirthRaw || data.formattedDob;
+    if (cccdDob) {
+      const ageCheck = validateRescuerAge(cccdDob);
+      if (!ageCheck.isValid) {
+        Alert.alert('Chưa đủ điều kiện độ tuổi', ageCheck.message, [
+          { text: 'Đã hiểu', style: 'default' },
+        ]);
+        return;
+      }
+      if (ageCheck.isoDate) {
+        setProfileDob(ageCheck.isoDate);
+      }
+    }
+
     setIdNumber(data.idNumber);
     setIsCccdQrVerified(true);
     setScannedCccdInfo(data);
@@ -209,6 +224,9 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
         if (res.success && res.data && isMounted) {
           const u = user as any;
           const rescuer: any = res.data.rescuer || u?.rescuer || {};
+          if (res.data.dateOfBirth || u?.dateOfBirth) {
+            setProfileDob(res.data.dateOfBirth || u?.dateOfBirth);
+          }
           const existingId = rescuer.idNumber || u?.idNumber || u?.citizen?.idNumber || u?.idCard;
           const cleanExistingId = existingId ? String(existingId).replace(/\D/g, '') : '';
           const cleanRescuerId = rescuer.idNumber ? String(rescuer.idNumber).replace(/\D/g, '') : '';
@@ -434,6 +452,20 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
       }
     }
 
+    // 1b. Kiểm tra độ tuổi đăng ký Cứu hộ viên (từ đủ 18 đến 60 tuổi)
+    const dobToValidate =
+      scannedCccdInfo?.dateOfBirthRaw ||
+      scannedCccdInfo?.formattedDob ||
+      profileDob ||
+      userData?.dateOfBirth;
+    const ageCheck = validateRescuerAge(dobToValidate);
+    if (!ageCheck.isValid) {
+      Alert.alert('Chưa đủ điều kiện độ tuổi', ageCheck.message, [
+        { text: 'Đã hiểu', style: 'default' },
+      ]);
+      return;
+    }
+
     // 2. Bắt buộc chọn địa bàn tác chiến
     if (!selectedAreaName && !selectedAreaId) {
       Alert.alert(
@@ -491,6 +523,7 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
         isCccdVerified: isCccdQrVerified,
         skills: selectedSkills,
         experience: experience.trim(),
+        dateOfBirth: ageCheck.isoDate,
         areaId: isValidObjectId(selectedAreaId) ? selectedAreaId : undefined,
         areaName: selectedAreaName || undefined,
       });

@@ -155,6 +155,23 @@ export class UserApi {
     }
     return res;
   }
+
+  /**
+   * Liên kết tài khoản Google vào tài khoản hiện tại
+   */
+  async linkGoogleAccount(payload: {
+    idToken?: string;
+    credential?: string;
+    googleId?: string;
+    email?: string;
+    avatarUrl?: string;
+  }): Promise<ApiResponse<{ user: UserProfile }>> {
+    const res = await this.client.post<{ user: UserProfile }>('/users/me/link-google', payload);
+    if (res.success && res.data?.user) {
+      await this.client.saveUser(res.data.user);
+    }
+    return res;
+  }
 }
 
 export const userApi = new UserApi();

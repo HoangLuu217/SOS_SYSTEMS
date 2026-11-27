@@ -45,6 +45,7 @@ export interface AuthContextType {
   updateUserAvatar: (avatarUrl: string) => Promise<{ success: boolean; message: string }>;
   sendUserPhoneOtp: (phone: string) => Promise<{ success: boolean; message: string }>;
   verifyUserPhone: (phone: string, otp: string) => Promise<{ success: boolean; message: string; user?: UserProfile }>;
+  linkGoogleAccount: () => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -664,6 +665,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
+   * Liên kết tài khoản Google vào tài khoản đang đăng nhập
+   */
+  const linkGoogleAccount = async () => {
+    try {
+      if (!isSupabaseConfigured()) {
+        return {
+          success: false,
+          message: 'Chưa cấu hình Supabase để thực hiện xác thực Google OAuth.',
+        };
+      }
+
+      const result = await signInWithGoogleOAuth();
+      if (!result || !result.session || !result.user) {
+        return { success: false, message: 'Quá trình liên kết Google bị hủy.' };
+      }
+
+      const tokenToSend = result.session.access_token || result.providerToken;
+      const googleId =
+        result.user.user_metadata?.sub ||
+        result.user.id ||
+        result.user.identities?.[0]?.identity_data?.sub;
+      const email = result.user.email || result.user.user_metadata?.email;
+      const avatarUrl =
+        result.user.user_metadata?.avatar_url ||
+        result.user.user_metadata?.picture;
+
+      const res = await backendApi.linkGoogleAccount({
+        idToken: tokenToSend,
+        credential: tokenToSend,
+        googleId,
+        email,
+        avatarUrl,
+      });
+
+      if (res.success && res.data?.user) {
+        setSupabaseUser(result.user);
+        setUser(res.data.user);
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(res.data.user));
+        return { success: true, message: res.message || 'Liên kết tài khoản Google thành công!' };
+      }
+
+      return { success: false, message: res.message || 'Không thể liên kết tài khoản Google.' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Lỗi khi liên kết tài khoản Google.' };
+    }
+  };
+
+  /**
    * Đăng xuất
    */
   const logout = async () => {
@@ -710,6 +759,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateUserAvatar,
         sendUserPhoneOtp,
         verifyUserPhone,
+        linkGoogleAccount,
         logout,
         checkSession,
       }}

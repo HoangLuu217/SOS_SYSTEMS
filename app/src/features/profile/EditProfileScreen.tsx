@@ -97,14 +97,23 @@ const parseAddressComponents = (addrStr?: string | any) => {
 };
 
 export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) => {
-  const { user, supabaseUser, updateUserProfile, updateUserAvatar } = useAuth();
+  const { user, supabaseUser, updateUserProfile, updateUserAvatar, linkGoogleAccount } = useAuth();
 
-  // Xác định người dùng đăng nhập qua Google OAuth
+  // Xác định người dùng đã liên kết Google OAuth chưa
   const isGoogleUser = Boolean(
     user?.googleId ||
     supabaseUser?.app_metadata?.provider === 'google' ||
     supabaseUser?.identities?.some((id: any) => id.provider === 'google')
   );
+
+  const [hasPasswordOverride, setHasPasswordOverride] = useState<boolean | null>(null);
+  const hasPassword =
+    hasPasswordOverride !== null
+      ? hasPasswordOverride
+      : user?.hasPassword !== undefined
+      ? user.hasPassword
+      : !isGoogleUser;
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
 
   // Chế độ màn hình: false = Xem thông tin (Mặc định khi vào), true = Chỉnh sửa
   const [isEditing, setIsEditing] = useState(false);
@@ -484,10 +493,27 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     }, Platform.OS === 'ios' ? 100 : 350);
   };
 
-  // Đổi mật khẩu
+  // Liên kết tài khoản Google phụ
+  const handleLinkGoogle = async () => {
+    setIsLinkingGoogle(true);
+    try {
+      const res = await linkGoogleAccount();
+      if (res.success) {
+        Alert.alert('Thành công', res.message || 'Liên kết tài khoản Google thành công!');
+      } else {
+        Alert.alert('Thông báo', res.message || 'Không thể liên kết tài khoản Google.');
+      }
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.message || 'Lỗi khi liên kết tài khoản Google.');
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  // Đổi / Thiết lập mật khẩu
   const handleChangePassword = async () => {
     const newErrors: { currentPassword?: string; newPassword?: string; confirmPassword?: string } = {};
-    if (!currentPassword.trim()) {
+    if (hasPassword && !currentPassword.trim()) {
       newErrors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại';
     }
     if (!newPassword.trim()) {
@@ -509,9 +535,10 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     setPwdSuccess(null);
 
     try {
-      const res = await backendApi.changePassword(currentPassword, newPassword);
+      const res = await backendApi.changePassword(hasPassword ? currentPassword : '', newPassword);
       if (res.success) {
-        setPwdSuccess('Đổi mật khẩu thành công!');
+        setHasPasswordOverride(true);
+        setPwdSuccess(hasPassword ? 'Đổi mật khẩu thành công!' : 'Thiết lập mật khẩu thành công!');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -845,42 +872,82 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 <View style={styles.infoDivider} />
 
                 {/* 2. Mật khẩu đăng nhập */}
-
-                {isGoogleUser ? (
-                  <View style={styles.googleSecurityBox}>
-                    <View style={styles.googleIconCircle}>
-                      <Ionicons name="logo-google" size={20} color="#4285F4" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.googleSecurityTitle}>Đăng nhập bằng Google</Text>
-                      <Text style={styles.googleSecurityDesc}>
-                        Mật khẩu được quản lý trực tiếp và bảo vệ bởi tài khoản Google của bạn.
+                <View style={styles.passwordSecurityRow}>
+                  <Text style={styles.infoLabel}>Mật khẩu</Text>
+                  <View style={styles.securityValueGroup}>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        hasPassword ? { letterSpacing: 1.5 } : { color: '#94A3B8' },
+                      ]}
+                    >
+                      {hasPassword ? '••••••••' : 'Chưa thiết lập'}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.changePasswordBtn}
+                      onPress={() => {
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPwdErrors({});
+                        setPwdSuccess(null);
+                        setShowPasswordModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="lock" size={12} color="#0066FF" />
+                      <Text style={styles.changePasswordBtnText}>
+                        {hasPassword ? 'Đổi mật khẩu' : 'Đặt mật khẩu'}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={styles.passwordSecurityRow}>
-                    <Text style={styles.infoLabel}>Mật khẩu</Text>
-                    <View style={styles.securityValueGroup}>
-                      <Text style={[styles.infoValue, { letterSpacing: 1.5 }]}>••••••••</Text>
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                {/* 3. Liên kết Google (đăng nhập phụ) */}
+                <View style={styles.passwordSecurityRow}>
+                  <Text style={styles.infoLabel}>Google</Text>
+                  <View style={styles.securityValueGroup}>
+                    <Text
+                      style={[
+                        styles.infoValue,
+                        !isGoogleUser && { color: '#94A3B8' },
+                        { maxWidth: 150 },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {isGoogleUser
+                        ? user?.email || supabaseUser?.email || 'Đã liên kết'
+                        : 'Chưa liên kết'}
+                    </Text>
+                    {isGoogleUser ? (
+                      <View
+                        style={[
+                          styles.changePasswordBtn,
+                          { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                        ]}
+                      >
+                        <Feather name="check" size={12} color="#059669" />
+                        <Text style={[styles.changePasswordBtnText, { color: '#059669' }]}>
+                          Đã liên kết
+                        </Text>
+                      </View>
+                    ) : (
                       <TouchableOpacity
-                        style={styles.changePasswordBtn}
-                        onPress={() => {
-                          setCurrentPassword('');
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setPwdErrors({});
-                          setPwdSuccess(null);
-                          setShowPasswordModal(true);
-                        }}
+                        style={[styles.changePasswordBtn, isLinkingGoogle && { opacity: 0.6 }]}
+                        onPress={handleLinkGoogle}
+                        disabled={isLinkingGoogle}
                         activeOpacity={0.7}
                       >
-                        <Feather name="lock" size={12} color="#0066FF" />
-                        <Text style={styles.changePasswordBtnText}>Đổi mật khẩu</Text>
+                        <Ionicons name="logo-google" size={12} color="#4285F4" />
+                        <Text style={styles.changePasswordBtnText}>
+                          {isLinkingGoogle ? 'Đang liên kết...' : 'Liên kết'}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
-                )}
+                </View>
               </View>
 
               {/* Card: Địa chỉ thường trú */}
@@ -1503,8 +1570,14 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 <Feather name="lock" size={20} color="#0066FF" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.pwdModalTitle}>Đổi mật khẩu</Text>
-                <Text style={styles.pwdModalSubtitle}>Cập nhật mật khẩu đăng nhập tài khoản</Text>
+                <Text style={styles.pwdModalTitle}>
+                  {hasPassword ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu'}
+                </Text>
+                <Text style={styles.pwdModalSubtitle}>
+                  {hasPassword
+                    ? 'Cập nhật mật khẩu đăng nhập tài khoản'
+                    : 'Đặt mật khẩu để đăng nhập bằng SĐT/Email song song Google'}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowPasswordModal(false)}
@@ -1531,7 +1604,8 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
               </View>
             )}
 
-            {/* 1. Mật khẩu hiện tại */}
+            {/* 1. Mật khẩu hiện tại (chỉ hiển thị khi đã có mật khẩu) */}
+            {hasPassword && (
             <View style={styles.pwdInputGroup}>
               <Text style={styles.pwdLabel}>Mật khẩu hiện tại *</Text>
               <View style={[styles.pwdInputBox, pwdErrors.currentPassword ? styles.inputBoxError : null]}>
@@ -1557,6 +1631,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
               </View>
               {pwdErrors.currentPassword && <Text style={styles.errorText}>{pwdErrors.currentPassword}</Text>}
             </View>
+            )}
 
             {/* 2. Mật khẩu mới */}
             <View style={styles.pwdInputGroup}>
