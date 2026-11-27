@@ -28,6 +28,7 @@ router.post('/me/avatar', uploadAvatarMiddleware, userController.updateAvatar);
 router.patch('/me/password', userController.changePassword);
 router.post('/me/send-phone-otp', userController.sendPhoneOtp);
 router.post('/me/verify-phone-otp', userController.verifyPhoneOtp);
+router.post('/me/link-google', userController.linkGoogle);
 
 // 3. Citizen Profile
 router.get('/me/citizen', userController.getCitizen);

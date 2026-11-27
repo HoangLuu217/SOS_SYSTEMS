@@ -20,6 +20,7 @@ export interface UserProfile {
   email: string;
   phone?: string;
   isPhoneVerified?: boolean;
+  hasPassword?: boolean;
   googleId?: string;
   avatarUrl?: string;
   roles: string[];

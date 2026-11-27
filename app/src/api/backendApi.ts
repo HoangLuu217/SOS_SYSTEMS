@@ -106,6 +106,13 @@ class BackendApiService {
 
   sendUserPhoneOtp = (phone: string) => userApi.sendPhoneOtp(phone);
   verifyUserPhoneOtp = (phone: string, otp: string) => userApi.verifyPhoneOtp(phone, otp);
+  linkGoogleAccount = (payload: {
+    idToken?: string;
+    credential?: string;
+    googleId?: string;
+    email?: string;
+    avatarUrl?: string;
+  }) => userApi.linkGoogleAccount(payload);
 
   changePassword = (oldPassword: string, newPassword: string) =>
     userApi.changePassword(oldPassword, newPassword);
