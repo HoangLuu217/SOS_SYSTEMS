@@ -59,14 +59,14 @@
 .author-jurisdiction-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3.5px 9px;
-  border-radius: 6px;
-  background: var(--sos-surface-subtle);
-  border: 1px solid var(--sos-border);
-  color: var(--sos-text-primary);
-  font-weight: 700;
-  font-size: 13px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  color: #334155;
+  font-weight: 600;
+  font-size: 15.5px;
+  line-height: 1.3;
 }
 
 .author-shield-icon {
@@ -75,15 +75,15 @@
 }
 
 .author-header-divider {
-  color: var(--sos-border);
-  font-size: 13px;
+  color: #cbd5e1;
+  font-size: 15px;
   user-select: none;
 }
 
 .author-view-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--sos-text-muted);
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #64748b;
 }
 
 .author-live-chip {

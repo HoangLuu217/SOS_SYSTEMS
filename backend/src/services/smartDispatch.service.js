@@ -389,7 +389,11 @@ function buildTeamCandidate({
     warnings.push(`Đội chi viện từ địa bàn khác (${team.areaId?.name || 'lân cận'})`);
   }
   if (busyAssignment) {
-    warnings.push(`Đang bận nhiệm vụ (${busyAssignment.sosRequestId?.sosCode || busyAssignment.status})`);
+    const busyRef = busyAssignment.sosRequestId?.sosCode
+      || (busyAssignment.missionType === 'RELIEF_DISPATCH'
+        ? `lệnh tiếp tế ${busyAssignment.dispatchCode || busyAssignment.status}`
+        : busyAssignment.status);
+    warnings.push(`Đang bận nhiệm vụ (${busyRef})`);
   }
   if (team.operationalStatus === 'LIMITED') {
     warnings.push('Đội đang hoạt động hạn chế; cần cán bộ xác nhận khả năng xuất phát');

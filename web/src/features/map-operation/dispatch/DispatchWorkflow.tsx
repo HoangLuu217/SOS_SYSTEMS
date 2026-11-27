@@ -28,6 +28,7 @@ import type {
   DispatchSuggestedSupply,
 } from '@/types/domainD';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
+import { getSosPriorityBadgeMeta } from '@/features/hazards';
 import { domainDService } from '@/services/domainDService';
 import { getSocket } from '@/services/socketService';
 import { useApp } from '@/context/AppContext';
@@ -987,40 +988,26 @@ export const DispatchWorkflow = ({
               <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {selectedSos.timeAgo || 'Vừa xong'}
               </span>
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 800,
-                  padding: '2px 7px',
-                  borderRadius: 5,
-                  letterSpacing: '0.35px',
-                  color: '#ffffff',
-                  background:
-                    selectedSos.priority === 'CRITICAL'
-                      ? '#dc2626'
-                      : selectedSos.priority === 'HIGH'
-                        ? '#ea580c'
-                        : selectedSos.priority === 'LOW'
-                          ? '#16a34a'
-                          : selectedSos.priority === 'UNASSESSED'
-                            ? '#c2410c'
-                            : '#d97706',
-                  boxShadow:
-                    selectedSos.priority === 'CRITICAL'
-                      ? '0 1px 4px rgba(220, 38, 38, 0.35)'
-                      : 'none',
-                }}
-              >
-                {selectedSos.priority === 'CRITICAL'
-                  ? 'NGUY CẤP'
-                  : selectedSos.priority === 'HIGH'
-                    ? 'KHẨN CẤP'
-                    : selectedSos.priority === 'LOW'
-                      ? 'THẤP'
-                      : selectedSos.priority === 'UNASSESSED'
-                        ? 'CHỜ AI PHÂN LOẠI'
-                        : 'TRUNG BÌNH'}
-              </span>
+              {(() => {
+                const priorityMeta = getSosPriorityBadgeMeta(selectedSos.priority);
+                return (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2.5px 9px',
+                      borderRadius: 999,
+                      letterSpacing: '0.2px',
+                      color: priorityMeta.color,
+                      background: priorityMeta.bg,
+                      border: `1px solid ${priorityMeta.border}`,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {priorityMeta.label.toUpperCase()}
+                  </span>
+                );
+              })()}
               {onToggleCollapse && (
                 <button
                   type="button"

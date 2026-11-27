@@ -18,7 +18,7 @@ import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 import { toast } from '@/components/common/toast';
 import { getShoreHandoffVehicleStatusMeta, formatCompactLandingPointName } from '@/utils/shoreHandoffStatus';
-import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel, getSosPriorityBadgeMeta } from '@/features/hazards';
 
 interface Props {
   sosRequests: SosRequest[];
@@ -203,13 +203,6 @@ export const IncidentFeed = ({
     };
   }, [scopedIncidents]);
 
-  const totalPendingSupplyRequests = useMemo(() => {
-    return scopedIncidents.filter((s) => {
-      const { items } = getRequestedSupplies(s);
-      return items.some((x: any) => x.status === 'PENDING');
-    }).length;
-  }, [scopedIncidents]);
-
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
   // Sắp xếp ca SOS mới tạo lên đầu danh sách (trang 1) để cán bộ thấy ngay khi phát sinh.
   const filteredIncidents = useMemo(() => {
@@ -294,9 +287,6 @@ export const IncidentFeed = ({
                   : 'City-wide SOS'
                 : `SOS ${activeOfficer?.jurisdictionAreaName || (lang === 'vi' ? 'Địa Bàn' : 'District')}`}
             </h2>
-            <span className="sos-badge critical feed-total-badge" title="Tổng số tín hiệu SOS trong địa bàn">
-              {searchQuery ? filteredIncidents.length : tabCounts.all}
-            </span>
           </div>
 
           {onToggleCollapse && (
@@ -353,29 +343,6 @@ export const IncidentFeed = ({
           )}
         </div>
 
-        {/* Banner cảnh báo nhanh khi có yêu cầu chi viện vật tư đang chờ duyệt */}
-        {totalPendingSupplyRequests > 0 && (
-          <button
-            type="button"
-            className="feed-supply-alert-banner"
-            onClick={() => {
-              const target = scopedIncidents.find((s) =>
-                getRequestedSupplies(s).items.some((x: any) => x.status === 'PENDING')
-              );
-              if (target) onSelectSos(target);
-            }}
-            title="Bấm để chuyển tới ca yêu cầu chi viện vật tư"
-          >
-            <Package size={14} className="feed-supply-alert-icon" />
-            <span className="feed-supply-alert-text">
-              {totalPendingSupplyRequests} yêu cầu chi viện vật tư chờ duyệt
-            </span>
-            <span className="feed-supply-alert-link">
-              Xem <ChevronRight size={12} />
-            </span>
-          </button>
-        )}
-
         {/* 3. Segmented Filter Tabs (.sos-segmented) */}
         <div className="sos-segmented feed-segmented-tabs" role="tablist" aria-label="Lọc trạng thái SOS">
           {[
@@ -418,24 +385,9 @@ export const IncidentFeed = ({
               : sos.priority === 'HIGH'
               ? 'high'
               : 'medium';
-          const badgeSemanticClass =
-            sos.priority === 'CRITICAL'
-              ? 'critical'
-              : sos.priority === 'HIGH'
-              ? 'high'
-              : sos.priority === 'LOW'
-              ? 'neutral'
-              : 'medium';
-          const priorityLabel =
-            sos.priority === 'CRITICAL'
-              ? 'Nguy cấp'
-              : sos.priority === 'HIGH'
-              ? 'Khẩn cấp'
-              : sos.priority === 'LOW'
-              ? 'Thấp'
-              : sos.priority === 'UNASSESSED'
-              ? 'Chờ phân loại'
-              : 'Trung bình';
+          const priorityMeta = getSosPriorityBadgeMeta(sos.priority);
+          const badgeSemanticClass = priorityMeta.semanticClass;
+          const priorityLabel = priorityMeta.label;
 
           const emergencyTypeLabel = getEmergencyTypeLabel(sos);
           const priorityList = getPriorityTargets(sos);
@@ -477,12 +429,12 @@ export const IncidentFeed = ({
                     <span
                       style={{
                         fontSize: 10,
-                        fontWeight: 900,
+                        fontWeight: 700,
                         padding: '1.5px 5px',
                         borderRadius: 4,
-                        background: '#fff7ed',
-                        color: '#c2410c',
-                        border: '1px solid #fed7aa',
+                        background: '#f1f5f9',
+                        color: '#475569',
+                        border: '1px solid #cbd5e1',
                       }}
                       title="AI chưa phân loại; cán bộ cần xem xét"
                     >
@@ -502,7 +454,7 @@ export const IncidentFeed = ({
                       <Package size={13} />
                       <span>Yêu cầu chi viện vật tư</span>
                     </div>
-                    <span className="sos-badge pending">Chờ duyệt</span>
+                    <span className="sos-badge neutral">Chờ duyệt</span>
                   </div>
 
                   <div className="feed-supply-items">
@@ -516,7 +468,7 @@ export const IncidentFeed = ({
                       <button
                         type="button"
                         disabled={isProc}
-                        className="sos-btn sos-btn--success sos-btn--xs feed-supply-action-btn"
+                        className="sos-btn sos-btn--primary sos-btn--xs feed-supply-action-btn"
                         onClick={() => handleQuickApprove(targetAssignId, sos.id)}
                       >
                         <Check size={13} />
@@ -525,7 +477,7 @@ export const IncidentFeed = ({
                       <button
                         type="button"
                         disabled={isProc}
-                        className="sos-btn sos-btn--soft-danger sos-btn--xs feed-supply-action-btn"
+                        className="sos-btn sos-btn--outline sos-btn--xs feed-supply-action-btn"
                         onClick={() => setConfirmRejectSosId(sos.id)}
                       >
                         <X size={13} />
@@ -710,11 +662,6 @@ export const IncidentFeed = ({
 
       {/* 5. Footer + Pagination (3 SOS / trang) */}
       <div className="feed-footer-summary">
-        <div className="sos-live-pill">
-          <span className="live-dot-steady" />
-          <span>{lang === 'vi' ? 'Trực ban tác chiến' : 'Live Operations'}</span>
-        </div>
-
         <div className="feed-footer-right">
           {totalPages > 1 ? (
             <div className="feed-pagination" aria-label="Phân trang danh sách SOS">
