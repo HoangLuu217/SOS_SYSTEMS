@@ -202,6 +202,7 @@ export const PhoenixTopbar: React.FC<PhoenixTopbarProps> = ({
       { key: 'rescuers_admin', label: 'Xác minh cứu hộ', group: 'Quản trị', desc: NAV_TITLES.rescuers_admin.desc, icon: <UserCheck size={15} />, adminOnly: true },
       { key: 'authorities', label: 'Cán bộ & Đơn vị', group: 'Quản trị', desc: NAV_TITLES.authorities.desc, icon: <Building2 size={15} />, adminOnly: true },
       { key: 'areas', label: 'Địa bàn', group: 'Quản trị', desc: NAV_TITLES.areas.desc, icon: <Globe2 size={15} />, adminOnly: true },
+      { key: 'profile', label: 'Hồ sơ cá nhân', group: 'Tài khoản', desc: NAV_TITLES.profile.desc, icon: <UserIcon size={15} /> },
     ],
     []
   );
@@ -514,11 +515,22 @@ export const PhoenixTopbar: React.FC<PhoenixTopbarProps> = ({
                   className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
                   onClick={() => {
                     setIsUserMenuOpen(false);
-                    window.dispatchEvent(new CustomEvent('sos_open_profile_modal'));
+                    onSelectNavKey('profile');
                   }}
                 >
                   <UserIcon className="size-4 text-muted-foreground" />
                   <span>Hồ sơ cá nhân</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    onSelectNavKey('profile', 'account');
+                  }}
+                >
+                  <ShieldCheck className="size-4 text-muted-foreground" />
+                  <span>Tài khoản &amp; Bảo mật</span>
                 </button>
                 <button
                   type="button"
@@ -946,14 +958,14 @@ export const PhoenixTopbar: React.FC<PhoenixTopbarProps> = ({
                     className="ch-cmd-item"
                     onClick={() => {
                       setIsCommandOpen(false);
-                      window.dispatchEvent(new CustomEvent('sos_open_profile_modal'));
+                      onSelectNavKey('profile');
                     }}
                   >
                     <span className="ch-cmd-item-ico">
                       <UserIcon size={15} />
                     </span>
                     <div className="ch-cmd-item-copy">
-                      <strong>Hồ sơ cán bộ &amp; Đơn vị</strong>
+                      <strong>Hồ sơ cá nhân</strong>
                       <span>Tài khoản</span>
                     </div>
                   </button>

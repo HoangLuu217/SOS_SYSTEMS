@@ -70,6 +70,10 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
     title: 'Trao đổi',
     desc: 'Liên lạc giữa chỉ huy và đơn vị cơ sở',
   },
+  profile: {
+    title: 'Hồ sơ cá nhân',
+    desc: 'Thông tin cán bộ, bảo mật, giao diện và thông báo',
+  },
   settings: {
     title: 'Cài đặt',
     desc: 'Cấu hình hệ thống và cảnh báo',

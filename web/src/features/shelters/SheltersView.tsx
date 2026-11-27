@@ -17,8 +17,14 @@ import {
   Edit,
   RotateCcw,
   EyeOff,
-  FileSpreadsheet
 } from 'lucide-react';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+} from '@/components/common/TableBulkKit';
 import {
   exportWorkbookSheets,
   buildSheetFormHeader,
@@ -40,6 +46,7 @@ import {
 import { MultiImageUploader } from '@/components/common/MultiImageUploader';
 import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import {
   appendPendingImageFiles,
   removePendingImageItem,
@@ -669,8 +676,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setShelterPage(1);
     };
 
-    const handleExportSheltersExcel = () => {
-      if (sortedShelters.length === 0) {
+    const handleExportSheltersExcel = (onlySelected = false) => {
+      const targetList = onlySelected
+        ? sortedShelters.filter((sh) => selectedShelterIds.includes(sh._id))
+        : sortedShelters;
+      if (targetList.length === 0) {
         showToast('Chưa có điểm trú ẩn nào để xuất file Excel!', 'error');
         return;
       }
@@ -695,7 +705,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       let totalAvailable = 0;
       let activeCount = 0;
 
-      const dataMatrix = sortedShelters.map((sh, idx) => {
+      const dataMatrix = targetList.map((sh, idx) => {
         const statusInfo = getShelterStatusBadge(sh.status, sh.currentOccupancy, sh.capacity);
         const cap = sh.capacity || 0;
         const occ = sh.currentOccupancy || 0;
@@ -737,10 +747,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
       const { rows, merges } = buildSheetFormHeader(
         'BÁO CÁO DANH SÁCH ĐIỂM TRÚ ẨN & CƠ SỞ AN TOÀN — HỆ THỐNG CỨU HỘ KHẨN CẤP (SOS)',
-        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm trú ẩn: ${sortedShelters.length}`,
+        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm trú ẩn: ${targetList.length}`,
         headers.length,
         [
-          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm trú ẩn', sortedShelters.length],
+          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm trú ẩn', targetList.length],
           ['Tổng đang lưu trú (người)', totalOccupancy, 'Tổng sức chứa tối đa (người)', totalCapacity],
           ['Tổng chỗ trống khả dụng', totalAvailable, 'Số điểm đang hoạt động', activeCount],
         ]
@@ -748,7 +758,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
       appendDataTable(rows, headers, dataMatrix, [
         'TỔNG',
-        `${sortedShelters.length} điểm trú ẩn`,
+        `${targetList.length} điểm trú ẩn`,
         '',
         '',
         totalOccupancy,
@@ -772,7 +782,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         ],
         `Bao_cao_diem_tru_an_${new Date().toISOString().slice(0, 10)}.xlsx`
       );
-      showToast(`Đã xuất ${sortedShelters.length} điểm trú ẩn an toàn ra file Excel!`, 'success');
+      showToast(`Đã xuất ${targetList.length} điểm trú ẩn an toàn ra file Excel!`, 'success');
     };
 
     const renderSortIcon = (field: typeof shelterSortField) => {
@@ -1232,42 +1242,27 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       }
     };
 
-    // Ẩn hàng loạt cơ sở đã chọn
-    const handleBulkHideShelters = () => {
+    // Đóng / Ẩn hàng loạt cơ sở đã chọn (xác nhận bởi TableBulkActionBar)
+    const handleBulkHideShelters = async () => {
       if (selectedShelterIds.length === 0) return;
-      const count = selectedShelterIds.length;
-      setConfirmModal({
-        isOpen: true,
-        title: `Xác nhận ẩn ${count} điểm trú ẩn đã chọn`,
-        message: `Bạn có chắc chắn muốn ẩn ${count} cơ sở an toàn đã chọn không? Trạng thái các cơ sở này sẽ được chuyển sang Tạm ngưng hoạt động (INACTIVE).`,
-        type: 'warning',
-        confirmText: `Xác nhận ẩn (${count})`,
-        cancelText: 'Hủy bỏ',
-        onConfirm: async () => {
-          setIsBulkShelterAction(true);
-          try {
-            let successCount = 0;
-            await Promise.allSettled(
-              selectedShelterIds.map(async (id) => {
-                const res = await updateSafeLocation(id, { status: 'INACTIVE' });
-                if (res.success && res.data) {
-                  successCount++;
-                  setShelters((prev) => prev.map((s) => (s._id === id ? res.data : s)));
-                }
-              })
-            );
-            setSelectedShelterIds([]);
-            refreshData();
-            window.dispatchEvent(new CustomEvent('sos_data_updated'));
-            setConfirmModal((c) => ({ ...c, isOpen: false }));
-            showToast(`✅ Đã chuyển ${successCount} cơ sở an toàn sang Tạm ngưng hoạt động (ẩn)!`, 'success');
-          } catch (err: any) {
-            showToast('❌ Có lỗi khi ẩn hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
-          } finally {
-            setIsBulkShelterAction(false);
-          }
-        },
-      });
+      setIsBulkShelterAction(true);
+      try {
+        const ids = [...selectedShelterIds];
+        const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+          updateSafeLocation(id, { status: 'INACTIVE' })
+        );
+        if (succeeded.length > 0) {
+          showToast(`✅ Đã đóng / tạm ngưng ${succeeded.length} cơ sở an toàn!`, 'success');
+        }
+        if (failed.length > 0) {
+          showToast(`⚠️ Không thể cập nhật ${failed.length} cơ sở.`, 'warning');
+        }
+        setSelectedShelterIds([]);
+        refreshData();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } finally {
+        setIsBulkShelterAction(false);
+      }
     };
 
     // Mở lại hoạt động hàng loạt cơ sở đã chọn
@@ -1308,57 +1303,30 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       });
     };
 
-    // Xóa vĩnh viễn hàng loạt cơ sở đã chọn
-    const handleBulkDeleteShelters = () => {
+    // Xóa vĩnh viễn hàng loạt cơ sở đã chọn (xác nhận bởi TableBulkActionBar)
+    const handleBulkDeleteShelters = async () => {
       if (selectedShelterIds.length === 0) return;
-      const count = selectedShelterIds.length;
-      setConfirmModal({
-        isOpen: true,
-        title: `Xác nhận xóa vĩnh viễn ${count} điểm trú ẩn đã chọn`,
-        message: `Bạn có chắc chắn muốn xóa vĩnh viễn ${count} cơ sở an toàn đã chọn không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ cứu hộ.`,
-        type: 'danger',
-        confirmText: `Xác nhận xóa vĩnh viễn (${count})`,
-        cancelText: 'Hủy bỏ',
-        onConfirm: async () => {
-          setIsBulkShelterAction(true);
-          try {
-            let successCount = 0;
-            let failCount = 0;
-            await Promise.allSettled(
-              selectedShelterIds.map(async (id) => {
-                try {
-                  const res = await deleteSafeLocation(id);
-                  if (res.success) {
-                    successCount++;
-                  } else {
-                    failCount++;
-                  }
-                } catch {
-                  failCount++;
-                }
-              })
-            );
-            const deletedIdSet = new Set(selectedShelterIds);
-            setShelters((prev) => prev.filter((s) => !deletedIdSet.has(s._id)));
-            if (detailShelter && deletedIdSet.has(detailShelter._id)) {
-              setDetailShelter(null);
-            }
-            setSelectedShelterIds([]);
-            refreshData();
-            window.dispatchEvent(new CustomEvent('sos_data_updated'));
-            setConfirmModal((c) => ({ ...c, isOpen: false }));
-            if (failCount === 0) {
-              showToast(`✅ Đã xóa vĩnh viễn ${successCount} cơ sở an toàn thành công!`, 'success');
-            } else {
-              showToast(`⚠️ Đã xóa ${successCount} cơ sở, ${failCount} cơ sở thất bại.`, 'warning');
-            }
-          } catch (err: any) {
-            showToast('❌ Có lỗi khi xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
-          } finally {
-            setIsBulkShelterAction(false);
+      setIsBulkShelterAction(true);
+      try {
+        const ids = [...selectedShelterIds];
+        const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteSafeLocation(id));
+        if (succeeded.length > 0) {
+          const deletedIdSet = new Set(succeeded);
+          setShelters((prev) => prev.filter((s) => !deletedIdSet.has(s._id)));
+          if (detailShelter && deletedIdSet.has(detailShelter._id)) {
+            setDetailShelter(null);
           }
-        },
-      });
+          showToast(`✅ Đã xóa vĩnh viễn ${succeeded.length} cơ sở an toàn!`, 'success');
+        }
+        if (failed.length > 0) {
+          showToast(`⚠️ Không thể xóa ${failed.length} cơ sở.`, 'warning');
+        }
+        setSelectedShelterIds([]);
+        refreshData();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } finally {
+        setIsBulkShelterAction(false);
+      }
     };
 
     const renderCapacityOccupancyFields = ({
@@ -1453,28 +1421,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     const actionButtons = (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={handleExportSheltersExcel}
-          style={{
-            padding: '7px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--dm-green-border)',
-            background: 'var(--dm-green-bg)',
-            color: 'var(--dm-green-text)',
-            fontSize: '13px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
+        <ExcelExportButton
+          onClick={() => handleExportSheltersExcel(false)}
+          disabled={sortedShelters.length === 0}
           title="Xuất danh sách điểm trú ẩn đang lọc ra file Excel có biểu mẫu"
-        >
-          <FileSpreadsheet size={15} />
-          <span>Xuất Excel</span>
-        </button>
+        />
 
         <button
           type="button"
@@ -1561,41 +1512,14 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '2px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
-                  Phường / Xã:
-                </span>
-                <SearchableSelect
-                  ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                  searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                <DaNangAreaSelect
+                  wards={daNangWards}
+                  valueKey="name"
                   value={selectedAdminProvince}
                   onChange={(val) => {
                     setSelectedAdminProvince(val);
                     setShelterPage(1);
                   }}
-                  triggerStyle={{
-                    padding: '4px 10px',
-                    fontSize: '12px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--dm-border-strong)',
-                    backgroundColor: 'var(--dm-surface)',
-                    color: 'var(--dm-text-strong)',
-                    fontWeight: 500,
-                    minWidth: '215px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  }}
-                  options={[
-                    {
-                      value: 'ALL',
-                      label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
-                      keywords: 'tat ca toan thanh pho da nang',
-                    },
-                    ...daNangWards.map((a) => ({
-                      value: a.name,
-                      label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
-                      badgeText: a.code || undefined,
-                      keywords: `${a.name} ${a.code || ''}`,
-                    })),
-                  ]}
                 />
 
                 {selectedAdminProvince !== 'ALL' && (
@@ -1731,122 +1655,58 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           }}
         >
           {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
-          {selectedShelterIds.length > 0 && (
-            <div
-              style={{
-                padding: '10px 16px',
-                backgroundColor: 'var(--dm-green-bg)',
-                borderBottom: '1px solid var(--dm-green-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: 600, color: 'var(--dm-green-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckCircle2 size={16} color="#16a34a" />
-                  <span>Đã chọn <strong>{selectedShelterIds.length}</strong> cơ sở an toàn</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedShelterIds([])}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--dm-text-muted)',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: '2px 4px',
-                  }}
-                >
-                  Bỏ chọn
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={handleBulkHideShelters}
-                  disabled={isBulkShelterAction}
-                  className="sos-btn-flat warning"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Ẩn các cơ sở đã chọn (chuyển sang Tạm ngưng hoạt động)"
-                >
-                  <EyeOff size={13} />
-                  <span>Ẩn ({selectedShelterIds.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBulkActivateShelters}
-                  disabled={isBulkShelterAction}
-                  className="sos-btn-flat success"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Mở lại hoạt động đón tiếp cho các cơ sở đã chọn"
-                >
-                  <Eye size={13} />
-                  <span>Mở lại ({selectedShelterIds.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBulkDeleteShelters}
-                  disabled={isBulkShelterAction}
-                  className="sos-btn-flat danger"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Xóa vĩnh viễn các cơ sở đã chọn"
-                >
-                  <Trash2 size={13} />
-                  <span>Xóa ({selectedShelterIds.length})</span>
-                </button>
-              </div>
-            </div>
-          )}
+          <TableBulkActionBar
+            selectedCount={selectedShelterIds.length}
+            totalFilteredCount={sortedShelters.length}
+            unitLabel="điểm trú ẩn"
+            onSelectAllFiltered={() => setSelectedShelterIds(sortedShelters.map((s) => s._id))}
+            onClearSelection={() => setSelectedShelterIds([])}
+            onExportSelected={() => handleExportSheltersExcel(true)}
+            onCloseSelected={handleBulkHideShelters}
+            closeLabel="Đóng / Ẩn đã chọn"
+            closeConfirmTitle={`Đóng & tạm ngưng ${selectedShelterIds.length} điểm trú ẩn?`}
+            closeConfirmDesc="Các cơ sở an toàn đã chọn sẽ chuyển sang trạng thái Tạm ngưng hoạt động (INACTIVE)."
+            onDeleteSelected={handleBulkDeleteShelters}
+            deleteLabel="Xóa đã chọn"
+            extraActions={
+              <button
+                type="button"
+                onClick={handleBulkActivateShelters}
+                disabled={isBulkShelterAction}
+                className="sos-bulk-btn"
+                style={{
+                  background: 'var(--dm-blue-bg)',
+                  color: 'var(--dm-blue-text)',
+                  borderColor: 'var(--dm-blue-border)',
+                }}
+                title="Mở lại hoạt động đón tiếp cho các cơ sở đã chọn"
+              >
+                <Eye size={13} />
+                <span>Mở lại ({selectedShelterIds.length})</span>
+              </button>
+            }
+          />
 
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
             <table className="sos-clean-table">
               <thead>
                 <tr>
-                  <th style={{ width: '36px', textAlign: 'center', padding: '7px 6px' }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                  <th className="sos-checkbox-col">
+                    <TableSelectAllCheckbox
                       checked={
                         paginatedShelters.length > 0 &&
                         paginatedShelters.every((sh) => selectedShelterIds.includes(sh._id))
                       }
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      indeterminate={
+                        paginatedShelters.some((sh) => selectedShelterIds.includes(sh._id)) &&
+                        !paginatedShelters.every((sh) => selectedShelterIds.includes(sh._id))
+                      }
+                      disabled={paginatedShelters.length === 0}
+                      onChange={() => {
+                        const allOnPage =
+                          paginatedShelters.length > 0 &&
+                          paginatedShelters.every((sh) => selectedShelterIds.includes(sh._id));
+                        if (!allOnPage) {
                           const pageIds = paginatedShelters.map((sh) => sh._id);
                           setSelectedShelterIds((prev) => Array.from(new Set([...prev, ...pageIds])));
                         } else {
@@ -1980,20 +1840,17 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       >
                         {/* 0. Checkbox chọn từng mục */}
                         <td
-                          style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}
+                          className="sos-checkbox-col"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <input
-                            type="checkbox"
-                            style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                          <TableRowCheckbox
                             checked={selectedShelterIds.includes(sh._id)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
+                            onChange={() => {
                               setSelectedShelterIds((prev) =>
                                 prev.includes(sh._id) ? prev.filter((id) => id !== sh._id) : [...prev, sh._id]
                               );
                             }}
+                            ariaLabel={`Chọn điểm trú ẩn ${sh.name}`}
                           />
                         </td>
 

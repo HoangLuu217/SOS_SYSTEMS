@@ -205,7 +205,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
     <div className="sos-office-map-section">
       {/* Ô nhập Link Google Maps + Nút Mở Maps (giống hình 2) */}
       <div className="sos-office-map-url-field">
-        <label className="sos-profile-sublabel" style={{ fontWeight: 600, color: '#142235', marginBottom: 4, display: 'block' }}>
+        <label className="sos-profile-sublabel" style={{ fontWeight: 600, color: 'var(--foreground)', marginBottom: 4, display: 'block' }}>
           Địa chỉ Google Maps / Link dẫn đường (Ủy ban)
         </label>
         <div className="sos-office-map-url-row">

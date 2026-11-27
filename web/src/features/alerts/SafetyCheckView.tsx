@@ -4,11 +4,20 @@ import {
   fetchSafetyChecksApi,
   createSafetyCheckApi,
   closeSafetyCheckApi,
+  deleteSafetyCheckApi,
   fetchSafetyCheckResponsesApi,
   type SafetyCheckItem,
   type SafetyCheckResponseItem,
   type CreateSafetyCheckPayload,
 } from '@/api/safetyCheck.api';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
 import {
   fetchAdministrativeAreas,
   findRootProvinceId,
@@ -16,7 +25,7 @@ import {
   getSelectedWardValue,
 } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import {
   exportWorkbookSheets,
   buildSheetFormHeader,
@@ -33,7 +42,6 @@ import {
   X,
   MapPin,
   Square,
-  FileSpreadsheet,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -292,6 +300,54 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
   const paginatedChecks = filteredAndSortedChecks.slice(startIndex, startIndex + PAGE_SIZE);
+
+  const checkSelection = useTableSelection(
+    paginatedChecks.map((c) => c._id),
+    filteredAndSortedChecks.map((c) => c._id)
+  );
+
+  const handleBulkCloseChecks = async () => {
+    const ids = Array.from(checkSelection.selectedIds);
+    const activeIds = ids.filter((id) => {
+      const target = safetyChecks.find((c) => c._id === id);
+      return target && target.status === 'ACTIVE';
+    });
+    if (activeIds.length === 0) {
+      toast.info('Các đợt kiểm tra đã chọn đều đã kết thúc.');
+      checkSelection.clearSelection();
+      return;
+    }
+    const { succeeded, failed } = await runBulkOperation(activeIds, (id) => closeSafetyCheckApi(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã đóng ${succeeded.length} đợt kiểm tra an toàn.`);
+      if (viewingCheck && succeeded.includes(viewingCheck._id)) {
+        setViewingCheck({ ...viewingCheck, status: 'CLOSED' });
+      }
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể đóng ${failed.length} đợt: ${failed[0].error}`);
+    }
+    checkSelection.clearSelection();
+    await loadSafetyChecks();
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
+
+  const handleBulkDeleteChecks = async () => {
+    const ids = Array.from(checkSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteSafetyCheckApi(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã xóa ${succeeded.length} đợt kiểm tra an toàn.`);
+      if (viewingCheck && succeeded.includes(viewingCheck._id)) {
+        setViewingCheck(null);
+      }
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} đợt: ${failed[0].error}`);
+    }
+    checkSelection.clearSelection();
+    await loadSafetyChecks();
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
 
   // Đổi cột sắp xếp
   const handleSort = (field: typeof sortField) => {
@@ -603,23 +659,26 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     };
   };
 
-  // Xuất file Excel toàn bộ các đợt kiểm tra an toàn (mỗi đợt 1 tab Excel kèm đủ danh sách người phản hồi)
-  const handleExportChecksCsv = async () => {
-    if (filteredAndSortedChecks.length === 0) {
+  // Xuất file Excel các đợt kiểm tra an toàn (mỗi đợt 1 tab Excel kèm đủ danh sách người phản hồi)
+  const handleExportChecksCsv = async (onlySelected = false) => {
+    const exportList = onlySelected
+      ? filteredAndSortedChecks.filter((c) => checkSelection.selectedIds.has(c._id))
+      : filteredAndSortedChecks;
+    if (exportList.length === 0) {
       toast.warning('Không có đợt kiểm tra an toàn nào để xuất.');
       return;
     }
     setExportingAllChecks(true);
     try {
       const responsesByCheck = await Promise.all(
-        filteredAndSortedChecks.map((c) => fetchAllResponsesForCheck(c._id))
+        exportList.map((c) => fetchAllResponsesForCheck(c._id))
       );
 
-      const sheets: SheetSpec[] = filteredAndSortedChecks.map((check, idx) =>
+      const sheets: SheetSpec[] = exportList.map((check, idx) =>
         buildSafetyCheckSheet(
           check,
           responsesByCheck[idx] || [],
-          filteredAndSortedChecks.length > 1 ? `Đợt ${idx + 1} - ` : ''
+          exportList.length > 1 ? `Đợt ${idx + 1} - ` : ''
         )
       );
 
@@ -677,30 +736,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
   const actionButtons = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-      <button
-        type="button"
-        onClick={handleExportChecksCsv}
-        disabled={exportingAllChecks || filteredAndSortedChecks.length === 0}
+      <ExcelExportButton
+        onClick={() => handleExportChecksCsv(false)}
+        loading={exportingAllChecks}
+        disabled={filteredAndSortedChecks.length === 0}
         title="Xuất biểu mẫu Excel: mỗi đợt kiểm tra an toàn là 1 tab kèm đầy đủ người phản hồi"
-        style={{
-          padding: '7px 12px',
-          borderRadius: 8,
-          border: '1px solid var(--dm-green-border)',
-          background: 'var(--dm-green-bg)',
-          color: 'var(--dm-green-text)',
-          fontWeight: 600,
-          fontSize: 13,
-          cursor: exportingAllChecks || filteredAndSortedChecks.length === 0 ? 'not-allowed' : 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          whiteSpace: 'nowrap',
-          opacity: exportingAllChecks || filteredAndSortedChecks.length === 0 ? 0.65 : 1,
-        }}
-      >
-        {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <FileSpreadsheet size={14} />}
-        <span>{exportingAllChecks ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
-      </button>
+      />
 
       <button
         type="button"
@@ -781,33 +822,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
-                Phường/Xã (Đà Nẵng):
-              </span>
-              <SearchableSelect
+              <DaNangAreaSelect
                 className="sos-clean-sort-select"
-                ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                searchPlaceholder="Tìm nhanh Phường / Xã..."
+                wards={daNangWards}
+                allValue=""
+                valueKey="_id"
                 value={getSelectedWardValue(areaFilter, daNangWardIds, canonicalAreaIdMap)}
                 onChange={(wId) => {
                   setAreaFilter(wId || 'ALL');
                   setCurrentPage(1);
                   setJumpPageInput('1');
                 }}
-                triggerStyle={{ minWidth: '230px' }}
-                options={[
-                  {
-                    value: '',
-                    label: `Tất cả Phường / Xã Đà Nẵng (${daNangWards.length})`,
-                    keywords: 'tat ca toan thanh pho da nang',
-                  },
-                  ...daNangWards.map((w) => ({
-                    value: w._id,
-                    label: w.name,
-                    badgeText: w.code || undefined,
-                    keywords: `${w.name} ${w.code || ''}`,
-                  })),
-                ]}
               />
             </div>
           </div>
@@ -970,10 +995,32 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
           flexDirection: 'column',
         }}
       >
+        <TableBulkActionBar
+          selectedCount={checkSelection.selectedCount}
+          totalFilteredCount={filteredAndSortedChecks.length}
+          unitLabel="đợt kiểm tra"
+          onSelectAllFiltered={checkSelection.selectAllFiltered}
+          onClearSelection={checkSelection.clearSelection}
+          onExportSelected={() => handleExportChecksCsv(true)}
+          onCloseSelected={handleBulkCloseChecks}
+          closeLabel="Đóng đợt đã chọn"
+          closeConfirmTitle={`Đóng ${checkSelection.selectedCount} đợt kiểm tra đã chọn?`}
+          closeConfirmDesc="Các đợt đang mở sẽ được kết thúc ngay lập tức và ngừng nhận phản hồi mới."
+          onDeleteSelected={handleBulkDeleteChecks}
+          deleteLabel="Xóa đã chọn"
+        />
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
           <table className="sos-clean-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={checkSelection.allVisibleSelected}
+                    indeterminate={checkSelection.someVisibleSelected}
+                    disabled={paginatedChecks.length === 0}
+                    onChange={checkSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th style={{ width: '48px', minWidth: '48px', maxWidth: '48px', textAlign: 'center', padding: '10px 6px' }}>STT</th>
                 <th
                   className={`sortable ${sortField === 'title' ? 'sorted' : ''}`}
@@ -1035,14 +1082,14 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
                     <RefreshCw size={28} className="fa-spin" style={{ margin: '0 auto 10px auto', color: 'var(--dm-blue-text)' }} />
                     <div style={{ fontSize: '13.5px', fontWeight: 600 }}>Đang tải danh sách đợt kiểm tra an toàn...</div>
                   </td>
                 </tr>
               ) : totalItems === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
                     <ShieldCheck size={36} color="#94a3b8" style={{ margin: '0 auto 10px auto' }} />
                     <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--dm-text-body)', marginBottom: 4 }}>
                       Chưa có đợt kiểm tra an toàn nào phù hợp
@@ -1078,6 +1125,13 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       style={{ cursor: 'pointer' }}
                       title="Nhấn để xem chi tiết phản hồi người dân"
                     >
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={checkSelection.isSelected(check._id)}
+                          onChange={() => checkSelection.toggleRow(check._id)}
+                          ariaLabel={`Chọn đợt ${check.title}`}
+                        />
+                      </td>
                       {/* 0. STT */}
                       <td style={{ textAlign: 'center', width: '45px', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
                         {startIndex + idx + 1}
@@ -1417,36 +1471,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
+                <ExcelExportButton
                   onClick={handleExportResponsesCsv}
-                  disabled={exportingSingleCheckId === viewingCheck._id}
+                  loading={exportingSingleCheckId === viewingCheck._id}
+                  label="Xuất Excel"
                   title="Xuất riêng biểu mẫu đợt kiểm tra này (1 tab Excel kèm đầy đủ người phản hồi)"
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    border: '1px solid var(--dm-green-border)',
-                    background: 'var(--dm-green-bg)',
-                    color: 'var(--dm-green-text)',
-                    fontWeight: 600,
-                    fontSize: 12.5,
-                    cursor: exportingSingleCheckId === viewingCheck._id ? 'not-allowed' : 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    whiteSpace: 'nowrap',
-                    opacity: exportingSingleCheckId === viewingCheck._id ? 0.65 : 1,
-                  }}
-                >
-                  {exportingSingleCheckId === viewingCheck._id ? (
-                    <RefreshCw size={13} className="fa-spin" />
-                  ) : (
-                    <FileSpreadsheet size={13} />
-                  )}
-                  <span>
-                    {exportingSingleCheckId === viewingCheck._id ? 'Đang xuất Excel...' : 'Xuất Excel phản hồi'}
-                  </span>
-                </button>
+                />
 
                 {viewingCheck.status === 'ACTIVE' && (
                   <button
@@ -1851,10 +1881,14 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '4px' }}>
                         Phường / Xã (Khu vực {daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-                      <SearchableSelect
+                      <DaNangAreaSelect
                         className="sc-form-control"
-                        ariaLabel="Chọn Phường / Xã kiểm tra an toàn"
-                        searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                        wards={daNangWards}
+                        allValue=""
+                        valueKey="_id"
+                        ariaLabel="Chọn địa bàn kiểm tra an toàn"
+                        highlightActive={false}
+                        triggerStyle={{ width: '100%' }}
                         value={getSelectedWardValue(createForm.areaId, daNangWardIds, canonicalAreaIdMap)}
                         onChange={(wardId) => {
                           const nextAreaId = wardId || daNangProvinceId || 'ALL';
@@ -1870,20 +1904,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                               : prev.title,
                           }));
                         }}
-                        triggerStyle={{ width: '100%' }}
-                        options={[
-                          {
-                            value: '',
-                            label: `Tất cả Phường/Xã tại Đà Nẵng (${daNangWards.length})`,
-                            keywords: 'tat ca toan thanh pho da nang',
-                          },
-                          ...daNangWards.map((ward) => ({
-                            value: ward._id,
-                            label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
-                            badgeText: ward.code || undefined,
-                            keywords: `${ward.name} ${ward.code || ''}`,
-                          })),
-                        ]}
                       />
                       <p className="sc-form-hint">
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>

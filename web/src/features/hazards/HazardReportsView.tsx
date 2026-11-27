@@ -15,8 +15,14 @@ import {
   Compass,
   XCircle,
   Clock,
-  FileSpreadsheet
 } from 'lucide-react';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+} from '@/components/common/TableBulkKit';
 import {
   exportWorkbookSheets,
   buildSheetFormHeader,
@@ -38,7 +44,7 @@ import {
 } from '@/api';
 import { MultiImageUploader } from '@/components/common/MultiImageUploader';
 import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import {
   appendPendingImageFiles,
   removePendingImageItem,
@@ -783,8 +789,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       }
     };
 
-    const handleExportHazardsExcel = () => {
-      if (sortedReports.length === 0) {
+    const handleExportHazardsExcel = (onlySelected = false) => {
+      const targetList = onlySelected
+        ? sortedReports.filter((r) => selectedHazardIds.includes(r._id))
+        : sortedReports;
+      if (targetList.length === 0) {
         showToast('Chưa có điểm nguy hiểm nào để xuất file Excel!', 'error');
         return;
       }
@@ -817,7 +826,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       let rejectedCount = 0;
       let highSeverityCount = 0;
 
-      const dataMatrix = sortedReports.map((r, idx) => {
+      const dataMatrix = targetList.map((r, idx) => {
         const typeCfg = getHazardTypeConfig(r.hazardType, r.customHazardType);
         const sevCfg = getSeverityBadge(r.severity);
         const reporterName = typeof r.reportedBy === 'object' ? (r.reportedBy?.fullName || 'Người dân') : 'Hệ thống';
@@ -854,10 +863,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
       const { rows, merges } = buildSheetFormHeader(
         'BÁO CÁO ĐIỂM NGUY HIỂM & HIỆN TRƯỜNG THIÊN TAI — HỆ THỐNG CỨU HỘ KHẨN CẤP (SOS)',
-        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm nguy hiểm: ${sortedReports.length}`,
+        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm nguy hiểm: ${targetList.length}`,
         headers.length,
         [
-          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm nguy hiểm', sortedReports.length],
+          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm nguy hiểm', targetList.length],
           ['Đã duyệt hiển thị', approvedCount, 'Chờ thẩm định', pendingCount],
           ['Đã từ chối', rejectedCount, 'Mức độ Rất cao / Cao', highSeverityCount],
         ]
@@ -865,7 +874,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
       appendDataTable(rows, headers, dataMatrix, [
         'TỔNG',
-        `${sortedReports.length} điểm nguy hiểm`,
+        `${targetList.length} điểm nguy hiểm`,
         '',
         `Cao/Rất cao: ${highSeverityCount}`,
         `Duyệt: ${approvedCount} | Chờ: ${pendingCount}`,
@@ -890,7 +899,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         ],
         `Bao_cao_diem_nguy_hiem_${new Date().toISOString().slice(0, 10)}.xlsx`
       );
-      showToast(`Đã xuất ${sortedReports.length} điểm nguy hiểm ra file Excel!`, 'success');
+      showToast(`Đã xuất ${targetList.length} điểm nguy hiểm ra file Excel!`, 'success');
     };
 
     const notifyInvalidImageFile = () => {
@@ -1445,83 +1454,62 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       });
     };
 
-    // Xóa vĩnh viễn hàng loạt các điểm nguy hiểm đã chọn
-    const handleBulkDeleteHazards = () => {
+    // Đóng / Từ chối hàng loạt điểm nguy hiểm đã chọn (xác nhận bởi TableBulkActionBar)
+    const handleBulkRejectHazards = async () => {
       if (selectedHazardIds.length === 0) return;
-      const count = selectedHazardIds.length;
-      setConfirmModal({
-        isOpen: true,
-        title: `Xác nhận xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn`,
-        message: `Bạn có chắc chắn muốn xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ cứu trợ.`,
-        type: 'danger',
-        confirmText: `Xác nhận xóa vĩnh viễn (${count})`,
-        cancelText: 'Hủy bỏ',
-        onConfirm: async () => {
-          setIsBulkHazardAction(true);
-          try {
-            let successCount = 0;
-            let failCount = 0;
-            await Promise.allSettled(
-              selectedHazardIds.map(async (id) => {
-                try {
-                  const res = await deleteHazardReport(id);
-                  if (res.success) {
-                    successCount++;
-                  } else {
-                    failCount++;
-                  }
-                } catch {
-                  failCount++;
-                }
-              })
-            );
-            const deletedIdSet = new Set(selectedHazardIds);
-            setHazardReports((prev) => prev.filter((r) => !deletedIdSet.has(r._id)));
-            if (detailHazard && deletedIdSet.has(detailHazard._id)) {
-              setDetailHazard(null);
-            }
-            setSelectedHazardIds([]);
-            refreshData();
-            window.dispatchEvent(new CustomEvent('sos_data_updated'));
-            setConfirmModal((c) => ({ ...c, isOpen: false }));
-            if (failCount === 0) {
-              showToast(`✅ Đã xóa vĩnh viễn ${successCount} điểm nguy hiểm thành công!`, 'success');
-            } else {
-              showToast(`⚠️ Đã xóa ${successCount} điểm, ${failCount} điểm thất bại.`, 'warning');
-            }
-          } catch (err: any) {
-            showToast('❌ Có lỗi khi xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
-          } finally {
-            setIsBulkHazardAction(false);
+      setIsBulkHazardAction(true);
+      try {
+        const ids = [...selectedHazardIds];
+        const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+          reviewHazardReport(id, 'REJECTED', 'Đã đóng / từ chối hàng loạt')
+        );
+        if (succeeded.length > 0) {
+          showToast(`✅ Đã đóng / từ chối ${succeeded.length} điểm nguy hiểm!`, 'success');
+        }
+        if (failed.length > 0) {
+          showToast(`⚠️ Không thể đóng ${failed.length} điểm nguy hiểm.`, 'warning');
+        }
+        setSelectedHazardIds([]);
+        refreshData();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } finally {
+        setIsBulkHazardAction(false);
+      }
+    };
+
+    // Xóa vĩnh viễn hàng loạt các điểm nguy hiểm đã chọn (xác nhận bởi TableBulkActionBar)
+    const handleBulkDeleteHazards = async () => {
+      if (selectedHazardIds.length === 0) return;
+      setIsBulkHazardAction(true);
+      try {
+        const ids = [...selectedHazardIds];
+        const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteHazardReport(id));
+        if (succeeded.length > 0) {
+          const deletedIdSet = new Set(succeeded);
+          setHazardReports((prev) => prev.filter((r) => !deletedIdSet.has(r._id)));
+          if (detailHazard && deletedIdSet.has(detailHazard._id)) {
+            setDetailHazard(null);
           }
-        },
-      });
+          showToast(`✅ Đã xóa vĩnh viễn ${succeeded.length} điểm nguy hiểm!`, 'success');
+        }
+        if (failed.length > 0) {
+          showToast(`⚠️ Không thể xóa ${failed.length} điểm nguy hiểm.`, 'warning');
+        }
+        setSelectedHazardIds([]);
+        refreshData();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } finally {
+        setIsBulkHazardAction(false);
+      }
     };
 
     const actionButtons = (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={handleExportHazardsExcel}
-          style={{
-            padding: '7px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--dm-green-border)',
-            background: 'var(--dm-green-bg)',
-            color: 'var(--dm-green-text)',
-            fontSize: '13px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
+        <ExcelExportButton
+          onClick={() => handleExportHazardsExcel(false)}
+          disabled={sortedReports.length === 0}
           title="Xuất danh sách điểm nguy hiểm đang lọc ra file Excel có biểu mẫu"
-        >
-          <FileSpreadsheet size={15} />
-          <span>Xuất Excel</span>
-        </button>
+        />
 
         <button
           type="button"
@@ -1606,41 +1594,14 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
-              <span style={{ fontSize: '12.5px', color: 'var(--dm-text-muted)', fontWeight: 500 }}>
-                Lọc theo Phường / Xã (Đà Nẵng):
-              </span>
-              <SearchableSelect
-                ariaLabel="Lọc theo Phường / Xã Đà Nẵng"
-                searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+              <DaNangAreaSelect
+                wards={daNangWards}
+                valueKey="name"
                 value={selectedAdminProvince}
                 onChange={(val) => {
                   setSelectedAdminProvince(val);
                   setHazardPage(1);
                 }}
-                triggerStyle={{
-                  padding: '6px 12px',
-                  fontSize: '13px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--dm-border-strong)',
-                  backgroundColor: 'var(--dm-surface)',
-                  color: 'var(--dm-text-strong)',
-                  fontWeight: 500,
-                  minWidth: '240px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                }}
-                options={[
-                  {
-                    value: 'ALL',
-                    label: `-- Tất cả Phường / Xã Đà Nẵng (${daNangWards.length}) --`,
-                    keywords: 'tat ca toan thanh pho da nang',
-                  },
-                  ...daNangWards.map((a) => ({
-                    value: a.name,
-                    label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
-                    badgeText: a.code || undefined,
-                    keywords: `${a.name} ${a.code || ''}`,
-                  })),
-                ]}
               />
 
               {selectedAdminProvince !== 'ALL' && (
@@ -1754,102 +1715,59 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           }}
         >
           {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
-          {selectedHazardIds.length > 0 && (
-            <div
-              style={{
-                padding: '10px 16px',
-                backgroundColor: 'var(--dm-red-bg)',
-                borderBottom: '1px solid var(--dm-red-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontWeight: 600, color: 'var(--dm-red-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertTriangle size={16} color="#dc2626" />
-                  <span>Đã chọn <strong>{selectedHazardIds.length}</strong> điểm nguy hiểm</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedHazardIds([])}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--dm-text-muted)',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: '2px 4px',
-                  }}
-                >
-                  Bỏ chọn
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={handleBulkApproveHazards}
-                  disabled={isBulkHazardAction}
-                  className="sos-btn-flat success"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Duyệt nhanh tất cả các điểm nguy hiểm đã chọn"
-                >
-                  <CheckCircle2 size={13} />
-                  <span>Duyệt nhanh ({selectedHazardIds.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBulkDeleteHazards}
-                  disabled={isBulkHazardAction}
-                  className="sos-btn-flat danger"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
-                  }}
-                  title="Xóa vĩnh viễn các điểm nguy hiểm đã chọn"
-                >
-                  <Trash2 size={13} />
-                  <span>Xóa ({selectedHazardIds.length})</span>
-                </button>
-              </div>
-            </div>
-          )}
+          <TableBulkActionBar
+            selectedCount={selectedHazardIds.length}
+            totalFilteredCount={sortedReports.length}
+            unitLabel="điểm nguy hiểm"
+            onSelectAllFiltered={() => setSelectedHazardIds(sortedReports.map((r) => r._id))}
+            onClearSelection={() => setSelectedHazardIds([])}
+            onExportSelected={() => handleExportHazardsExcel(true)}
+            onCloseSelected={handleBulkRejectHazards}
+            closeLabel="Đóng / Từ chối"
+            closeConfirmTitle={`Đóng / Từ chối ${selectedHazardIds.length} điểm nguy hiểm?`}
+            closeConfirmDesc="Các điểm nguy hiểm đã chọn sẽ chuyển sang trạng thái Từ chối và gỡ khỏi bản đồ công khai."
+            onDeleteSelected={handleBulkDeleteHazards}
+            deleteLabel="Xóa đã chọn"
+            extraActions={
+              <button
+                type="button"
+                onClick={handleBulkApproveHazards}
+                disabled={isBulkHazardAction}
+                className="sos-bulk-btn"
+                style={{
+                  background: 'var(--dm-blue-bg)',
+                  color: 'var(--dm-blue-text)',
+                  borderColor: 'var(--dm-blue-border)',
+                }}
+                title="Duyệt nhanh tất cả các điểm nguy hiểm đã chọn"
+              >
+                <CheckCircle2 size={13} />
+                <span>Duyệt nhanh ({selectedHazardIds.length})</span>
+              </button>
+            }
+          />
 
           {/* KHUNG CUỘN CỦA BẢNG DỮ LIỆU */}
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
             <table className="sos-clean-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                  <th className="sos-checkbox-col">
+                    <TableSelectAllCheckbox
                       checked={
                         paginatedReports.length > 0 &&
                         paginatedReports.every((r) => selectedHazardIds.includes(r._id))
                       }
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      indeterminate={
+                        paginatedReports.some((r) => selectedHazardIds.includes(r._id)) &&
+                        !paginatedReports.every((r) => selectedHazardIds.includes(r._id))
+                      }
+                      disabled={paginatedReports.length === 0}
+                      onChange={() => {
+                        const allOnPage =
+                          paginatedReports.length > 0 &&
+                          paginatedReports.every((r) => selectedHazardIds.includes(r._id));
+                        if (!allOnPage) {
                           const pageIds = paginatedReports.map((r) => r._id);
                           setSelectedHazardIds((prev) => Array.from(new Set([...prev, ...pageIds])));
                         } else {
@@ -1977,20 +1895,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       >
                         {/* 0. Checkbox chọn từng mục */}
                         <td
-                          style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}
+                          className="sos-checkbox-col"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <input
-                            type="checkbox"
-                            style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                          <TableRowCheckbox
                             checked={selectedHazardIds.includes(r._id)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
+                            onChange={() => {
                               setSelectedHazardIds((prev) =>
                                 prev.includes(r._id) ? prev.filter((id) => id !== r._id) : [...prev, r._id]
                               );
                             }}
+                            ariaLabel={`Chọn điểm nguy hiểm ${r.title}`}
                           />
                         </td>
 
@@ -3424,9 +3339,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: '3px' }}>
                             Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                           </div>
-                          <SearchableSelect
-                            ariaLabel="Chọn Phường / Xã quản lý điểm nguy hiểm"
-                            searchPlaceholder="Tìm nhanh Phường / Xã..."
+                          <DaNangAreaSelect
+                            wards={daNangWards}
+                            allValue={daNangProvinceId}
+                            valueKey="_id"
+                            ariaLabel="Chọn địa bàn quản lý điểm nguy hiểm"
+                            highlightActive={false}
                             value={createHazardAreaId || daNangProvinceId}
                             onChange={(val) => {
                               setCreateHazardAreaId(val);
@@ -3436,19 +3354,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               }
                             }}
                             triggerStyle={HAZARD_SELECT_STYLE}
-                            options={[
-                              {
-                                value: daNangProvinceId,
-                                label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
-                                keywords: 'tat ca toan thanh pho da nang',
-                              },
-                              ...daNangWards.map((w) => ({
-                                value: w._id,
-                                label: w.name,
-                                badgeText: w.code || undefined,
-                                keywords: `${w.name} ${w.code || ''}`,
-                              })),
-                            ]}
                           />
                         </div>
                       ) : (

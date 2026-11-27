@@ -31,6 +31,7 @@ import {
 import { AuthoritiesView } from '@/features/authorities';
 import { AdministrativeAreasView } from '@/features/areas';
 import { SystemSettingsView } from '@/features/settings';
+import { ProfileView } from '@/features/profile';
 import { TacticalChatView } from '@/features/chat';
 import { AuditLogsView } from '@/features/audit';
 
@@ -38,6 +39,7 @@ export interface DashboardViewsProps {
   activeKey: NavItemKey;
   onOpenMap: (sosId?: any) => void;
   user?: User;
+  onLogout?: () => void;
 }
 
 /**
@@ -48,6 +50,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   activeKey,
   onOpenMap,
   user,
+  onLogout,
 }) => {
   switch (activeKey) {
     // 1. Tác chiến cứu nạn SOS
@@ -152,7 +155,11 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'chat':
       return <TacticalChatView currentUser={user} />;
 
-    // 17. Cài đặt hệ thống
+    // 17. Hồ sơ cá nhân & Tùy chỉnh tài khoản
+    case 'profile':
+      return <ProfileView user={user} onLogout={onLogout} />;
+
+    // 18. Cài đặt hệ thống
     case 'settings':
       return <SystemSettingsView />;
 

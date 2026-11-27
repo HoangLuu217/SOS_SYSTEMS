@@ -18,6 +18,15 @@ import {
   fetchProvinceSubUnitsService,
   type ProvinceSubUnitItem,
 } from '@/services/geoapifyBoundariesService';
+import { toast } from '@/components/common/toast';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import './AdministrativeAreasView.css';
 
 export interface AdministrativeAreasViewProps {
@@ -143,6 +152,50 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
     });
   }, [subUnits, getSubUnitManager, subUnitManagerFilter, subUnitTypeFilter, subUnitSearchQuery]);
 
+  const areaSelection = useTableSelection(filteredSubUnits.map((u) => u.id));
+
+  const handleExportAreasExcel = (onlySelected = false) => {
+    const targetRows = onlySelected
+      ? filteredSubUnits.filter((u) => areaSelection.selectedIds.has(u.id))
+      : filteredSubUnits;
+    if (targetRows.length === 0) {
+      toast.warning('Không có dữ liệu địa bàn để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH MỤC ĐỊA BÀN HÀNH CHÍNH TP. ĐÀ NẴNG',
+      subtitle: onlySelected
+        ? `Xuất ${targetRows.length} địa bàn đã chọn`
+        : `Tổng hợp ${targetRows.length} phường / xã trực thuộc`,
+      sheetName: 'Dia ban hanh chinh',
+      fileNamePrefix: 'Dia_ban_Da_Nang',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Tên đơn vị', width: 28 },
+        { header: 'Cấp hành chính', width: 16, align: 'center' },
+        { header: 'Cán bộ phụ trách', width: 26 },
+        { header: 'Chức vụ / Đơn vị', width: 30 },
+        { header: 'Số điện thoại', width: 16, align: 'center' },
+        { header: 'Trạng thái phân công', width: 20, align: 'center' },
+      ],
+      rows: targetRows.map((u, idx) => {
+        const mgr = getSubUnitManager(u);
+        const typeLabel =
+          u.type === 'COMMUNE' ? 'Xã' : u.type === 'TOWN' ? 'Thị trấn' : u.type === 'WARD' ? 'Phường' : 'Đặc khu / Khác';
+        return [
+          idx + 1,
+          u.name || '—',
+          typeLabel,
+          mgr?.managerName || 'Chưa phân công',
+          mgr ? mgr.position || mgr.department || 'Cán bộ phụ trách' : '—',
+          mgr?.phone || '—',
+          mgr ? 'Đã có quản lý' : 'Chưa phân công',
+        ];
+      }),
+    });
+    toast.success(`Đã xuất Excel ${targetRows.length} địa bàn hành chính.`);
+  };
+
   return (
     <div className="sos-views-container administrative-areas-container">
       <div className="sos-view-card administrative-areas-card">
@@ -249,13 +302,36 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 </button>
               )}
             </div>
+
+            <ExcelExportButton
+              onClick={() => handleExportAreasExcel(false)}
+              disabled={filteredSubUnits.length === 0}
+              title="Xuất danh sách địa bàn hành chính ra Excel (.xlsx)"
+            />
           </div>
         </div>
+
+        <TableBulkActionBar
+          selectedCount={areaSelection.selectedCount}
+          totalFilteredCount={filteredSubUnits.length}
+          unitLabel="địa bàn"
+          onSelectAllFiltered={areaSelection.selectAllFiltered}
+          onClearSelection={areaSelection.clearSelection}
+          onExportSelected={() => handleExportAreasExcel(true)}
+        />
 
         <div className="sos-table-wrapper administrative-areas-table-wrapper">
           <table className="sos-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={areaSelection.allVisibleSelected}
+                    indeterminate={areaSelection.someVisibleSelected}
+                    disabled={filteredSubUnits.length === 0}
+                    onChange={areaSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th style={{ width: '24%' }}>Tên đơn vị (Phường / Xã)</th>
                 <th style={{ width: '16%', textAlign: 'center' }}>Cấp hành chính</th>
                 <th style={{ width: '42%' }}>Địa phương quản lý</th>
@@ -265,7 +341,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             <tbody>
               {subUnitsLoading && subUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: 'var(--sos-text-secondary)' }}>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'var(--sos-text-secondary)' }}>
                     <Loader2
                       size={24}
                       className="animate-spin"
@@ -276,7 +352,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 </tr>
               ) : filteredSubUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: 'var(--sos-text-secondary)' }}>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--sos-text-secondary)' }}>
                     Không có phường / xã nào phù hợp với bộ lọc tìm kiếm.
                   </td>
                 </tr>
@@ -304,6 +380,13 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
 
                   return (
                     <tr key={u.id} style={{ height: '56px' }}>
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={areaSelection.isSelected(u.id)}
+                          onChange={() => areaSelection.toggleRow(u.id)}
+                          ariaLabel={`Chọn địa bàn ${u.name}`}
+                        />
+                      </td>
                       <td>
                         <span className="areas-unit-name">{u.name}</span>
                       </td>

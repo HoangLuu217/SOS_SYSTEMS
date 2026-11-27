@@ -55,6 +55,12 @@ export async function updateUserStatus(userId: string, status: string): Promise<
   });
 }
 
+export async function deleteAdminUser(userId: string): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function createAdminUser(payload: {
   fullName: string;
   phone: string;

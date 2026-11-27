@@ -160,3 +160,12 @@ export async function closeSafetyCheckApi(
 ): Promise<{ success: boolean; data: SafetyCheckItem; message: string }> {
   return fetchWithAuth(`/safety-checks/${id}/close`, { method: 'PATCH' });
 }
+
+/**
+ * Xóa đợt kiểm tra an toàn
+ */
+export async function deleteSafetyCheckApi(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/safety-checks/${id}`, { method: 'DELETE' });
+}

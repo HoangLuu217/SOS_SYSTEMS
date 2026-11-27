@@ -9,6 +9,7 @@ import {
   findRootProvinceId,
   getDaNangAreaScope,
   getSelectedWardValue,
+  matchesSelectedWardFilter,
   subscribeNotificationEvents,
   fetchSafeLocations,
   fetchHazardReports,
@@ -18,6 +19,15 @@ import {
 } from '@/api';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import './AlertsView.css';
 
 export interface AlertsViewProps {
@@ -44,6 +54,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     'ALL' | 'INSTANT' | 'SYSTEM' | 'SAFETY_CHECK' | 'BLOOD_DONATION' | 'WEATHER' | 'SAFE_LOCATION' | 'HAZARD'
   >('ALL');
   const [broadcastSearch, setBroadcastSearch] = useState('');
+  const [areaFilter, setAreaFilter] = useState<string>('ALL');
 
   // Phân trang & Sắp xếp bảng lịch sử
   const [page, setPage] = useState<number>(1);
@@ -57,7 +68,6 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
   // Chọn hàng loạt (Bulk selection)
   const [selectedAlertIds, setSelectedAlertIds] = useState<string[]>([]);
-  const [isBulkDeleting, setIsBulkDeleting] = useState<boolean>(false);
 
   // Modal Khởi Tạo & Gửi Thông Báo Mới (Thiết kế đồng nhất với SheltersView)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -214,7 +224,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             },
             ...daNangWards.map((ward) => ({
               value: ward._id,
-              label: `${ward.name}${ward.code ? ` [${ward.code}]` : ''}`,
+              label: ward.name,
               badgeText: ward.code || undefined,
               keywords: `${ward.name} ${ward.code || ''}`,
             })),
@@ -696,51 +706,23 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     });
   };
 
-  // Thu hồi / Xóa hàng loạt các thông báo đã chọn
-  const handleBulkDeleteAlerts = () => {
+  // Thu hồi / Xóa hàng loạt các thông báo đã chọn (xác nhận bởi TableBulkActionBar)
+  const handleBulkDeleteAlerts = async () => {
     if (selectedAlertIds.length === 0) return;
-    const count = selectedAlertIds.length;
-    setConfirmModal({
-      isOpen: true,
-      title: `Thu hồi / Xóa ${count} bản tin đã chọn`,
-      message: `Bạn có chắc chắn muốn thu hồi và xóa ${count} bản tin thông báo đã chọn khỏi toàn bộ hệ thống? Thao tác này sẽ xóa đồng loạt khỏi các thiết bị nhận tin.`,
-      type: 'danger',
-      confirmText: `Xác nhận xóa (${count})`,
-      cancelText: 'Hủy bỏ',
-      onConfirm: async () => {
-        setIsBulkDeleting(true);
-        try {
-          let successCount = 0;
-          let failCount = 0;
-          await Promise.allSettled(
-            selectedAlertIds.map(async (id) => {
-              try {
-                await deleteBroadcastApi(id);
-                successCount++;
-              } catch {
-                failCount++;
-              }
-            })
-          );
-          const deletedIdSet = new Set(selectedAlertIds);
-          setBroadcastHistory((prev) => prev.filter((b) => !deletedIdSet.has(b.id)));
-          setSelectedAlertIds([]);
-          if (detailBroadcast && deletedIdSet.has(detailBroadcast.id)) {
-            setDetailBroadcast(null);
-          }
-          setConfirmModal((c) => ({ ...c, isOpen: false }));
-          if (failCount === 0) {
-            showToast(`✅ Đã thu hồi thành công ${successCount} thông báo!`, 'success');
-          } else {
-            showToast(`⚠️ Đã thu hồi ${successCount} thông báo (${failCount} lỗi)`, 'warning');
-          }
-        } catch (err: any) {
-          showToast('❌ Không thể xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
-        } finally {
-          setIsBulkDeleting(false);
-        }
-      },
-    });
+    const ids = [...selectedAlertIds];
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteBroadcastApi(id));
+    if (succeeded.length > 0) {
+      const deletedIdSet = new Set(succeeded);
+      setBroadcastHistory((prev) => prev.filter((b) => !deletedIdSet.has(b.id)));
+      if (detailBroadcast && deletedIdSet.has(detailBroadcast.id)) {
+        setDetailBroadcast(null);
+      }
+      showToast(`✅ Đã thu hồi thành công ${succeeded.length} thông báo!`, 'success');
+    }
+    if (failed.length > 0) {
+      showToast(`⚠️ Không thể thu hồi ${failed.length} thông báo.`, 'warning');
+    }
+    setSelectedAlertIds([]);
   };
 
   // Đếm số lượng theo tab
@@ -778,6 +760,16 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         String(item.type || '').toUpperCase() !== broadcastFilterTab
       )
         return false;
+      if (isAdmin && areaFilter !== 'ALL') {
+        const matched = matchesSelectedWardFilter(
+          item.areaId,
+          [item.areaName, item.title, item.content],
+          areaFilter,
+          daNangWards,
+          canonicalAreaIdMap
+        );
+        if (!matched) return false;
+      }
       if (broadcastSearch.trim()) {
         const q = broadcastSearch.trim().toLowerCase();
         const matchTitle = item.title?.toLowerCase().includes(q);
@@ -788,7 +780,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       }
       return true;
     });
-  }, [broadcastHistory, broadcastFilterTab, broadcastSearch]);
+  }, [broadcastHistory, broadcastFilterTab, broadcastSearch, isAdmin, areaFilter, daNangWards, canonicalAreaIdMap]);
 
   // Sắp xếp
   const sortedBroadcasts = useMemo(() => {
@@ -856,6 +848,45 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     }
   };
 
+  const handleExportAlertsExcel = (onlySelected = false) => {
+    const targetList = onlySelected
+      ? sortedBroadcasts.filter((item) => selectedAlertIds.includes(item.id))
+      : sortedBroadcasts;
+    if (targetList.length === 0) {
+      showToast('Không có thông báo nào để xuất Excel.', 'warning');
+      return;
+    }
+    exportTableToExcel({
+      title: 'LỊCH SỬ THÔNG BÁO & CẢNH BÁO PHÁT SÓNG',
+      subtitle: onlySelected
+        ? `Xuất ${targetList.length} thông báo đã chọn`
+        : `Tổng hợp ${targetList.length} thông báo đã phát`,
+      sheetName: 'Thong bao',
+      fileNamePrefix: 'Lich_su_thong_bao',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Tiêu đề', width: 32 },
+        { header: 'Nội dung', width: 42 },
+        { header: 'Phân loại', width: 18, align: 'center' },
+        { header: 'Mức độ', width: 14, align: 'center' },
+        { header: 'Khu vực', width: 22 },
+        { header: 'Người phát', width: 22 },
+        { header: 'Thời gian gửi', width: 20, align: 'center' },
+      ],
+      rows: targetList.map((item, idx) => [
+        idx + 1,
+        item.title || '—',
+        item.content || '—',
+        item.type || 'SYSTEM',
+        item.priority || 'NORMAL',
+        item.areaName || 'Toàn hệ thống',
+        item.createdBy?.fullName || 'Hệ thống',
+        formatDateTime(item.createdAt),
+      ]),
+    });
+    showToast(`Đã xuất Excel ${targetList.length} thông báo.`, 'success');
+  };
+
   return (
     <div
       className="sos-views-container"
@@ -896,7 +927,13 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           </strong>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <ExcelExportButton
+            onClick={() => handleExportAlertsExcel(false)}
+            disabled={sortedBroadcasts.length === 0}
+            title="Xuất lịch sử thông báo ra file Excel (.xlsx)"
+          />
+
           <button
             type="button"
             className="sos-btn-flat primary"
@@ -1017,8 +1054,20 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           ))}
         </div>
 
-        {/* Ô tìm kiếm thông báo */}
-        <div style={{ position: 'relative' }}>
+        {/* Lọc địa bàn Đà Nẵng & Ô tìm kiếm thông báo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {isAdmin && daNangWards.length > 0 && (
+            <DaNangAreaSelect
+              wards={daNangWards}
+              valueKey="name"
+              value={areaFilter}
+              onChange={(val) => {
+                setAreaFilter(val);
+                setPage(1);
+              }}
+            />
+          )}
+          <div style={{ position: 'relative' }}>
           <i
             className="bi bi-search"
             style={{
@@ -1074,6 +1123,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               <i className="bi bi-x-lg" style={{ fontSize: '11px' }}></i>
             </button>
           )}
+          </div>
         </div>
       </div>
 
@@ -1094,67 +1144,18 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         }}
       >
         {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
-        {selectedAlertIds.length > 0 && (
-          <div
-            style={{
-              padding: '10px 16px',
-              backgroundColor: 'var(--dm-blue-bg)',
-              borderBottom: '1px solid var(--dm-blue-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontWeight: 600, color: 'var(--dm-blue-text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <i className="bi bi-check2-square" style={{ fontSize: '16px', color: 'var(--dm-blue-text)' }}></i>
-                <span>Đã chọn <strong>{selectedAlertIds.length}</strong> thông báo</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedAlertIds([])}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--dm-text-muted)',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                  padding: '2px 4px',
-                }}
-              >
-                Bỏ chọn
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={handleBulkDeleteAlerts}
-                disabled={isBulkDeleting}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  backgroundColor: '#ef4444',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: isBulkDeleting ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 1px 2px rgba(239, 68, 68, 0.2)',
-                }}
-              >
-                <i className="bi bi-trash3" style={{ fontSize: '13px' }}></i>
-                <span>Thu hồi / Xóa đã chọn ({selectedAlertIds.length})</span>
-              </button>
-            </div>
-          </div>
-        )}
+        <TableBulkActionBar
+          selectedCount={selectedAlertIds.length}
+          totalFilteredCount={sortedBroadcasts.length}
+          unitLabel="thông báo"
+          onSelectAllFiltered={() => setSelectedAlertIds(sortedBroadcasts.map((item) => item.id))}
+          onClearSelection={() => setSelectedAlertIds([])}
+          onExportSelected={() => handleExportAlertsExcel(true)}
+          onDeleteSelected={handleBulkDeleteAlerts}
+          deleteLabel="Thu hồi / Xóa đã chọn"
+          deleteConfirmTitle={`Thu hồi & xóa ${selectedAlertIds.length} thông báo đã chọn?`}
+          deleteConfirmDesc="Các bản tin đã chọn sẽ bị thu hồi và gỡ bỏ khỏi tất cả thiết bị người nhận."
+        />
 
         <div
           className="sos-table-wrapper"
@@ -1169,16 +1170,22 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           <table className="sos-table">
             <thead>
               <tr>
-                <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
-                  <input
-                    type="checkbox"
-                    style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
                     checked={
                       paginatedBroadcasts.length > 0 &&
                       paginatedBroadcasts.every((item) => selectedAlertIds.includes(item.id))
                     }
-                    onChange={(e) => {
-                      if (e.target.checked) {
+                    indeterminate={
+                      paginatedBroadcasts.some((item) => selectedAlertIds.includes(item.id)) &&
+                      !paginatedBroadcasts.every((item) => selectedAlertIds.includes(item.id))
+                    }
+                    disabled={paginatedBroadcasts.length === 0}
+                    onChange={() => {
+                      const allOnPage =
+                        paginatedBroadcasts.length > 0 &&
+                        paginatedBroadcasts.every((item) => selectedAlertIds.includes(item.id));
+                      if (!allOnPage) {
                         const pageIds = paginatedBroadcasts.map((item) => item.id);
                         setSelectedAlertIds((prev) => Array.from(new Set([...prev, ...pageIds])));
                       } else {
@@ -1298,24 +1305,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   const priorityStr = String(item.priority || 'NORMAL').toUpperCase();
 
                   return (
-                    <tr
-                      key={item.id}
-                      style={{
-                        backgroundColor: selectedAlertIds.includes(item.id) ? 'var(--dm-blue-bg)' : undefined,
-                      }}
-                    >
+                    <tr key={item.id}>
                       {/* 0. Checkbox chọn từng mục */}
-                      <td style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}>
-                        <input
-                          type="checkbox"
-                          style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
                           checked={selectedAlertIds.includes(item.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
+                          onChange={() => {
                             setSelectedAlertIds((prev) =>
                               prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]
                             );
                           }}
+                          ariaLabel={`Chọn thông báo ${item.title}`}
                         />
                       </td>
 

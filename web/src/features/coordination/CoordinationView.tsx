@@ -17,9 +17,25 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
-import { fetchSosRequests, approveSuppliesApi, rejectSuppliesApi } from '@/api';
+import {
+  fetchSosRequests,
+  approveSuppliesApi,
+  rejectSuppliesApi,
+  completeSosRequest,
+  deleteSosRequestApi,
+} from '@/api';
 import { getSocket } from '@/services/socketService';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
+import { toast } from '@/components/common/toast';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
 
@@ -374,6 +390,76 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     return `${Math.floor(diffHour / 24)} ngày trước`;
   };
 
+  const missionSelection = useTableSelection(filteredMissions.map((s: SosRequestItem) => s._id));
+
+  const handleExportMissionsExcel = (onlySelected = false) => {
+    const targetRows = onlySelected
+      ? filteredMissions.filter((s: SosRequestItem) => missionSelection.selectedIds.has(s._id))
+      : filteredMissions;
+    if (targetRows.length === 0) {
+      toast.warning('Không có nhiệm vụ điều phối nào để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH SÁCH NHIỆM VỤ ĐIỀU PHỐI TÁC CHIẾN',
+      subtitle: onlySelected
+        ? `Xuất ${targetRows.length} nhiệm vụ đã chọn`
+        : `Tổng hợp ${targetRows.length} nhiệm vụ điều phối`,
+      sheetName: 'Dieu phoi tac chien',
+      fileNamePrefix: 'Dieu_phoi_tac_chien',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Mã SOS', width: 16, align: 'center' },
+        { header: 'Người dân', width: 24 },
+        { header: 'Số điện thoại', width: 15, align: 'center' },
+        { header: 'Địa chỉ hiện trường', width: 38 },
+        { header: 'Mức độ', width: 14, align: 'center' },
+        { header: 'Trạng thái', width: 18, align: 'center' },
+        { header: 'Thời gian tạo', width: 20, align: 'center' },
+      ],
+      rows: targetRows.map((sos: SosRequestItem, idx: number) => {
+        const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? (sos.citizenId as any) : null;
+        return [
+          idx + 1,
+          sos.sosCode || sos._id.slice(-6).toUpperCase(),
+          citizenInfo?.fullName || 'Người dân',
+          citizenInfo?.phone || '—',
+          sos.address || '—',
+          sos.priority || '—',
+          getEffectiveStatus(sos),
+          sos.createdAt ? new Date(sos.createdAt).toLocaleString('vi-VN') : '—',
+        ];
+      }),
+    });
+    toast.success(`Đã xuất Excel ${targetRows.length} nhiệm vụ điều phối.`);
+  };
+
+  const handleBulkCloseMissions = async () => {
+    const ids = Array.from(missionSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => completeSosRequest(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã đóng / hoàn thành ${succeeded.length} nhiệm vụ.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể đóng ${failed.length} nhiệm vụ: ${failed[0].error}`);
+    }
+    missionSelection.clearSelection();
+    refreshData();
+  };
+
+  const handleBulkDeleteMissions = async () => {
+    const ids = Array.from(missionSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteSosRequestApi(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã xóa ${succeeded.length} nhiệm vụ.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} nhiệm vụ: ${failed[0].error}`);
+    }
+    missionSelection.clearSelection();
+    refreshData();
+  };
+
   return (
     <div className="coordination-executive-container oceanic-executive-theme">
       {/* BẢNG DỮ LIỆU ĐIỀU PHỐI (CHUẨN EXECUTIVE TABLE CARD) */}
@@ -426,7 +512,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <div className="executive-search-input-wrap">
               <Search size={14} className="search-icon" />
               <input
@@ -441,14 +527,43 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                 </button>
               )}
             </div>
+
+            <ExcelExportButton
+              onClick={() => handleExportMissionsExcel(false)}
+              disabled={filteredMissions.length === 0}
+              title="Xuất danh sách điều phối tác chiến ra Excel (.xlsx)"
+            />
           </div>
         </div>
+
+        <TableBulkActionBar
+          selectedCount={missionSelection.selectedCount}
+          totalFilteredCount={filteredMissions.length}
+          unitLabel="nhiệm vụ"
+          onSelectAllFiltered={missionSelection.selectAllFiltered}
+          onClearSelection={missionSelection.clearSelection}
+          onExportSelected={() => handleExportMissionsExcel(true)}
+          onCloseSelected={handleBulkCloseMissions}
+          closeLabel="Đóng nhiệm vụ"
+          closeConfirmTitle={`Đóng ${missionSelection.selectedCount} nhiệm vụ đã chọn?`}
+          closeConfirmDesc="Các nhiệm vụ đang thực hiện sẽ chuyển sang trạng thái Hoàn thành."
+          onDeleteSelected={handleBulkDeleteMissions}
+          deleteLabel="Xóa đã chọn"
+        />
 
         {/* Table Content */}
         <div className="executive-table-scroll">
           <table className="executive-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={missionSelection.allVisibleSelected}
+                    indeterminate={missionSelection.someVisibleSelected}
+                    disabled={filteredMissions.length === 0}
+                    onChange={missionSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th style={{ width: '15%' }}>Mã Sự Cố</th>
                 <th style={{ width: '25%' }}>Hiện Trường &amp; Địa Chỉ</th>
                 <th style={{ width: '18%' }}>Người Dân &amp; Liên Hệ</th>
@@ -460,14 +575,14 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             <tbody>
               {loading && filteredMissions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
                     <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
                     <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu điều phối tác chiến...</p>
                   </td>
                 </tr>
               ) : filteredMissions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '50px 20px' }}>
                     <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
                     <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--dm-text-strong)' }}>
                       Không có nhiệm vụ cứu nạn nào trong danh sách điều phối
@@ -487,6 +602,13 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
                   return (
                     <tr key={sos._id} className="executive-table-row">
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={missionSelection.isSelected(sos._id)}
+                          onChange={() => missionSelection.toggleRow(sos._id)}
+                          ariaLabel={`Chọn nhiệm vụ ${sos.sosCode}`}
+                        />
+                      </td>
                       {/* Cột 1: Mã sự cố */}
                       <td>
                         <div className="table-code-cell">

@@ -27,16 +27,27 @@ import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/type
 import {
   fetchSosRequests,
   createSosRequest,
+  completeSosRequest,
   fetchAdministrativeAreas,
   fetchVehicles,
   deleteSosRequestApi,
   clearCancelledSosApi,
   reanalyzeSosAiApi,
 } from '@/api';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import './SosRequestsView.css';
@@ -821,6 +832,114 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     return true;
   });
 
+  const sosSelection = useTableSelection(filteredSosList.map((s) => s._id));
+
+  const handleExportSosExcel = (onlySelected = false) => {
+    const targetRows = onlySelected
+      ? filteredSosList.filter((s) => sosSelection.selectedIds.has(s._id))
+      : filteredSosList;
+    if (targetRows.length === 0) {
+      toast.warning('Không có dữ liệu SOS để xuất Excel.');
+      return;
+    }
+    const statusLabelMap: Record<string, string> = {
+      PENDING: 'Chờ điều phối',
+      VERIFIED: 'Đã xác minh',
+      ASSIGNED: 'Đã giao đội',
+      ACCEPTED: 'Đội đã nhận',
+      ON_THE_WAY: 'Đang di chuyển',
+      ARRIVED: 'Đã tới nơi',
+      RESCUING: 'Đang cứu hộ',
+      COMPLETED: 'Hoàn thành',
+      CANCELLED: 'Đã hủy',
+    };
+    const priorityLabelMap: Record<string, string> = {
+      CRITICAL: 'Nguy cấp',
+      HIGH: 'Khẩn cấp',
+      MEDIUM: 'Trung bình',
+      LOW: 'Thấp',
+      UNASSESSED: 'Chưa đánh giá',
+    };
+    exportTableToExcel({
+      title: 'DANH SÁCH YÊU CẦU CỨU HỘ KHẨN CẤP (SOS)',
+      subtitle: onlySelected
+        ? `Xuất ${targetRows.length} ca SOS đã chọn`
+        : `Tổng hợp ${targetRows.length} ca SOS theo bộ lọc hiện tại`,
+      sheetName: 'Yeu cau SOS',
+      fileNamePrefix: 'Danh_sach_SOS',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Mã SOS', width: 16, align: 'center' },
+        { header: 'Người dân', width: 24 },
+        { header: 'Số điện thoại', width: 15, align: 'center' },
+        { header: 'Địa chỉ hiện trường', width: 38 },
+        { header: 'Loại sự cố', width: 20 },
+        { header: 'Mức độ', width: 14, align: 'center' },
+        { header: 'Số người', width: 11, align: 'right' },
+        { header: 'Trạng thái', width: 16, align: 'center' },
+        { header: 'Thời gian gửi', width: 20, align: 'center' },
+      ],
+      rows: targetRows.map((sos, idx) => {
+        const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? sos.citizenId : null;
+        return [
+          idx + 1,
+          sos.sosCode || sos._id.slice(-6).toUpperCase(),
+          citizenInfo?.fullName || 'Người dân',
+          citizenInfo?.phone || '—',
+          sos.address || '—',
+          EMERGENCY_TYPE_LABELS[sos.emergencyType] || sos.emergencyType || 'Khẩn cấp',
+          priorityLabelMap[sos.priority] || sos.priority || '—',
+          sos.people || 1,
+          statusLabelMap[sos.status] || sos.status || '—',
+          sos.createdAt ? new Date(sos.createdAt).toLocaleString('vi-VN') : '—',
+        ];
+      }),
+    });
+    toast.success(`Đã xuất Excel ${targetRows.length} ca SOS.`);
+  };
+
+  const handleBulkCloseSos = async () => {
+    const ids = Array.from(sosSelection.selectedIds);
+    const activeIds = ids.filter((id) => {
+      const item = sosList.find((s) => s._id === id);
+      return item && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(item.status);
+    });
+    if (activeIds.length === 0) {
+      toast.info('Các ca SOS đã chọn đều đã đóng hoặc hoàn thành.');
+      sosSelection.clearSelection();
+      return;
+    }
+    const { succeeded, failed } = await runBulkOperation(activeIds, (id) => completeSosRequest(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã đóng / hoàn thành ${succeeded.length} ca SOS.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể đóng ${failed.length} ca: ${failed[0].error}`);
+    }
+    sosSelection.clearSelection();
+    await loadData();
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
+
+  const handleBulkDeleteSos = async () => {
+    const ids = Array.from(sosSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteSosRequestApi(id));
+    if (succeeded.length > 0) {
+      const deletedSet = new Set(succeeded);
+      setSosList((prev) => prev.filter((item) => !deletedSet.has(item._id)));
+      if (selectedSosDetail && deletedSet.has(selectedSosDetail._id)) {
+        setSelectedSosDetail(null);
+      }
+      toast.success(`Đã xóa ${succeeded.length} ca SOS.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} ca: ${failed[0].error}`);
+    }
+    sosSelection.clearSelection();
+    await loadData();
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
+
   const formatTimeAgo = (dateStr: string) => {
     if (!dateStr) return 'Vừa xong';
     const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -896,23 +1015,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 ))}
               </select>
 
-              <select
-                className={`sos-area-filter-select ${adminAreaFilter !== 'ALL' ? 'has-filter' : ''}`}
+              <DaNangAreaSelect
+                wards={adminFilterWards}
+                loading={adminFilterWardsLoading}
                 value={adminAreaFilter}
-                onChange={(e) => setAdminAreaFilter(e.target.value)}
-                title="Lọc yêu cầu SOS theo xã / phường / đặc khu"
-              >
-                <option value="ALL">
-                  {adminFilterWardsLoading
-                    ? 'Đang tải địa bàn...'
-                    : `Tất cả địa bàn Đà Nẵng (${adminFilterWards.length})`}
-                </option>
-                {adminFilterWards.map((ward) => (
-                  <option key={ward.id || ward.code} value={ward.id}>
-                    {ward.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setAdminAreaFilter}
+                title="Lọc yêu cầu SOS theo địa bàn Đà Nẵng"
+              />
             </>
           ) : (
             <div className="executive-triage-pills">
@@ -951,7 +1060,29 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </button>
               )}
           </div>
+
+          <ExcelExportButton
+            onClick={() => handleExportSosExcel(false)}
+            disabled={filteredSosList.length === 0}
+            title="Xuất danh sách SOS đang hiển thị ra Excel (.xlsx)"
+          />
         </div>
+
+        {/* Thanh thao tác hàng loạt khi chọn dòng */}
+        <TableBulkActionBar
+          selectedCount={sosSelection.selectedCount}
+          totalFilteredCount={filteredSosList.length}
+          unitLabel="ca SOS"
+          onSelectAllFiltered={sosSelection.selectAllFiltered}
+          onClearSelection={sosSelection.clearSelection}
+          onExportSelected={() => handleExportSosExcel(true)}
+          onCloseSelected={handleBulkCloseSos}
+          closeLabel="Đóng ca đã chọn"
+          closeConfirmTitle={`Đóng ${sosSelection.selectedCount} ca SOS đã chọn?`}
+          closeConfirmDesc="Các ca đang hoạt động sẽ được chuyển sang trạng thái Hoàn thành / Đóng."
+          onDeleteSelected={handleBulkDeleteSos}
+          deleteLabel="Xóa đã chọn"
+        />
 
         {/* Banner tác vụ dọn dẹp khi đang xem các ca đã hủy */}
         {triageFilter === 'CANCELLED' && cancelledCount > 0 && (
@@ -979,6 +1110,14 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <table className="executive-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={sosSelection.allVisibleSelected}
+                    indeterminate={sosSelection.someVisibleSelected}
+                    disabled={filteredSosList.length === 0}
+                    onChange={sosSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th style={{ width: '14%' }}>Mã sự cố</th>
                 <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
                 <th style={{ width: '20%' }}>Địa điểm hiện trường</th>
@@ -991,14 +1130,14 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <tbody>
               {loading && displaySosList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '45px 20px' }}>
                     <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
                     <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu cứu nạn...</p>
                   </td>
                 </tr>
               ) : filteredSosList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '45px 20px' }}>
                     <div style={{ maxWidth: 460, margin: '0 auto' }}>
                       <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>
                         {triageFilter === 'ACTIVE_ALL' && totalCount > 0 ? '✨' : '🛡️'}
@@ -1066,6 +1205,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       title="Bấm để mở bảng chi tiết điều phối bên phải"
                       style={{ cursor: 'pointer' }}
                     >
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={sosSelection.isSelected(sos._id)}
+                          onChange={() => sosSelection.toggleRow(sos._id)}
+                          ariaLabel={`Chọn ca ${sos.sosCode}`}
+                        />
+                      </td>
                       {/* 1. Mã sự cố */}
                       <td>
                         <div className="table-code-cell">

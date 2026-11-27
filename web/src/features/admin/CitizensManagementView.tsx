@@ -5,14 +5,24 @@ import {
   Lock as LockIcon,
   Unlock,
   Search,
-  MapPin,
   Filter,
   X,
   RotateCcw,
   FileQuestion,
 } from 'lucide-react';
-import { fetchAdminUsers, updateUserStatus } from '@/api';
+import { fetchAdminUsers, updateUserStatus, deleteAdminUser } from '@/api';
 import { toast } from '@/components/common/toast';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import './CitizensManagementView.css';
 
 interface CitizenUser {
@@ -44,6 +54,10 @@ export const CitizensManagementView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWard, setSelectedWard] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const { wards: daNangWards, wardsLoading: daNangWardsLoading } = useAdministrativeFilter({
+    isAdmin: true,
+    wardsScopeProvince: 'Đà Nẵng',
+  });
 
   const loadData = async () => {
     try {
@@ -83,49 +97,20 @@ export const CitizensManagementView: React.FC = () => {
     }
   };
 
-  // Trích xuất danh sách Phường / Xã tự động từ địa chỉ thực tế trong CSDL
-  const wardOptions = useMemo(() => {
-    const wardCountMap = new Map<string, number>();
-
-    citizens.forEach((u) => {
-      const addr = u.address || '';
-      if (!addr || addr.toLowerCase().includes('chưa cung cấp')) return;
-
-      const matches = Array.from(addr.matchAll(/(phường|xã|thị trấn)\s+([^,]+)/gi));
-      if (matches.length > 0) {
-        matches.forEach((m) => {
-          const type = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
-          const name = m[2].trim();
-          const fullWard = `${type} ${name}`;
-          wardCountMap.set(fullWard, (wardCountMap.get(fullWard) || 0) + 1);
-        });
-      } else {
-        const dMatch = addr.match(/(quận|huyện|thị xã)\s+([^,]+)/i);
-        if (dMatch) {
-          const type = dMatch[1].charAt(0).toUpperCase() + dMatch[1].slice(1).toLowerCase();
-          const name = dMatch[2].trim();
-          const fullDistrict = `${type} ${name}`;
-          wardCountMap.set(fullDistrict, (wardCountMap.get(fullDistrict) || 0) + 1);
-        }
-      }
-    });
-
-    return Array.from(wardCountMap.entries())
-      .map(([ward, count]) => ({ ward, count }))
-      .sort((a, b) => a.ward.localeCompare(b.ward, 'vi'));
-  }, [citizens]);
-
   // Lọc danh sách người dân theo điều kiện tìm kiếm và bộ lọc
   const filteredCitizens = useMemo(() => {
     const rawSearch = searchTerm.trim().toLowerCase();
     const cleanSearch = removeVietnameseTones(rawSearch);
 
     return citizens.filter((u) => {
-      // 1. Lọc theo Phường / Xã
+      // 1. Lọc theo địa bàn Đà Nẵng
       if (selectedWard !== 'ALL') {
         const addrClean = removeVietnameseTones(u.address || '');
-        const wardClean = removeVietnameseTones(selectedWard);
-        if (!addrClean.includes(wardClean)) {
+        const wardFullClean = removeVietnameseTones(selectedWard);
+        const wardCoreClean = wardFullClean
+          .replace(/^(phuong|xa|dac khu|thi tran|quan|huyen|thi xa)\s+/i, '')
+          .trim();
+        if (!addrClean.includes(wardFullClean) && (!wardCoreClean || !addrClean.includes(wardCoreClean))) {
           return false;
         }
       }
@@ -163,6 +148,71 @@ export const CitizensManagementView: React.FC = () => {
     setSelectedStatus('ALL');
   };
 
+  const citizenSelection = useTableSelection(filteredCitizens.map((u) => u._id));
+
+  const handleExportCitizensExcel = (onlySelected = false) => {
+    const targetRows = onlySelected
+      ? filteredCitizens.filter((u) => citizenSelection.selectedIds.has(u._id))
+      : filteredCitizens;
+    if (targetRows.length === 0) {
+      toast.warning('Không có dữ liệu người dân để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH SÁCH TÀI KHOẢN NGƯỜI DÂN',
+      subtitle: onlySelected
+        ? `Xuất ${targetRows.length} tài khoản đã chọn`
+        : `Tổng hợp ${targetRows.length} tài khoản người dân`,
+      sheetName: 'Nguoi dan',
+      fileNamePrefix: 'Danh_sach_nguoi_dan',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Họ và tên', width: 26 },
+        { header: 'Số điện thoại', width: 16, align: 'center' },
+        { header: 'Email', width: 28 },
+        { header: 'Địa chỉ', width: 38 },
+        { header: 'Trạng thái', width: 15, align: 'center' },
+      ],
+      rows: targetRows.map((u, idx) => [
+        idx + 1,
+        u.fullName || '—',
+        u.phone || 'Chưa có',
+        u.email || 'Chưa có',
+        u.address || 'Chưa cung cấp',
+        u.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm khóa',
+      ]),
+    });
+    toast.success(`Đã xuất Excel ${targetRows.length} tài khoản người dân.`);
+  };
+
+  const handleBulkSuspendCitizens = async () => {
+    const ids = Array.from(citizenSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      updateUserStatus(id, 'SUSPENDED')
+    );
+    if (succeeded.length > 0) {
+      toast.success(`Đã khóa ${succeeded.length} tài khoản người dân.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể khóa ${failed.length} tài khoản: ${failed[0].error}`);
+    }
+    citizenSelection.clearSelection();
+    await loadData();
+  };
+
+  const handleBulkDeleteCitizens = async () => {
+    const ids = Array.from(citizenSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteAdminUser(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã xóa ${succeeded.length} tài khoản người dân.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} tài khoản: ${failed[0].error}`);
+    }
+    citizenSelection.clearSelection();
+    await loadData();
+  };
+
   return (
     <div className="sos-views-container">
       <div className="sos-view-card">
@@ -171,15 +221,22 @@ export const CitizensManagementView: React.FC = () => {
             <Users size={18} color="#ef4444" />
             <span>Người dân ({citizens.length})</span>
           </div>
-          <button
-            type="button"
-            className="sos-btn sos-btn--outline sos-btn--sm"
-            onClick={loadData}
-            disabled={loading}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Làm mới</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <ExcelExportButton
+              onClick={() => handleExportCitizensExcel(false)}
+              disabled={filteredCitizens.length === 0}
+              title="Xuất danh sách tài khoản người dân ra Excel (.xlsx)"
+            />
+            <button
+              type="button"
+              className="sos-btn sos-btn--outline sos-btn--sm"
+              onClick={loadData}
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>Làm mới</span>
+            </button>
+          </div>
         </div>
 
         {/* THANH TÌM KIẾM VÀ BỘ LỌC PHƯỜNG / XÃ */}
@@ -206,22 +263,14 @@ export const CitizensManagementView: React.FC = () => {
             )}
           </div>
 
-          {/* Bộ lọc theo Phường / Xã */}
-          <div className="sos-citizen-filter-select-wrap">
-            <MapPin size={15} className="sos-citizen-select-icon" />
-            <select
-              value={selectedWard}
-              onChange={(e) => setSelectedWard(e.target.value)}
-              className="sos-citizen-select"
-            >
-              <option value="ALL">Tất cả Phường / Xã ({citizens.length})</option>
-              {wardOptions.map((w) => (
-                <option key={w.ward} value={w.ward}>
-                  {w.ward} ({w.count})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Bộ lọc địa bàn Đà Nẵng đồng bộ */}
+          <DaNangAreaSelect
+            wards={daNangWards}
+            loading={daNangWardsLoading}
+            valueKey="name"
+            value={selectedWard}
+            onChange={setSelectedWard}
+          />
 
           {/* Bộ lọc theo Trạng thái */}
           <div className="sos-citizen-filter-select-wrap">
@@ -256,11 +305,35 @@ export const CitizensManagementView: React.FC = () => {
           </div>
         </div>
 
+        {/* THANH THAO TÁC HÀNG LOẠT */}
+        <TableBulkActionBar
+          selectedCount={citizenSelection.selectedCount}
+          totalFilteredCount={filteredCitizens.length}
+          unitLabel="tài khoản"
+          onSelectAllFiltered={citizenSelection.selectAllFiltered}
+          onClearSelection={citizenSelection.clearSelection}
+          onExportSelected={() => handleExportCitizensExcel(true)}
+          onCloseSelected={handleBulkSuspendCitizens}
+          closeLabel="Khóa đã chọn"
+          closeConfirmTitle={`Khóa ${citizenSelection.selectedCount} tài khoản người dân?`}
+          closeConfirmDesc="Các tài khoản đã chọn sẽ chuyển sang trạng thái Tạm khóa (SUSPENDED)."
+          onDeleteSelected={handleBulkDeleteCitizens}
+          deleteLabel="Xóa đã chọn"
+        />
+
         {/* BẢNG DANH SÁCH TÀI KHOẢN NGƯỜI DÂN */}
         <div className="sos-table-wrapper">
           <table className="sos-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={citizenSelection.allVisibleSelected}
+                    indeterminate={citizenSelection.someVisibleSelected}
+                    disabled={filteredCitizens.length === 0}
+                    onChange={citizenSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th>Họ và tên</th>
                 <th>Số điện thoại</th>
                 <th>Email</th>
@@ -272,7 +345,7 @@ export const CitizensManagementView: React.FC = () => {
             <tbody>
               {filteredCitizens.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="sos-empty-table-cell">
+                  <td colSpan={7} className="sos-empty-table-cell">
                     <div className="sos-empty-table-inner">
                       <FileQuestion size={36} color="#94a3b8" />
                       <span className="sos-empty-table-title">
@@ -298,6 +371,13 @@ export const CitizensManagementView: React.FC = () => {
               ) : (
                 filteredCitizens.map((u) => (
                   <tr key={u._id}>
+                    <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                      <TableRowCheckbox
+                        checked={citizenSelection.isSelected(u._id)}
+                        onChange={() => citizenSelection.toggleRow(u._id)}
+                        ariaLabel={`Chọn tài khoản ${u.fullName}`}
+                      />
+                    </td>
                     <td>
                       <strong>{u.fullName}</strong>
                     </td>

@@ -20,11 +20,20 @@ import {
   FilterX,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
-import { fetchAdminUsers, verifyRescuer } from '@/api';
+import { fetchAdminUsers, verifyRescuer, deleteAdminUser } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import { SKILL_LABELS, getApplicantInitials } from './rescuersConstants';
 import './RescuerApprovalView.css';
@@ -512,6 +521,85 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     return filteredApplicants.slice(start, start + pageSize);
   }, [filteredApplicants, currentPage, pageSize]);
 
+  const appVisibleIds = useMemo(() => paginatedApplicants.map((a) => a.id), [paginatedApplicants]);
+  const appFilteredIds = useMemo(() => filteredApplicants.map((a) => a.id), [filteredApplicants]);
+  const appSelection = useTableSelection(appVisibleIds, appFilteredIds);
+
+  const handleExportApplicantsExcel = (onlySelected = false) => {
+    const rows = onlySelected
+      ? filteredApplicants.filter((a) => appSelection.isSelected(a.id))
+      : filteredApplicants;
+    const statusVi: Record<string, string> = {
+      PENDING: 'Chờ duyệt',
+      IN_REVIEW: 'Đang thẩm định',
+      REQUIRES_UPDATE: 'Cần bổ sung',
+      VERIFIED: 'Đã duyệt',
+      REJECTED: 'Từ chối',
+    };
+    exportTableToExcel({
+      title: 'DANH SÁCH HỒ SƠ CỨU HỘ VIÊN',
+      sheetName: 'Ho_so_cuu_ho',
+      fileNamePrefix: 'Ho_so_cuu_ho_vien',
+      rows,
+      columns: [
+        { header: 'STT', width: 7, align: 'center', value: (_, i) => i + 1 },
+        { header: 'Họ tên', width: 24, value: (a) => a.fullName || '—' },
+        { header: 'SĐT', width: 15, value: (a) => a.phone || '—' },
+        { header: 'Email', width: 26, value: (a) => a.email || '—' },
+        { header: 'CCCD', width: 18, value: (a) => a.idNumber || '—' },
+        { header: 'Địa bàn', width: 28, value: (a) => a.areaName || '—' },
+        {
+          header: 'Kỹ năng',
+          width: 30,
+          value: (a) => (a.skills || []).map((s) => SKILL_LABELS[s] || s).join(', ') || '—',
+        },
+        {
+          header: 'Ngày đăng ký',
+          width: 16,
+          align: 'center',
+          value: (a) => (a.submittedAt ? new Date(a.submittedAt).toLocaleDateString('vi-VN') : '—'),
+        },
+        {
+          header: 'Trạng thái',
+          width: 16,
+          align: 'center',
+          value: (a) => statusVi[a.status] || a.status,
+        },
+      ],
+    });
+    toast.success(`Đã xuất ${rows.length} hồ sơ cứu hộ ra file Excel.`, 'Xuất Excel');
+  };
+
+  const handleBulkRejectApplicants = async () => {
+    const ids = Array.from(appSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      verifyRescuer(id, 'REJECTED', 'Đóng / từ chối hàng loạt bởi Ban chỉ huy')
+    );
+    if (succeeded.length > 0) {
+      setApplicants((prev) =>
+        prev.map((a) => (succeeded.includes(a.id) ? { ...a, status: 'REJECTED' } : a))
+      );
+      toast.success(`Đã đóng / từ chối ${succeeded.length} hồ sơ cứu hộ.`);
+    }
+    if (failed.length > 0) {
+      toast.warning(`${failed.length} hồ sơ không thể cập nhật.`);
+    }
+    appSelection.clearSelection();
+  };
+
+  const handleBulkDeleteApplicants = async () => {
+    const ids = Array.from(appSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteAdminUser(id));
+    if (succeeded.length > 0) {
+      setApplicants((prev) => prev.filter((a) => !succeeded.includes(a.id)));
+      toast.success(`Đã xóa ${succeeded.length} hồ sơ khỏi hệ thống.`);
+    }
+    if (failed.length > 0) {
+      toast.warning(`${failed.length} hồ sơ không thể xóa.`);
+    }
+    appSelection.clearSelection();
+  };
+
   // 8. Xử lý nghiệp vụ: Phê duyệt hồ sơ
   const handleConfirmApproval = async () => {
     if (!selectedApplicant) return;
@@ -798,38 +886,15 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
           <div className="ra-toolbar-controls">
             {/* Bộ lọc địa bàn Đà Nẵng: Dành riêng cho Quản trị viên (Admin) */}
             {isAdmin && (
-              <SearchableSelect
+              <DaNangAreaSelect
                 className="ra-filter-select"
-                ariaLabel="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
-                title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
-                searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
+                wards={wards}
+                loading={wardsLoading}
                 value={areaFilter}
                 onChange={(val) => {
                   setAreaFilter(val);
                   setCurrentPage(1);
                 }}
-                triggerStyle={{
-                  minWidth: 215,
-                  fontWeight: 700,
-                  borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
-                  background: areaFilter !== 'ALL' ? 'var(--dm-blue-bg)' : undefined,
-                  color: areaFilter !== 'ALL' ? 'var(--dm-blue-text)' : undefined,
-                }}
-                options={[
-                  {
-                    value: 'ALL',
-                    label: wardsLoading
-                      ? '⏳ Đang tải địa bàn Đà Nẵng...'
-                      : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
-                    keywords: 'tat ca toan thanh pho da nang',
-                  },
-                  ...wards.map((ward) => ({
-                    value: ward.id,
-                    label: `${ward.type === 'DISTRICT' ? '🏛️' : '📍'} ${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
-                    badgeText: ward.code || undefined,
-                    keywords: `${ward.name} ${ward.code || ''}`,
-                  })),
-                ]}
               />
             )}
 
@@ -926,18 +991,35 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               </button>
             )}
 
-            <button
-              className="ra-refresh-btn"
-              onClick={handleRefresh}
-              title="Làm mới dữ liệu từ máy chủ"
-              disabled={refreshSpin}
-              style={{ marginLeft: 'auto' }}
-            >
-              <RefreshCw size={14} className={refreshSpin ? 'spin' : ''} />
-              <span>Làm mới</span>
-            </button>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ExcelExportButton
+                onClick={() => handleExportApplicantsExcel(false)}
+                disabled={filteredApplicants.length === 0}
+              />
+              <button
+                className="ra-refresh-btn"
+                onClick={handleRefresh}
+                title="Làm mới dữ liệu từ máy chủ"
+                disabled={refreshSpin}
+              >
+                <RefreshCw size={14} className={refreshSpin ? 'spin' : ''} />
+                <span>Làm mới</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        <TableBulkActionBar
+          selectedCount={appSelection.selectedCount}
+          totalFilteredCount={filteredApplicants.length}
+          unitLabel="hồ sơ"
+          onSelectAllFiltered={appSelection.selectAllFiltered}
+          onClearSelection={appSelection.clearSelection}
+          onCloseSelected={handleBulkRejectApplicants}
+          closeLabel="Đóng / Từ chối"
+          onDeleteSelected={isAdmin ? handleBulkDeleteApplicants : undefined}
+          onExportSelected={() => handleExportApplicantsExcel(true)}
+        />
 
         {/* 4. BẢNG DỮ LIỆU */}
         <div className="ra-table-wrap">
@@ -985,12 +1067,19 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             <table className="ra-table">
               <thead>
                 <tr>
-                  <th style={{ width: '24%' }}>ỨNG VIÊN</th>
-                  <th style={{ width: '16%' }}>ĐỊNH DANH</th>
+                  <th className="sos-checkbox-col">
+                    <TableSelectAllCheckbox
+                      checked={appSelection.allVisibleSelected}
+                      indeterminate={appSelection.someVisibleSelected}
+                      onChange={appSelection.toggleSelectVisible}
+                    />
+                  </th>
+                  <th style={{ width: '23%' }}>ỨNG VIÊN</th>
+                  <th style={{ width: '15%' }}>ĐỊNH DANH</th>
                   <th style={{ width: '18%' }}>ĐỊA BÀN ĐĂNG KÝ</th>
                   <th style={{ width: '18%' }}>CHUYÊN MÔN CỨU HỘ</th>
-                  <th style={{ width: '14%' }}>NGÀY ĐĂNG KÝ</th>
-                  <th style={{ width: '14%' }}>TRẠNG THÁI</th>
+                  <th style={{ width: '12%' }}>NGÀY ĐĂNG KÝ</th>
+                  <th style={{ width: '11%' }}>TRẠNG THÁI</th>
                   <th style={{ width: '8%', textAlign: 'center' }}>THAO TÁC</th>
                 </tr>
               </thead>
@@ -1005,6 +1094,13 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       style={{ cursor: 'pointer' }}
                       title="Bấm để xem chi tiết hồ sơ thẩm định của ứng viên này"
                     >
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={appSelection.isSelected(app.id)}
+                          onChange={() => appSelection.toggleRow(app.id)}
+                          ariaLabel={`Chọn hồ sơ ${app.fullName}`}
+                        />
+                      </td>
                       {/* 1. Ứng viên */}
                       <td>
                         <div className="ra-candidate-cell">

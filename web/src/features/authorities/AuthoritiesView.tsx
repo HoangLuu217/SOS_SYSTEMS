@@ -34,8 +34,18 @@ import {
   createAdminUser,
   updateAdminUser,
   updateUserStatus,
+  deleteAdminUser,
   fetchAdministrativeAreas,
 } from '@/api';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import {
   VIETNAM_34_PROVINCES_STANDARD,
   fetchVietnamProvincesService,
@@ -44,6 +54,7 @@ import {
 import { AreaPreviewMap, getAreaCoordinates } from './AreaPreviewMap';
 import { toast } from '@/components/common/toast';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import '@/features/sos/SosRequestsView.css';
 import './AuthoritiesView.css';
 
@@ -847,6 +858,76 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     });
   }, [authorities, authStatusFilter, authAreaFilter, areaFilterWards, normalizeUnitKey, authSearchQuery]);
 
+  const authoritySelection = useTableSelection(filteredAuthorities.map((a) => a._id));
+
+  const handleExportAuthoritiesExcel = (onlySelected = false) => {
+    const targetRows = onlySelected
+      ? filteredAuthorities.filter((a) => authoritySelection.selectedIds.has(a._id))
+      : filteredAuthorities;
+    if (targetRows.length === 0) {
+      toast.warning('Không có dữ liệu cán bộ để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH SÁCH CÁN BỘ ĐỊA PHƯƠNG & CHỈ HUY TRỰC BAN',
+      subtitle: onlySelected
+        ? `Xuất ${targetRows.length} cán bộ đã chọn`
+        : `Tổng hợp ${targetRows.length} tài khoản cán bộ địa phương`,
+      sheetName: 'Can bo dia phuong',
+      fileNamePrefix: 'Danh_sach_can_bo',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Họ và tên', width: 26 },
+        { header: 'Số điện thoại', width: 16, align: 'center' },
+        { header: 'Email', width: 28 },
+        { header: 'Khu vực phụ trách', width: 26 },
+        { header: 'Đơn vị / Cơ quan', width: 32 },
+        { header: 'Trạng thái', width: 15, align: 'center' },
+      ],
+      rows: targetRows.map((a, idx) => [
+        idx + 1,
+        a.fullName || '—',
+        a.phone || '--',
+        a.email || '--',
+        a.authority?.areaName || a.authority?.areaId || 'Địa bàn phụ trách',
+        a.authority?.department || 'Ban chỉ huy PCTT',
+        a.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm khóa',
+      ]),
+    });
+    toast.success(`Đã xuất Excel ${targetRows.length} cán bộ địa phương.`);
+  };
+
+  const handleBulkSuspendAuthorities = async () => {
+    const ids = Array.from(authoritySelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      updateUserStatus(id, 'INACTIVE')
+    );
+    if (succeeded.length > 0) {
+      toast.success(`Đã khóa ${succeeded.length} tài khoản cán bộ.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể khóa ${failed.length} tài khoản: ${failed[0].error}`);
+    }
+    authoritySelection.clearSelection();
+    refreshData();
+  };
+
+  const handleBulkDeleteAuthorities = async () => {
+    const ids = Array.from(authoritySelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteAdminUser(id));
+    if (succeeded.length > 0) {
+      if (detailAuthority && succeeded.includes(detailAuthority._id)) {
+        setDetailAuthority(null);
+      }
+      toast.success(`Đã xóa ${succeeded.length} tài khoản cán bộ.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} tài khoản: ${failed[0].error}`);
+    }
+    authoritySelection.clearSelection();
+    refreshData();
+  };
+
   return (
     <div className="authorities-executive-container">
       {/* Main Table Card */}
@@ -878,23 +959,13 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <select
-              className="authority-area-filter-select"
+            <DaNangAreaSelect
+              wards={areaFilterWards}
+              loading={areaFilterWardsLoading}
               value={authAreaFilter}
-              onChange={(e) => setAuthAreaFilter(e.target.value)}
-              title="Lọc cán bộ theo xã / phường / đặc khu"
-            >
-              <option value="ALL">
-                {areaFilterWardsLoading
-                  ? '📍 Đang tải địa bàn Đà Nẵng...'
-                  : `📍 Tất cả địa bàn Đà Nẵng (${areaFilterWards.length})`}
-              </option>
-              {areaFilterWards.map((ward) => (
-                <option key={ward.id || ward.code} value={ward.id}>
-                  {ward.name}
-                </option>
-              ))}
-            </select>
+              onChange={setAuthAreaFilter}
+              title="Lọc cán bộ theo địa bàn Đà Nẵng"
+            />
 
             <div className="executive-search-input-wrap">
               <Search size={16} className="search-icon" />
@@ -915,6 +986,12 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 </button>
               )}
             </div>
+
+            <ExcelExportButton
+              onClick={() => handleExportAuthoritiesExcel(false)}
+              disabled={filteredAuthorities.length === 0}
+              title="Xuất danh sách cán bộ địa phương ra Excel (.xlsx)"
+            />
 
             <button
               type="button"
@@ -937,11 +1014,35 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           </div>
         </div>
 
+        {/* Bulk Action Bar */}
+        <TableBulkActionBar
+          selectedCount={authoritySelection.selectedCount}
+          totalFilteredCount={filteredAuthorities.length}
+          unitLabel="cán bộ"
+          onSelectAllFiltered={authoritySelection.selectAllFiltered}
+          onClearSelection={authoritySelection.clearSelection}
+          onExportSelected={() => handleExportAuthoritiesExcel(true)}
+          onCloseSelected={handleBulkSuspendAuthorities}
+          closeLabel="Khóa đã chọn"
+          closeConfirmTitle={`Khóa ${authoritySelection.selectedCount} tài khoản cán bộ?`}
+          closeConfirmDesc="Các tài khoản cán bộ đã chọn sẽ bị tạm khóa và không thể đăng nhập điều phối."
+          onDeleteSelected={handleBulkDeleteAuthorities}
+          deleteLabel="Xóa đã chọn"
+        />
+
         {/* Content Table */}
         <div className="executive-table-wrapper">
           <table className="executive-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={authoritySelection.allVisibleSelected}
+                    indeterminate={authoritySelection.someVisibleSelected}
+                    disabled={filteredAuthorities.length === 0}
+                    onChange={authoritySelection.toggleSelectVisible}
+                  />
+                </th>
                 <th style={{ width: '19%' }}>Cán bộ chỉ huy</th>
                 <th style={{ width: '18%' }}>Số điện thoại / Email</th>
                 <th style={{ width: '24%' }}>Khu vực phụ trách (Địa bàn)</th>
@@ -953,7 +1054,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                       <Loader2 size={16} className="executive-spin" />
                       <span>Đang tải danh sách cán bộ...</span>
@@ -962,7 +1063,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 </tr>
               ) : filteredAuthorities.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
                     {authorities.length === 0
                       ? 'Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ" để tạo mới!'
                       : 'Không tìm thấy cán bộ nào phù hợp với bộ lọc tìm kiếm.'}
@@ -975,6 +1076,13 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                   return (
                     <tr key={a._id}>
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={authoritySelection.isSelected(a._id)}
+                          onChange={() => authoritySelection.toggleRow(a._id)}
+                          ariaLabel={`Chọn cán bộ ${a.fullName}`}
+                        />
+                      </td>
                       {/* Cán bộ chỉ huy */}
                       <td>
                         <div>

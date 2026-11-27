@@ -42,6 +42,7 @@ const NAV_CATEGORY_LABELS: Partial<Record<NavItemKey, string>> = {
   authorities: 'Quản trị hệ thống',
   areas: 'Quản trị hệ thống',
   rbac: 'Quản trị hệ thống',
+  profile: 'Tài khoản',
   settings: 'Cấu hình hệ thống',
 };
 

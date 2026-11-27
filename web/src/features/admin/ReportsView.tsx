@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { RefreshCw, FileSpreadsheet, ArrowUpRight, Map } from 'lucide-react';
+import { RefreshCw, ArrowUpRight, Map } from 'lucide-react';
+import { ExcelExportButton } from '@/components/common/TableBulkKit';
 import { onRescueTeamsUpdated } from '@/services/socketService';
 import {
   fetchSosRequests,
@@ -859,15 +860,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <Map size={14} />
             <span>Bản đồ</span>
           </button>
-          <button
-            type="button"
-            className="rpt-action-btn rpt-excel-btn"
+          <ExcelExportButton
             onClick={handleExportSummaryCsv}
             title="Xuất báo cáo thống kê đa sheet (.xlsx) kèm định dạng biểu mẫu"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Xuất Excel</span>
-          </button>
+          />
           <button
             type="button"
             className="rpt-action-btn"

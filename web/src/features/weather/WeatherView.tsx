@@ -23,6 +23,13 @@ import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import { exportWeatherArticlesExcel } from './exportWeatherExcel';
 import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+} from '@/components/common/TableBulkKit';
+import {
   CloudSun,
   RefreshCw,
   Search,
@@ -48,12 +55,10 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Sparkles,
-  CheckCheck,
   SlidersHorizontal,
   BellRing,
   Send,
   Smartphone,
-  Download,
   PlusCircle,
 } from 'lucide-react';
 import './WeatherView.css';
@@ -672,56 +677,61 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     });
   };
 
-  // Batch action: Xóa đồng loạt nhiều bài viết đã chọn
-  const handleBatchDelete = () => {
-    if (selectedIds.size === 0) return;
-    const count = selectedIds.size;
-    const isArchivedTab = activeTab === 'archived';
-    setConfirmModal({
-      isOpen: true,
-      title: isArchivedTab
-        ? `Xác nhận xóa vĩnh viễn ${count} bản tin đã chọn`
-        : `Xác nhận xóa ${count} bản tin đã chọn`,
-      message: isArchivedTab
-        ? `Các bản tin này đang nằm trong kho lưu trữ. Bạn có chắc chắn muốn xóa vĩnh viễn đồng loạt ${count} bản tin đã chọn khỏi cơ sở dữ liệu? Hành động này không thể hoàn tác.`
-        : `Bạn có chắc chắn muốn xóa/lưu trữ đồng loạt ${count} bản tin đã chọn? Sau khi xóa, các bản tin này sẽ không còn hiển thị và bị gỡ bỏ khỏi ứng dụng di động.`,
-      type: 'danger',
-      confirmText: isArchivedTab ? `Xóa vĩnh viễn (${count})` : `Xóa ${count} bản tin`,
-      cancelText: 'Hủy bỏ',
-      onConfirm: async () => {
-        try {
-          setBatchLoading(true);
-          const ids = Array.from(selectedIds);
-          let successCount = 0;
-          await Promise.all(
-            ids.map(async (id) => {
-              try {
-                const article = articles.find((a) => a._id === id);
-                const shouldPermanent = isArchivedTab || article?.status === 'ARCHIVED';
-                await deleteWeatherArticleApi(id, shouldPermanent ? { permanent: true } : undefined);
-                successCount++;
-              } catch (e) {
-                console.error(`Lỗi xóa ID ${id}:`, e);
-              }
-            })
-          );
-          toast.success(
-            isArchivedTab
-              ? `Đã xóa vĩnh viễn thành công ${successCount}/${ids.length} bản tin đã chọn!`
-              : `Đã xóa thành công ${successCount}/${ids.length} bản tin đã chọn!`
-          );
-          if (detailItem && ids.includes(detailItem._id)) {
-            setDetailItem(null);
-          }
-          setSelectedIds(new Set());
-          fetchArticles();
-        } catch (err: any) {
-          toast.error(err.message || 'Lỗi khi xóa đồng loạt bản tin');
-        } finally {
-          setBatchLoading(false);
+  // Batch action: Đóng / Lưu trữ hàng loạt bản tin đã chọn
+  const handleBulkArchiveSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBatchLoading(true);
+    try {
+      const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+        updateWeatherArticleApi(id, { status: 'ARCHIVED' })
+      );
+      if (succeeded.length > 0) {
+        toast.success(`Đã đóng / lưu trữ ${succeeded.length} bản tin thời tiết.`);
+        if (detailItem && succeeded.includes(detailItem._id)) {
+          setDetailItem(null);
         }
-      },
-    });
+      }
+      if (failed.length > 0) {
+        toast.error(`Không thể lưu trữ ${failed.length} bản tin: ${failed[0].error}`);
+      }
+      setSelectedIds(new Set());
+      fetchArticles();
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // Batch action: Xóa đồng loạt nhiều bài viết đã chọn (được xác nhận bởi TableBulkActionBar)
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const isArchivedTab = activeTab === 'archived';
+    setBatchLoading(true);
+    try {
+      const { succeeded, failed } = await runBulkOperation(ids, (id) => {
+        const article = articles.find((a) => a._id === id);
+        const shouldPermanent = isArchivedTab || article?.status === 'ARCHIVED';
+        return deleteWeatherArticleApi(id, shouldPermanent ? { permanent: true } : undefined);
+      });
+      if (succeeded.length > 0) {
+        toast.success(
+          isArchivedTab
+            ? `Đã xóa vĩnh viễn ${succeeded.length}/${ids.length} bản tin đã chọn!`
+            : `Đã xóa ${succeeded.length}/${ids.length} bản tin đã chọn!`
+        );
+        if (detailItem && succeeded.includes(detailItem._id)) {
+          setDetailItem(null);
+        }
+      }
+      if (failed.length > 0) {
+        toast.error(`Không thể xóa ${failed.length} bản tin: ${failed[0].error}`);
+      }
+      setSelectedIds(new Set());
+      fetchArticles();
+    } finally {
+      setBatchLoading(false);
+    }
   };
 
   // Toggle selection
@@ -759,7 +769,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   };
 
   // Xuất biểu mẫu Excel (.xlsx) danh sách bản tin thời tiết theo tab & bộ lọc hiện tại
-  const handleExportWeatherExcel = async () => {
+  const handleExportWeatherExcel = async (onlySelected = false) => {
     setExportingWeather(true);
     try {
       const queryStatus =
@@ -771,10 +781,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               ? 'archived'
               : undefined;
 
-      let exportList = articles;
+      let exportList = onlySelected
+        ? articles.filter((a) => selectedIds.has(a._id))
+        : articles;
       let exportCounts = globalCounts;
 
-      if (totalPages > 1 || totalItems > articles.length) {
+      if (!onlySelected && (totalPages > 1 || totalItems > articles.length)) {
         const res = await fetchWeatherArticlesApi({
           search: searchTerm.trim() || undefined,
           category: selectedCategory !== 'ALL' ? selectedCategory : undefined,
@@ -870,15 +882,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             </button>
           )}
 
-          <button
-            className="btn-secondary-weather"
-            onClick={handleExportWeatherExcel}
-            disabled={exportingWeather || loading}
+          <ExcelExportButton
+            onClick={() => handleExportWeatherExcel(false)}
+            loading={exportingWeather}
+            disabled={loading || articles.length === 0}
             title="Xuất biểu mẫu Excel báo cáo danh sách bản tin thời tiết hiện tại (.xlsx)"
-          >
-            {exportingWeather ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />}
-            {exportingWeather ? 'Đang xuất...' : 'Xuất Excel'}
-          </button>
+          />
           <button
             className="btn-secondary-weather"
             onClick={() => fetchArticles()}
@@ -1016,44 +1025,33 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       )}
 
       {/* Batch Actions Bar for Selected Articles */}
-      {selectedIds.size > 0 && (
-        <div className="weather-batch-bar">
-          <div className="weather-batch-info">
-            <CheckCheck size={18} color="#0284c7" />
-            <span>
-              Đã chọn <strong>{selectedIds.size}</strong> bản tin
-              {activeTab === 'pending' ? ' chờ duyệt' : ''}
-            </span>
-          </div>
-          <div className="weather-batch-buttons">
-            {activeTab === 'pending' && (
-              <button
-                className="btn-batch-approve"
-                onClick={handleBatchApprove}
-                disabled={batchLoading}
-              >
-                <CheckCircle2 size={16} />
-                {batchLoading ? 'Đang duyệt...' : `Duyệt nhanh ${selectedIds.size} bản tin đã chọn`}
-              </button>
-            )}
+      <TableBulkActionBar
+        selectedCount={selectedIds.size}
+        totalFilteredCount={articles.length}
+        unitLabel="bản tin"
+        onSelectAllFiltered={() => setSelectedIds(new Set(articles.map((a) => a._id)))}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onExportSelected={() => handleExportWeatherExcel(true)}
+        onCloseSelected={canManage && activeTab !== 'archived' ? handleBulkArchiveSelected : undefined}
+        closeLabel="Đóng / Lưu trữ"
+        closeConfirmTitle={`Đóng & lưu trữ ${selectedIds.size} bản tin đã chọn?`}
+        closeConfirmDesc="Các bản tin sẽ được chuyển sang kho Lưu trữ và ẩn khỏi ứng dụng di động."
+        onDeleteSelected={canManage ? handleBatchDelete : undefined}
+        deleteLabel={activeTab === 'archived' ? 'Xóa vĩnh viễn' : 'Xóa đã chọn'}
+        extraActions={
+          canManage && activeTab === 'pending' ? (
             <button
-              className="btn-batch-delete"
-              onClick={handleBatchDelete}
+              type="button"
+              className="btn-batch-approve"
+              onClick={handleBatchApprove}
               disabled={batchLoading}
             >
-              <Trash2 size={15} />
-              {batchLoading
-                ? 'Đang xóa...'
-                : activeTab === 'archived'
-                  ? `Xóa vĩnh viễn ${selectedIds.size} bản tin đã chọn`
-                  : `Xóa ${selectedIds.size} bản tin đã chọn`}
+              <CheckCircle2 size={14} />
+              <span>{batchLoading ? 'Đang duyệt...' : `Duyệt (${selectedIds.size})`}</span>
             </button>
-            <button className="btn-batch-clear" onClick={() => setSelectedIds(new Set())}>
-              Bỏ chọn
-            </button>
-          </div>
-        </div>
-      )}
+          ) : undefined
+        }
+      />
 
       {/* 5. Main Content Area: Table View or Grid View */}
       {loading && articles.length === 0 ? (
@@ -1091,10 +1089,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               <thead>
                 <tr>
                   {canManage && (
-                    <th style={{ width: 40, textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.size === articles.length && articles.length > 0}
+                    <th className="sos-checkbox-col">
+                      <TableSelectAllCheckbox
+                        checked={articles.length > 0 && articles.every((a) => selectedIds.has(a._id))}
+                        indeterminate={
+                          articles.some((a) => selectedIds.has(a._id)) &&
+                          !articles.every((a) => selectedIds.has(a._id))
+                        }
+                        disabled={articles.length === 0}
                         onChange={handleToggleSelectAll}
                         title="Chọn tất cả bản tin trang này"
                       />
@@ -1121,7 +1123,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                         ? item.score
                         : item.relevance_score ?? item.score ?? 0;
                   const areaText = item.area || (item.regions && item.regions[0]) || 'Toàn quốc';
-                  const isSelected = selectedIds.has(item._id) || detailItem?._id === item._id;
+                  const isRowChecked = selectedIds.has(item._id);
+                  const isSelected = isRowChecked || detailItem?._id === item._id;
                   const isPending = (item.status || '').toUpperCase() === 'PENDING';
 
                   return (
@@ -1134,13 +1137,13 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     >
                       {canManage && (
                         <td
-                          style={{ textAlign: 'center' }}
+                          className="sos-checkbox-col"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
+                          <TableRowCheckbox
+                            checked={isRowChecked}
                             onChange={() => handleToggleSelectOne(item._id)}
+                            ariaLabel={`Chọn bản tin ${item.title}`}
                           />
                         </td>
                       )}
@@ -2153,7 +2156,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     },
                     ...daNangWards.map((ward) => ({
                       value: ward._id,
-                      label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
+                      label: ward.name,
                       badgeText: ward.code || undefined,
                       keywords: `${ward.name} ${ward.code || ''}`,
                     })),

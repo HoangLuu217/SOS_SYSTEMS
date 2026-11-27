@@ -38,6 +38,7 @@ const VALID_KEYS: Set<string> = new Set([
   'reports',
   'operation_logs',
   'chat',
+  'profile',
   'settings',
   'citizens',
   'rescuers_admin',
@@ -85,6 +86,11 @@ const KEY_ALIASES: Record<string, NavItemKey> = {
   verify_rescuers: 'rescuers_approval',
   rescuer_approval: 'rescuers_approval',
   duyet_ho_so: 'rescuers_approval',
+  account: 'profile',
+  ho_so: 'profile',
+  'ho-so': 'profile',
+  hoso: 'profile',
+  appearance: 'profile',
 };
 
 

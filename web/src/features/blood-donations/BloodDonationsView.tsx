@@ -16,17 +16,26 @@ import {
   ExternalLink,
   CheckCircle2,
   Bell,
-  FileSpreadsheet,
 } from 'lucide-react';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { fetchWithAuth } from '@/api/client';
 import {
   fetchAdministrativeAreas,
   getDaNangAreaScope,
   getSelectedWardValue,
+  matchesSelectedWardFilter,
 } from '@/api/area.api';
 import type { User } from '@/types/auth';
 import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import {
   exportBloodDonationsExcel,
   exportSingleBloodDonationEventExcel,
@@ -217,6 +226,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
   // Thanh tìm kiếm thông minh & Gợi ý bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
+  const [areaFilter, setAreaFilter] = useState<string>('ALL');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -523,6 +533,17 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       // Chỉ hiển thị người đăng ký nhận thông báo về hiến máu
       if (r.registrationType !== 'PRE_REGISTRATION') return false;
 
+      if (isAdmin && areaFilter !== 'ALL') {
+        const matched = matchesSelectedWardFilter(
+          r.areaId,
+          [r.areaName, r.address, r.provinceName],
+          areaFilter,
+          daNangWards,
+          canonicalAreaIdMap
+        );
+        if (!matched) return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = (r.fullName || r.userId?.fullName || '').toLowerCase().includes(q);
@@ -540,10 +561,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       }
       return true;
     });
-  }, [registrations, searchQuery]);
+  }, [registrations, searchQuery, isAdmin, areaFilter, daNangWards, canonicalAreaIdMap]);
 
   const filteredEvents = useMemo(() => {
     return events.filter((ev) => {
+      if (isAdmin && areaFilter !== 'ALL') {
+        const matched = matchesSelectedWardFilter(
+          ev.areaId,
+          [ev.areaName, ev.address, ev.locationName, ev.title],
+          areaFilter,
+          daNangWards,
+          canonicalAreaIdMap
+        );
+        if (!matched) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchTitle = (ev.title || '').toLowerCase().includes(q);
@@ -555,7 +586,117 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       }
       return true;
     });
-  }, [events, searchQuery]);
+  }, [events, searchQuery, isAdmin, areaFilter, daNangWards, canonicalAreaIdMap]);
+
+  const regSelection = useTableSelection(filteredRegistrations.map((r) => r._id));
+  const eventSelection = useTableSelection(filteredEvents.map((ev) => ev._id));
+
+  const handleExportRegistrationsExcel = (onlySelected = false) => {
+    const targetList = onlySelected
+      ? filteredRegistrations.filter((r) => regSelection.selectedIds.has(r._id))
+      : filteredRegistrations;
+    if (targetList.length === 0) {
+      showToast('error', 'Chưa có người đăng ký hiến máu nào để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH SÁCH NGƯỜI ĐĂNG KÝ NHẬN THÔNG BÁO HIẾN MÁU',
+      subtitle: onlySelected
+        ? `Xuất ${targetList.length} đăng ký đã chọn`
+        : `Tổng hợp ${targetList.length} người đăng ký hiến máu`,
+      sheetName: 'DK hien mau',
+      fileNamePrefix: 'Danh_sach_DK_hien_mau',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Họ và tên', width: 26 },
+        { header: 'Số điện thoại', width: 15, align: 'center' },
+        { header: 'Nhóm máu', width: 12, align: 'center' },
+        { header: 'Khu vực', width: 24 },
+        { header: 'Trạng thái', width: 22, align: 'center' },
+        { header: 'Thời gian đăng ký', width: 20, align: 'center' },
+      ],
+      rows: targetList.map((r, idx) => [
+        idx + 1,
+        r.fullName || r.userId?.fullName || '—',
+        r.phone || r.userId?.phone || '—',
+        r.bloodType === 'UNKNOWN' ? 'Chưa rõ' : r.bloodType || 'Chưa rõ',
+        r.provinceName || r.areaName || '—',
+        getStatusLabelText(r.status),
+        formatDateTime(r.respondedAt || r.createdAt),
+      ]),
+    });
+    showToast('success', `Đã xuất Excel ${targetList.length} người đăng ký hiến máu.`);
+  };
+
+  const handleBulkCancelRegistrations = async () => {
+    const ids = Array.from(regSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      fetchWithAuth<any>(`/blood-donations/registrations/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      })
+    );
+    if (succeeded.length > 0) {
+      showToast('success', `Đã đóng / hủy ${succeeded.length} đăng ký hiến máu.`);
+    }
+    if (failed.length > 0) {
+      showToast('error', `Không thể cập nhật ${failed.length} đăng ký.`);
+    }
+    regSelection.clearSelection();
+    await fetchAllData(true);
+  };
+
+  const handleBulkCloseEvents = async () => {
+    const ids = Array.from(eventSelection.selectedIds);
+    const activeIds = ids.filter((id) => {
+      const ev = events.find((e) => e._id === id);
+      return ev && ev.status === 'ACTIVE';
+    });
+    if (activeIds.length === 0) {
+      showToast('success', 'Các đợt hiến máu đã chọn đều đã đóng.');
+      eventSelection.clearSelection();
+      return;
+    }
+    const { succeeded, failed } = await runBulkOperation(activeIds, (id) =>
+      fetchWithAuth<any>(`/blood-donations/events/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'CLOSED' }),
+      })
+    );
+    if (succeeded.length > 0) {
+      showToast('success', `Đã đóng ${succeeded.length} đợt hiến máu.`);
+      if (selectedEventDetail && succeeded.includes(selectedEventDetail._id)) {
+        setSelectedEventDetail({ ...selectedEventDetail, status: 'CLOSED' });
+      }
+    }
+    if (failed.length > 0) {
+      showToast('error', `Không thể đóng ${failed.length} đợt hiến máu.`);
+    }
+    eventSelection.clearSelection();
+    await fetchAllData(true);
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
+
+  const handleBulkDeleteEvents = async () => {
+    const ids = Array.from(eventSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      fetchWithAuth<any>(`/blood-donations/events/${id}`, {
+        method: 'DELETE',
+      })
+    );
+    if (succeeded.length > 0) {
+      if (selectedEventDetail && succeeded.includes(selectedEventDetail._id)) {
+        setSelectedEventDetail(null);
+      }
+      showToast('success', `Đã xóa ${succeeded.length} đợt hiến máu.`);
+    }
+    if (failed.length > 0) {
+      showToast('error', `Không thể xóa ${failed.length} đợt hiến máu.`);
+    }
+    eventSelection.clearSelection();
+    await fetchAllData(true);
+    window.dispatchEvent(new CustomEvent('sos_data_updated'));
+  };
 
   const toggleBloodNeed = (bt: string) => {
     if (bt === 'ALL') {
@@ -868,8 +1009,12 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const [exportingExcel, setExportingExcel] = useState(false);
 
   // Xuất Excel có biểu mẫu, mỗi đợt hiến máu là 1 tab riêng
-  const handleExportEventsExcel = async () => {
-    const targetEvents = activeTab === 'EVENTS' && filteredEvents.length > 0 ? filteredEvents : events;
+  const handleExportEventsExcel = async (onlySelected = false) => {
+    const targetEvents = onlySelected
+      ? filteredEvents.filter((ev) => eventSelection.selectedIds.has(ev._id))
+      : activeTab === 'EVENTS' && filteredEvents.length > 0
+        ? filteredEvents
+        : events;
     if (targetEvents.length === 0) {
       showToast('error', 'Chưa có đợt hiến máu nào để xuất file Excel.');
       return;
@@ -1158,7 +1303,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               {daNangWards.length > 0 && (
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 5 }}>
-                    📍 Phường / Xã (Đà Nẵng):
+                    Phường / Xã (Đà Nẵng):
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 90, overflowY: 'auto' }}>
                     {daNangWards.map((w) => (
@@ -1189,32 +1334,38 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           )}
         </div>
 
+        {/* Bộ lọc địa bàn Đà Nẵng (chỉ Admin) */}
+        {isAdmin && daNangWards.length > 0 && (
+          <div style={{ flexShrink: 0 }}>
+            <DaNangAreaSelect
+              wards={daNangWards}
+              valueKey="name"
+              value={areaFilter}
+              onChange={setAreaFilter}
+            />
+          </div>
+        )}
+
         {/* Nhóm nút hành động bên phải */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, whiteSpace: 'nowrap' }}>
-          <button
-            type="button"
-            onClick={handleExportEventsExcel}
-            disabled={exportingExcel}
-            style={{
-              padding: '7px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--dm-green-border)',
-              background: 'var(--dm-green-bg)',
-              color: 'var(--dm-green-text)',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: exportingExcel ? 'not-allowed' : 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              whiteSpace: 'nowrap',
-              opacity: exportingExcel ? 0.7 : 1,
-            }}
-            title="Xuất file Excel có biểu mẫu, mỗi đợt hiến máu là một tab riêng"
-          >
-            <FileSpreadsheet size={14} />
-            <span>{exportingExcel ? 'Đang xuất Excel...' : 'Xuất Excel'}</span>
-          </button>
+          <ExcelExportButton
+            onClick={() =>
+              activeTab === 'REGISTRATIONS'
+                ? handleExportRegistrationsExcel(false)
+                : handleExportEventsExcel(false)
+            }
+            loading={exportingExcel}
+            disabled={
+              activeTab === 'REGISTRATIONS'
+                ? filteredRegistrations.length === 0
+                : events.length === 0
+            }
+            title={
+              activeTab === 'REGISTRATIONS'
+                ? 'Xuất danh sách đăng ký hiến máu ra Excel (.xlsx)'
+                : 'Xuất file Excel có biểu mẫu, mỗi đợt hiến máu là một tab riêng'
+            }
+          />
 
           <button
             type="button"
@@ -1278,9 +1429,29 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       ) : activeTab === 'REGISTRATIONS' ? (
         <div className="sos-clean-table-container">
+          <TableBulkActionBar
+            selectedCount={regSelection.selectedCount}
+            totalFilteredCount={filteredRegistrations.length}
+            unitLabel="đăng ký"
+            onSelectAllFiltered={regSelection.selectAllFiltered}
+            onClearSelection={regSelection.clearSelection}
+            onExportSelected={() => handleExportRegistrationsExcel(true)}
+            onCloseSelected={handleBulkCancelRegistrations}
+            closeLabel="Đóng / Hủy ĐK"
+            closeConfirmTitle={`Đóng ${regSelection.selectedCount} đăng ký hiến máu?`}
+            closeConfirmDesc="Các bản ghi đăng ký đã chọn sẽ chuyển sang trạng thái Đã hủy."
+          />
           <table className="sos-clean-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={regSelection.allVisibleSelected}
+                    indeterminate={regSelection.someVisibleSelected}
+                    disabled={filteredRegistrations.length === 0}
+                    onChange={regSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th>Người đăng ký</th>
                 <th>Số điện thoại</th>
                 <th style={{ textAlign: 'center' }}>Nhóm máu</th>
@@ -1292,7 +1463,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <tbody>
               {filteredRegistrations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
+                  <td colSpan={7} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
                     Chưa có đăng ký hiến máu nào.
                   </td>
                 </tr>
@@ -1310,6 +1481,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       style={{ cursor: 'pointer' }}
                       title="Nhấn để xem chi tiết đăng ký hiến máu"
                     >
+                      <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                        <TableRowCheckbox
+                          checked={regSelection.isSelected(reg._id)}
+                          onChange={() => regSelection.toggleRow(reg._id)}
+                          ariaLabel={`Chọn đăng ký ${reg.fullName}`}
+                        />
+                      </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {avatarUrl ? (
@@ -1391,9 +1569,31 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       ) : (
         /* ================= BẢNG ĐỢT HIẾN MÁU GỌN GÀNG ================= */
         <div className="sos-clean-table-container">
+          <TableBulkActionBar
+            selectedCount={eventSelection.selectedCount}
+            totalFilteredCount={filteredEvents.length}
+            unitLabel="đợt hiến máu"
+            onSelectAllFiltered={eventSelection.selectAllFiltered}
+            onClearSelection={eventSelection.clearSelection}
+            onExportSelected={() => handleExportEventsExcel(true)}
+            onCloseSelected={handleBulkCloseEvents}
+            closeLabel="Đóng đợt đã chọn"
+            closeConfirmTitle={`Đóng ${eventSelection.selectedCount} đợt hiến máu?`}
+            closeConfirmDesc="Các đợt hiến máu đang mở sẽ chuyển sang trạng thái Đã đóng và ngừng nhận đăng ký mới."
+            onDeleteSelected={handleBulkDeleteEvents}
+            deleteLabel="Xóa đã chọn"
+          />
           <table className="sos-clean-table">
             <thead>
               <tr>
+                <th className="sos-checkbox-col">
+                  <TableSelectAllCheckbox
+                    checked={eventSelection.allVisibleSelected}
+                    indeterminate={eventSelection.someVisibleSelected}
+                    disabled={filteredEvents.length === 0}
+                    onChange={eventSelection.toggleSelectVisible}
+                  />
+                </th>
                 <th>Tên đợt hiến máu</th>
                 <th>Địa điểm</th>
                 <th>Thời gian</th>
@@ -1404,7 +1604,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <tbody>
               {filteredEvents.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
+                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
                     Chưa có đợt hiến máu nào.
                   </td>
                 </tr>
@@ -1417,6 +1617,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     style={{ cursor: 'pointer' }}
                     title="Nhấn để xem chi tiết đợt hiến máu"
                   >
+                    <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                      <TableRowCheckbox
+                        checked={eventSelection.isSelected(ev._id)}
+                        onChange={() => eventSelection.toggleRow(ev._id)}
+                        ariaLabel={`Chọn đợt ${ev.title}`}
+                      />
+                    </td>
                     <td style={{ fontWeight: 700, color: 'var(--dm-blue-text)' }}>
                       {ev.title}
                     </td>
@@ -2020,27 +2227,10 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     <Bell size={13} color="#2563eb" />
                     <span>{sendingReminder ? 'Đang gửi...' : 'Gửi nhắc nhở'}</span>
                   </button>
-                  <button
-                    type="button"
+                  <ExcelExportButton
                     onClick={() => handleExportEventParticipantsExcel(selectedEventDetail, eventResponses)}
                     title="Xuất phiếu theo dõi đợt hiến máu này ra file Excel có biểu mẫu"
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 6,
-                      border: '1px solid var(--dm-green-border)',
-                      background: 'var(--dm-green-bg)',
-                      color: 'var(--dm-green-text)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <FileSpreadsheet size={13} />
-                    <span>Xuất Excel</span>
-                  </button>
+                  />
                   <button
                     type="button"
                     onClick={() => handleToggleEventStatus(selectedEventDetail)}
@@ -2513,9 +2703,12 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--dm-text-secondary)', marginBottom: 4 }}>
                         Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-                      <SearchableSelect
-                        ariaLabel="Chọn Phường / Xã tổ chức hiến máu"
-                        searchPlaceholder="Tìm nhanh Phường / Xã..."
+                      <DaNangAreaSelect
+                        wards={daNangWards}
+                        allValue=""
+                        valueKey="_id"
+                        ariaLabel="Chọn địa bàn tổ chức hiến máu"
+                        highlightActive={false}
                         value={getSelectedWardValue(formAreaId, daNangWardIds, canonicalAreaIdMap)}
                         onChange={(wardId) => {
                           const nextAreaId = wardId || daNangProvinceId || 'ALL';
@@ -2525,25 +2718,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         }}
                         triggerStyle={{
                           width: '100%',
-                          padding: '8px 11px',
-                          borderRadius: 8,
-                          border: '1px solid var(--dm-border-strong)',
-                          fontSize: 13,
-                          background: 'var(--dm-surface)',
+                          height: '38px',
                         }}
-                        options={[
-                          {
-                            value: '',
-                            label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
-                            keywords: 'tat ca toan thanh pho da nang',
-                          },
-                          ...daNangWards.map((w) => ({
-                            value: w._id,
-                            label: w.name,
-                            badgeText: w.code || undefined,
-                            keywords: `${w.name} ${w.code || ''}`,
-                          })),
-                        ]}
                       />
                       <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 4 }}>
                         Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>

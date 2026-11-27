@@ -216,10 +216,10 @@
 .ch-app-shell .administrative-areas-table-wrapper table thead th {
   background: var(--card) !important;
   color: var(--muted-foreground) !important;
-  font-size: 12.5px !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
   padding: 12px 16px !important;
   border-top: none !important;
   border-left: none !important;
@@ -581,4 +581,211 @@
 [data-theme="dark"] .ch-app-shell .sos-audit-meta-val,
 [data-theme="dark"] .ch-app-shell .sos-timeline-text {
   color: var(--foreground) !important;
+}
+
+/* ==========================================================================
+   9. UNIFIED EXCEL EXPORT BUTTON (IMAGE 2) & BULK SELECTION KIT (IMAGE 1)
+   ========================================================================== */
+.sos-excel-btn,
+.ch-app-shell .rpt-excel-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 36px !important;
+  padding: 0 13px !important;
+  border-radius: calc(var(--radius) * 0.8) !important;
+  background: var(--dm-green-bg) !important;
+  border: 1px solid var(--dm-green-border) !important;
+  color: var(--dm-green-text) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease !important;
+}
+
+.sos-excel-btn:hover:not(:disabled),
+.ch-app-shell .rpt-excel-btn:hover:not(:disabled) {
+  background: var(--dm-green-bg-strong) !important;
+  border-color: var(--dm-green-text) !important;
+}
+
+.sos-excel-btn:disabled,
+.ch-app-shell .rpt-excel-btn:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+}
+
+/* Uniform Checkbox Column & Styled Checkboxes */
+.sos-checkbox-col {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  text-align: center !important;
+  padding-left: 12px !important;
+  padding-right: 8px !important;
+}
+
+.sos-table-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  accent-color: var(--primary);
+  vertical-align: middle;
+}
+
+/* Contextual Bulk Action Bar (appears seamlessly inside table cards when >= 1 row selected) */
+.sos-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--accent);
+  border-bottom: 1px solid var(--sos-primary-border);
+  color: var(--foreground);
+}
+
+.sos-bulk-bar-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sos-bulk-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--accent-foreground);
+}
+
+.sos-bulk-link-btn {
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.sos-bulk-bar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sos-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: calc(var(--radius) * 0.75);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.sos-bulk-btn.warning {
+  background: var(--dm-amber-bg);
+  border-color: var(--dm-amber-border);
+  color: var(--dm-amber-text);
+}
+.sos-bulk-btn.warning:hover:not(:disabled) {
+  background: var(--dm-amber-bg-strong);
+}
+
+.sos-bulk-btn.danger {
+  background: var(--dm-red-bg);
+  border-color: var(--dm-red-border);
+  color: var(--dm-red-text);
+}
+.sos-bulk-btn.danger:hover:not(:disabled) {
+  background: var(--dm-red-bg-strong);
+}
+
+.sos-bulk-btn.ghost {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+.sos-bulk-btn.ghost:hover:not(:disabled) {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.sos-bulk-confirm-card {
+  max-width: 460px !important;
+}
+
+.sos-bulk-confirm-desc {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+.sos-bulk-confirm-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: calc(var(--radius) * 0.8);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #ffffff;
+}
+
+.sos-bulk-confirm-submit.delete {
+  background: var(--destructive);
+}
+.sos-bulk-confirm-submit.close {
+  background: var(--warning);
+}
+.sos-bulk-confirm-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* Unified Da Nang Area Select trigger */
+.ch-app-shell .sos-area-searchable-select {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ch-app-shell .sos-area-searchable-select:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+
+.ch-app-shell .sos-area-searchable-select.has-filter {
+  border-color: var(--dm-blue-border);
+  background: var(--dm-blue-bg);
+  color: var(--dm-blue-text);
 }

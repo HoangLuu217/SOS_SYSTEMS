@@ -56,6 +56,16 @@ import { domainDService } from '@/services/domainDService';
 import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import {
   onRescuerApplicationSubmitted,
@@ -1302,6 +1312,74 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     return filteredTeams.slice(start, start + pageSize);
   }, [filteredTeams, currentPage, pageSize]);
 
+  const teamVisibleIds = useMemo(() => paginatedTeams.map((t) => t._id), [paginatedTeams]);
+  const teamFilteredIds = useMemo(() => filteredTeams.map((t) => t._id), [filteredTeams]);
+  const teamSelection = useTableSelection(teamVisibleIds, teamFilteredIds);
+
+  const handleExportTeamsExcel = (onlySelected = false) => {
+    const rows = onlySelected
+      ? filteredTeams.filter((t) => teamSelection.isSelected(t._id))
+      : filteredTeams;
+    exportTableToExcel({
+      title: 'DANH SÁCH ĐỘI CỨU HỘ ĐỊA PHƯƠNG',
+      sheetName: 'Doi_cuu_ho',
+      fileNamePrefix: 'Danh_sach_doi_cuu_ho',
+      rows,
+      columns: [
+        { header: 'STT', width: 7, align: 'center', value: (_, i) => i + 1 },
+        { header: 'Tên đội', width: 34, value: (t) => t.name || '—' },
+        {
+          header: 'Chuyên môn',
+          width: 24,
+          value: (t) => SPECIALIZATION_LABELS[t.specialization] || t.specialization || '—',
+        },
+        { header: 'Chỉ huy đội', width: 22, value: (t) => t.leaderName || 'Chưa phân công' },
+        { header: 'SĐT chỉ huy', width: 16, value: (t) => t.leaderPhone || '—' },
+        { header: 'Phân vùng phụ trách', width: 28, value: (t) => t.areaName || '—' },
+        { header: 'Nhân lực', width: 12, align: 'center', value: (t) => t.members?.length ?? 0 },
+        { header: 'Phương tiện', width: 12, align: 'center', value: (t) => t.vehicles?.length ?? 0 },
+        {
+          header: 'Trạng thái',
+          width: 18,
+          align: 'center',
+          value: (t) =>
+            (OPERATIONAL_STATUS_LABELS as Record<string, { label: string }>)[t.operationalStatus || t.status]?.label ||
+            t.status ||
+            '—',
+        },
+      ],
+    });
+    toast.success(`Đã xuất ${rows.length} đội cứu hộ ra file Excel.`, 'Xuất Excel');
+  };
+
+  const handleBulkCloseTeams = async () => {
+    const ids = Array.from(teamSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      updateRescueTeamStatus(id, 'INACTIVE')
+    );
+    if (succeeded.length > 0) {
+      toast.success(`Đã đóng / tạm ngưng ${succeeded.length} đội cứu hộ.`, 'Cập nhật hàng loạt');
+    }
+    if (failed.length > 0) {
+      toast.warning(`${failed.length} đội không thể cập nhật trạng thái.`);
+    }
+    teamSelection.clearSelection();
+    refreshData();
+  };
+
+  const handleBulkDeleteTeams = async () => {
+    const ids = Array.from(teamSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteRescueTeam(id));
+    if (succeeded.length > 0) {
+      toast.success(`Đã xóa ${succeeded.length} đội cứu hộ.`, 'Xóa hàng loạt');
+    }
+    if (failed.length > 0) {
+      toast.warning(`${failed.length} đội không thể xóa.`);
+    }
+    teamSelection.clearSelection();
+    refreshData();
+  };
+
   const handleClearFilters = () => {
     setSearchQuery('');
     setSpecFilter('ALL');
@@ -1648,35 +1726,24 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                 {/* Bộ lọc địa bàn Đà Nẵng: Chỉ hiển thị cho Admin */}
                 {isAdmin && (
-                  <SearchableSelect
+                  <DaNangAreaSelect
                     className="ra-filter-select"
-                    ariaLabel="Lọc theo địa bàn Đà Nẵng"
-                    searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
+                    wards={wards}
+                    loading={wardsLoading}
                     value={selectedAreaId}
                     onChange={(val) => {
                       setSelectedAreaId(val);
                       setCurrentPage(1);
                     }}
-                    triggerStyle={{ minWidth: '220px' }}
-                    options={[
-                      {
-                        value: 'ALL',
-                        label: wardsLoading
-                          ? '📍 Đang tải địa bàn Đà Nẵng...'
-                          : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
-                        keywords: 'tat ca toan thanh pho da nang',
-                      },
-                      ...wards.map((ward) => ({
-                        value: ward.id,
-                        label: `${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
-                        badgeText: ward.code || undefined,
-                        keywords: `${ward.name} ${ward.code || ''}`,
-                      })),
-                    ]}
                   />
                 )}
 
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ExcelExportButton
+                    onClick={() => handleExportTeamsExcel(false)}
+                    disabled={filteredTeams.length === 0}
+                  />
+
                   <button
                     className="ra-refresh-btn"
                     onClick={refreshData}
@@ -1712,6 +1779,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               </div>
             </div>
 
+            <TableBulkActionBar
+              selectedCount={teamSelection.selectedCount}
+              totalFilteredCount={filteredTeams.length}
+              unitLabel="đội"
+              onSelectAllFiltered={teamSelection.selectAllFiltered}
+              onClearSelection={teamSelection.clearSelection}
+              onCloseSelected={handleBulkCloseTeams}
+              closeLabel="Đóng / Tạm ngưng"
+              onDeleteSelected={handleBulkDeleteTeams}
+              onExportSelected={() => handleExportTeamsExcel(true)}
+            />
+
             {/* Bảng dữ liệu theo chuẩn ra-table */}
             <div className="ra-table-wrap">
               {loading && filteredTeams.length === 0 ? (
@@ -1741,11 +1820,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <table className="ra-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '25%' }}>TÊN ĐỘI &amp; CHUYÊN MÔN</th>
-                      <th style={{ width: '19%' }}>CHỈ HUY ĐỘI</th>
+                      <th className="sos-checkbox-col">
+                        <TableSelectAllCheckbox
+                          checked={teamSelection.allVisibleSelected}
+                          indeterminate={teamSelection.someVisibleSelected}
+                          onChange={teamSelection.toggleSelectVisible}
+                        />
+                      </th>
+                      <th style={{ width: '24%' }}>TÊN ĐỘI &amp; CHUYÊN MÔN</th>
+                      <th style={{ width: '18%' }}>CHỈ HUY ĐỘI</th>
                       <th style={{ width: '21%' }}>PHÂN VÙNG PHỤ TRÁCH</th>
-                      <th style={{ width: '14%' }}>NHÂN LỰC</th>
-                      <th style={{ width: '14%' }}>PHƯƠNG TIỆN</th>
+                      <th style={{ width: '13%' }}>NHÂN LỰC</th>
+                      <th style={{ width: '13%' }}>PHƯƠNG TIỆN</th>
                       <th style={{ width: '7%', textAlign: 'center' }}>THAO TÁC</th>
                     </tr>
                   </thead>
@@ -1768,6 +1854,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                           style={{ cursor: 'pointer' }}
                           title="Bấm để mở hồ sơ chi tiết và phân công của đội này"
                         >
+                          <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                            <TableRowCheckbox
+                              checked={teamSelection.isSelected(team._id)}
+                              onChange={() => teamSelection.toggleRow(team._id)}
+                              ariaLabel={`Chọn đội ${team.name}`}
+                            />
+                          </td>
                           {/* Cột 1: Tên đội & Chuyên môn */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

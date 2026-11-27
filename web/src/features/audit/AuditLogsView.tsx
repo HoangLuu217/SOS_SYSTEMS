@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { History, RefreshCw, Search, X, FileSpreadsheet, Download } from 'lucide-react';
+import { History, RefreshCw, Search, X, Download } from 'lucide-react';
 import type { AuditLogItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
 import { fetchAuditLogs } from '@/api';
 import { toast } from '@/components/common/toast';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
 import { exportAuditLogsToExcel } from './exportAuditLogsExcel';
 import './AuditLogsView.css';
 
@@ -367,14 +374,18 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
     });
   }
 
+  const logSelection = useTableSelection(filteredLogs.map((l) => l._id));
+
   // Xử lý xuất file Excel đầy đủ cột hàng và định dạng chuẩn
-  const handleExportExcel = async (exportAll = false) => {
+  const handleExportExcel = async (exportAll = false, onlySelected = false) => {
     try {
       setExporting(true);
-      let logsToExport = filteredLogs;
+      let logsToExport = onlySelected
+        ? filteredLogs.filter((l) => logSelection.selectedIds.has(l._id))
+        : filteredLogs;
 
       // Nếu chọn xuất toàn bộ hoặc danh sách hiện tại chưa tải hết
-      if (exportAll || auditLogs.length === 0) {
+      if (!onlySelected && (exportAll || auditLogs.length === 0)) {
         toast.info('Đang tải đầy đủ dữ liệu nhật ký tác chiến...');
         const res = await fetchAuditLogs({ limit: 5000 });
         if (res.success && res.data?.logs) {
@@ -430,43 +441,19 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {/* Nút xuất file Excel */}
-            <button
-              type="button"
-              className="sos-btn-action"
-              style={{
-                backgroundColor: '#16a34a',
-                color: '#ffffff',
-                border: '1px solid #15803d',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: exporting ? 'not-allowed' : 'pointer',
-              }}
+            {/* Nút xuất file Excel đồng bộ */}
+            <ExcelExportButton
               onClick={() => handleExportExcel(false)}
-              disabled={exporting}
+              loading={exporting}
+              disabled={filteredLogs.length === 0}
               title={`Xuất ${filteredLogs.length} sự kiện nhật ký đang lọc ra file Excel (.xlsx)`}
-            >
-              <FileSpreadsheet size={15} className={exporting ? 'animate-spin' : ''} />
-              <span>{exporting ? 'Đang xuất Excel...' : 'Xuất file Excel'}</span>
-            </button>
+            />
 
             {/* Nút xuất tất cả khi đang có bộ lọc tìm kiếm */}
             {(filteredLogs.length !== totalCount || auditRoleFilter !== 'ALL' || Boolean(auditSearchTerm)) && (
               <button
                 type="button"
-                className="sos-btn-action"
-                style={{
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  border: '1px solid #0369a1',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: exporting ? 'not-allowed' : 'pointer',
-                }}
+                className="sos-btn sos-btn--outline sos-btn--sm"
                 onClick={() => handleExportExcel(true)}
                 disabled={exporting}
                 title={`Xuất toàn bộ ${totalCount} sự kiện nhật ký ra file Excel (.xlsx)`}
@@ -489,7 +476,28 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
 
         {/* THANH CÔNG CỤ BỘ LỌC VÀ TÌM KIẾM */}
         <div className="sos-audit-toolbar">
-          <div className="sos-filter-tabs" style={{ marginBottom: 0 }}>
+          <div className="sos-filter-tabs" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: 'var(--dm-text-secondary)',
+                cursor: 'pointer',
+                marginRight: 4,
+              }}
+            >
+              <TableSelectAllCheckbox
+                checked={logSelection.allVisibleSelected}
+                indeterminate={logSelection.someVisibleSelected}
+                disabled={filteredLogs.length === 0}
+                onChange={logSelection.toggleSelectVisible}
+                title="Chọn tất cả nhật ký đang lọc"
+              />
+              <span>Chọn tất cả</span>
+            </label>
             <button
               type="button"
               className={`sos-btn-filter-pill ${auditRoleFilter === 'ALL' ? 'active' : ''}`}
@@ -547,6 +555,15 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
             )}
           </div>
         </div>
+
+        <TableBulkActionBar
+          selectedCount={logSelection.selectedCount}
+          totalFilteredCount={filteredLogs.length}
+          unitLabel="sự kiện"
+          onSelectAllFiltered={logSelection.selectAllFiltered}
+          onClearSelection={logSelection.clearSelection}
+          onExportSelected={() => handleExportExcel(false, true)}
+        />
 
         {/* DANH SÁCH DÒNG THỜI GIAN KẾT NỐI */}
         {filteredLogs.length === 0 ? (
@@ -682,8 +699,13 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
                   <div className="sos-audit-card">
                     {/* 1. Hàng thông tin người thực hiện gồm bốn cột */}
                     <div className="sos-audit-actor-grid">
-                      {/* Cột 1: avatar tròn 40px, họ tên đậm, badge vai trò nhỏ bên dưới tên */}
+                      {/* Cột 1: checkbox chọn + avatar tròn 40px, họ tên đậm, badge vai trò nhỏ bên dưới tên */}
                       <div className="sos-audit-col-actor">
+                        <TableRowCheckbox
+                          checked={logSelection.isSelected(log._id)}
+                          onChange={() => logSelection.toggleRow(log._id)}
+                          ariaLabel={`Chọn sự kiện ${actionText}`}
+                        />
                         <div className="sos-audit-col-avatar">{initialLetter}</div>
                         <div className="sos-audit-col-actor-info">
                           <span className="sos-audit-col-name" title={actorName !== '—' ? actorName : undefined}>

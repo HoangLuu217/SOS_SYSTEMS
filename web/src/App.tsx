@@ -284,6 +284,7 @@ function MainRouter() {
           activeKey={activeNavKey}
           onOpenMap={(sosId?: string) => handleNavSelect('map', sosId)}
           user={authUser || undefined}
+          onLogout={handleLogout}
         />
       </DashboardLayout>
     );

@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Eye,
   Check,
-  CheckCircle2,
   MapPin,
   PlusCircle,
   Trash2,
@@ -63,6 +62,16 @@ import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import {
+  ExcelExportButton,
+  TableBulkActionBar,
+  TableRowCheckbox,
+  TableSelectAllCheckbox,
+  runBulkOperation,
+  useTableSelection,
+} from '@/components/common/TableBulkKit';
+import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { exportSupplyDispatchVoucherPdf, formatActualRecipientDisplay } from './printSupplyDispatchVoucher';
 import {
   resolveProofImageSrc,
@@ -1991,6 +2000,208 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     return filteredEquipments.slice(start, start + pageSize);
   }, [filteredEquipments, currentPage, pageSize]);
 
+  const vehicleSelection = useTableSelection(
+    paginatedVehicles.map((v) => v._id),
+    filteredVehicles.map((v) => v._id)
+  );
+  const dispatchSelection = useTableSelection(dispatchHistory.map((d) => d.id));
+
+  const selectedSupplySet = useMemo(() => new Set(selectedTableItemIds), [selectedTableItemIds]);
+  const allVisibleSuppliesSelected =
+    paginatedEquipments.length > 0 && paginatedEquipments.every((eq) => selectedSupplySet.has(eq._id));
+  const someVisibleSuppliesSelected =
+    paginatedEquipments.some((eq) => selectedSupplySet.has(eq._id)) && !allVisibleSuppliesSelected;
+  const selectedDepotEligibleCount = useMemo(() => {
+    return equipments.filter((eq) => {
+      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+      return !tId && eq.quantity > 0 && selectedSupplySet.has(eq._id);
+    }).length;
+  }, [equipments, selectedSupplySet]);
+
+  const handleExportVehiclesExcel = (onlySelected = false) => {
+    const rows = onlySelected
+      ? filteredVehicles.filter((v) => vehicleSelection.selectedIds.has(v._id))
+      : filteredVehicles;
+    if (rows.length === 0) {
+      toast.warning('Không có phương tiện nào để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH SÁCH PHƯƠNG TIỆN CỨU HỘ CƠ ĐỘNG',
+      subtitle: onlySelected ? `Xuất ${rows.length} phương tiện đã chọn` : `Tổng hợp ${rows.length} phương tiện`,
+      sheetName: 'Phuong tien',
+      fileNamePrefix: 'Danh_sach_phuong_tien',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Biển số / Định danh', width: 20, align: 'center' },
+        { header: 'Loại phương tiện', width: 22 },
+        { header: 'Đội quản lý', width: 28 },
+        { header: 'Sức chở', width: 12, align: 'right' },
+        { header: 'Trạng thái', width: 18, align: 'center' },
+        { header: 'Mô tả', width: 32 },
+      ],
+      rows: rows.map((v, idx) => [
+        idx + 1,
+        v.plateNumber || '—',
+        getVehicleTypeLabel(v.type),
+        v.assignedTeam?.name || 'Kho Tổng dự trữ',
+        v.capacity || 0,
+        getVehicleStatusMeta(v.status).label,
+        v.description || '—',
+      ]),
+    });
+    toast.success(`Đã xuất Excel ${rows.length} phương tiện.`);
+  };
+
+  const handleExportEquipmentsExcel = (onlySelected = false) => {
+    const rows = onlySelected
+      ? filteredEquipments.filter((eq) => selectedSupplySet.has(eq._id))
+      : filteredEquipments;
+    if (rows.length === 0) {
+      toast.warning('Không có thiết bị / nhu yếu phẩm nào để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'DANH MỤC THIẾT BỊ & HÀNG CỨU TRỢ',
+      subtitle: onlySelected ? `Xuất ${rows.length} mặt hàng đã chọn` : `Tổng hợp ${rows.length} mặt hàng trong kho`,
+      sheetName: 'Thiet bi & Vat tu',
+      fileNamePrefix: 'Kho_thiet_bi_cuu_tro',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Tên mặt hàng', width: 28 },
+        { header: 'Nhóm', width: 16, align: 'center' },
+        { header: 'Danh mục', width: 22 },
+        { header: 'Đơn vị quản lý', width: 26 },
+        { header: 'Số lượng tồn', width: 14, align: 'right' },
+        { header: 'Đơn vị tính', width: 12, align: 'center' },
+        { header: 'Mã lô / Serial', width: 18, align: 'center' },
+        { header: 'Tình trạng', width: 16, align: 'center' },
+      ],
+      rows: rows.map((eq, idx) => {
+        const teamObj = typeof eq.teamId === 'object' ? eq.teamId : null;
+        return [
+          idx + 1,
+          eq.name || '—',
+          eq.supplyType === 'CONSUMABLE' ? 'Nhu yếu phẩm' : 'Thiết bị dùng bền',
+          getEquipmentCategoryName(eq.category),
+          teamObj?.name || 'Kho Tổng dự trữ',
+          eq.quantity ?? 0,
+          eq.unit || 'cái',
+          eq.serialNumber || '—',
+          eq.status || 'AVAILABLE',
+        ];
+      }),
+    });
+    toast.success(`Đã xuất Excel ${rows.length} mặt hàng.`);
+  };
+
+  const handleExportDispatchHistoryExcel = (onlySelected = false) => {
+    const rows = onlySelected
+      ? dispatchHistory.filter((rec) => dispatchSelection.selectedIds.has(rec.id))
+      : dispatchHistory;
+    if (rows.length === 0) {
+      toast.warning('Không có phiếu xuất kho nào để xuất Excel.');
+      return;
+    }
+    exportTableToExcel({
+      title: 'LỊCH SỬ PHIẾU XUẤT KHO & ĐIỀU PHỐI TIẾP TẾ',
+      subtitle: onlySelected ? `Xuất ${rows.length} phiếu đã chọn` : `Tổng hợp ${rows.length} phiếu xuất kho`,
+      sheetName: 'Lich su xuat kho',
+      fileNamePrefix: 'Lich_su_xuat_kho',
+      columns: [
+        { header: 'STT', width: 6, align: 'center' },
+        { header: 'Mã phiếu', width: 18, align: 'center' },
+        { header: 'Hình thức', width: 18, align: 'center' },
+        { header: 'Điểm / Đơn vị tiếp nhận', width: 32 },
+        { header: 'Số mặt hàng', width: 13, align: 'right' },
+        { header: 'Trạng thái', width: 18, align: 'center' },
+        { header: 'Thời gian tạo', width: 20, align: 'center' },
+      ],
+      rows: rows.map((rec, idx) => [
+        idx + 1,
+        rec.dispatchCode || rec.id.slice(-6).toUpperCase(),
+        rec.mode === 'DIRECT' ? 'Xuất trực tiếp' : 'Giao đội cứu hộ',
+        rec.destination || rec.recipientName || '—',
+        Array.isArray(rec.items) ? rec.items.length : 0,
+        rec.status || '—',
+        rec.createdAt ? new Date(rec.createdAt).toLocaleString('vi-VN') : '—',
+      ]),
+    });
+    toast.success(`Đã xuất Excel ${rows.length} phiếu xuất kho.`);
+  };
+
+  const handleExportActiveResourceTab = () => {
+    if (resourceTab === 'VEHICLES') {
+      handleExportVehiclesExcel(false);
+    } else if (equipmentViewMode === 'DISPATCH_HISTORY') {
+      handleExportDispatchHistoryExcel(false);
+    } else {
+      handleExportEquipmentsExcel(false);
+    }
+  };
+
+  const handleBulkCloseVehicles = async () => {
+    const ids = Array.from(vehicleSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      updateVehicle(id, { status: 'INACTIVE' })
+    );
+    if (succeeded.length > 0) {
+      toast.success(`Đã chuyển ${succeeded.length} phương tiện sang trạng thái Ngừng hoạt động.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể cập nhật ${failed.length} phương tiện: ${failed[0].error}`);
+    }
+    vehicleSelection.clearSelection();
+    refreshData();
+  };
+
+  const handleBulkDeleteVehicles = async () => {
+    const ids = Array.from(vehicleSelection.selectedIds);
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteVehicle(id));
+    if (succeeded.length > 0) {
+      if (selectedVehicle && succeeded.includes(selectedVehicle._id)) {
+        setSelectedVehicle(null);
+      }
+      toast.success(`Đã xóa ${succeeded.length} phương tiện.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} phương tiện: ${failed[0].error}`);
+    }
+    vehicleSelection.clearSelection();
+    refreshData();
+  };
+
+  const handleBulkCloseEquipments = async () => {
+    const ids = [...selectedTableItemIds];
+    const { succeeded, failed } = await runBulkOperation(ids, (id) =>
+      updateEquipmentStatus(id, 'MAINTENANCE')
+    );
+    if (succeeded.length > 0) {
+      toast.success(`Đã chuyển ${succeeded.length} mặt hàng sang Bảo trì / Tạm ngừng.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể cập nhật ${failed.length} mặt hàng: ${failed[0].error}`);
+    }
+    setSelectedTableItemIds([]);
+    refreshData();
+  };
+
+  const handleBulkDeleteEquipments = async () => {
+    const ids = [...selectedTableItemIds];
+    const { succeeded, failed } = await runBulkOperation(ids, (id) => deleteEquipment(id));
+    if (succeeded.length > 0) {
+      if (selectedEquipment && succeeded.includes(selectedEquipment._id)) {
+        setSelectedEquipment(null);
+      }
+      toast.success(`Đã xóa ${succeeded.length} mặt hàng.`);
+    }
+    if (failed.length > 0) {
+      toast.error(`Không thể xóa ${failed.length} mặt hàng: ${failed[0].error}`);
+    }
+    setSelectedTableItemIds([]);
+    refreshData();
+  };
+
   const renderVehicleStatusBadge = (status?: string) => {
     const s = (status || 'READY').toUpperCase();
     if (s === 'READY' || s === 'AVAILABLE') {
@@ -2188,40 +2399,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   const renderAdminAreaSelects = (onResetTeamFilter: () => void) => {
     if (!isAdmin) return null;
-    const activeStyle = (active: boolean) => ({
-      borderColor: active ? '#0284c7' : undefined,
-      background: active ? 'var(--dm-blue-bg)' : undefined,
-      color: active ? 'var(--dm-blue-text)' : undefined,
-    });
 
     return (
-      <SearchableSelect
+      <DaNangAreaSelect
         className="ra-filter-select"
-        ariaLabel="Lọc theo địa bàn Đà Nẵng"
-        title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
-        searchPlaceholder="Tìm nhanh địa bàn Đà Nẵng..."
+        wards={wards}
+        loading={wardsLoading}
         value={selectedAreaId}
         onChange={(val) => {
           setSelectedAreaId(val);
           onResetTeamFilter();
           setCurrentPage(1);
         }}
-        triggerStyle={{ minWidth: 210, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
-        options={[
-          {
-            value: 'ALL',
-            label: wardsLoading
-              ? '⏳ Đang tải địa bàn Đà Nẵng...'
-              : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`,
-            keywords: 'tat ca dia ban da nang',
-          },
-          ...wards.map((ward) => ({
-            value: ward.id,
-            label: `${ward.type === 'DISTRICT' ? '🏛️' : '📍'} ${ward.name}${ward.code ? ` (${ward.code})` : ''}`,
-            badgeText: ward.code || undefined,
-            keywords: `${ward.name} ${ward.code || ''}`,
-          })),
-        ]}
       />
     );
   };
@@ -2292,6 +2481,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
           {/* Phía phải Header: Toàn bộ nút hành động cấp kho */}
           <div className="resources-card-header-actions">
+            <ExcelExportButton
+              onClick={handleExportActiveResourceTab}
+              disabled={
+                resourceTab === 'VEHICLES'
+                  ? filteredVehicles.length === 0
+                  : equipmentViewMode === 'DISPATCH_HISTORY'
+                    ? dispatchHistory.length === 0
+                    : filteredEquipments.length === 0
+              }
+              title="Xuất dữ liệu tab hiện tại ra file Excel (.xlsx)"
+            />
+
             <button
               className="ra-refresh-btn"
               onClick={() => {
@@ -2489,7 +2690,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     }).length;
                     return (
                       <option key={team._id} value={team._id}>
-                        📍 {team.name} ({count} xe)
+                        {team.name} ({count} xe)
                       </option>
                     );
                   })}
@@ -2666,9 +2867,32 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   );
                 })()
               ) : (
+                <>
+                <TableBulkActionBar
+                  selectedCount={vehicleSelection.selectedCount}
+                  totalFilteredCount={filteredVehicles.length}
+                  unitLabel="phương tiện"
+                  onSelectAllFiltered={vehicleSelection.selectAllFiltered}
+                  onClearSelection={vehicleSelection.clearSelection}
+                  onExportSelected={() => handleExportVehiclesExcel(true)}
+                  onCloseSelected={handleBulkCloseVehicles}
+                  closeLabel="Ngừng hoạt động"
+                  closeConfirmTitle={`Ngừng hoạt động ${vehicleSelection.selectedCount} phương tiện?`}
+                  closeConfirmDesc="Các phương tiện đã chọn sẽ chuyển sang trạng thái Ngừng hoạt động và không được điều phối."
+                  onDeleteSelected={handleBulkDeleteVehicles}
+                  deleteLabel="Xóa đã chọn"
+                />
                 <table className="ra-table">
                   <thead>
                     <tr>
+                      <th className="sos-checkbox-col">
+                        <TableSelectAllCheckbox
+                          checked={vehicleSelection.allVisibleSelected}
+                          indeterminate={vehicleSelection.someVisibleSelected}
+                          disabled={paginatedVehicles.length === 0}
+                          onChange={vehicleSelection.toggleSelectVisible}
+                        />
+                      </th>
                       <th style={{ width: '17%' }}>BIỂN SỐ &amp; ĐỊNH DANH</th>
                       <th style={{ width: '18%' }}>LOẠI PHƯƠNG TIỆN</th>
                       <th style={{ width: '25%' }}>ĐỘI QUẢN LÝ</th>
@@ -2695,6 +2919,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           style={{ cursor: 'pointer' }}
                           title="Bấm để xem hồ sơ kỹ thuật chi tiết phương tiện"
                         >
+                          <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                            <TableRowCheckbox
+                              checked={vehicleSelection.isSelected(v._id)}
+                              onChange={() => vehicleSelection.toggleRow(v._id)}
+                              ariaLabel={`Chọn phương tiện ${v.plateNumber}`}
+                            />
+                          </td>
                           {/* Cột 1: Biển số & định danh */}
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2785,6 +3016,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     })}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
 
@@ -2924,9 +3156,26 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     )}
                 </div>
               ) : (
+                <>
+                <TableBulkActionBar
+                  selectedCount={dispatchSelection.selectedCount}
+                  totalFilteredCount={dispatchHistory.length}
+                  unitLabel="phiếu xuất"
+                  onSelectAllFiltered={dispatchSelection.selectAllFiltered}
+                  onClearSelection={dispatchSelection.clearSelection}
+                  onExportSelected={() => handleExportDispatchHistoryExcel(true)}
+                />
                 <table className="ra-table">
                   <thead>
                     <tr>
+                      <th className="sos-checkbox-col">
+                        <TableSelectAllCheckbox
+                          checked={dispatchSelection.allVisibleSelected}
+                          indeterminate={dispatchSelection.someVisibleSelected}
+                          disabled={dispatchHistory.length === 0}
+                          onChange={dispatchSelection.toggleSelectVisible}
+                        />
+                      </th>
                       <th style={{ width: '15%' }}>MÃ PHIẾU / THỜI GIAN</th>
                       <th style={{ width: '13%' }}>HÌNH THỨC</th>
                       <th style={{ width: '25%' }}>ĐƠN VỊ / ĐIỂM TIẾP NHẬN</th>
@@ -3078,6 +3327,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           style={{ cursor: 'pointer', transition: 'background 0.15s ease' }}
                           title="Bấm để xem chi tiết phiếu xuất kho & điều phối"
                         >
+                          <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
+                            <TableRowCheckbox
+                              checked={dispatchSelection.isSelected(rec.id)}
+                              onChange={() => dispatchSelection.toggleRow(rec.id)}
+                              ariaLabel={`Chọn phiếu ${rec.dispatchCode}`}
+                            />
+                          </td>
                           {/* Cột 1: Mã phiếu / Thời gian */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -3249,6 +3505,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     })}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
 
@@ -3343,7 +3600,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   {
                     scopedRescueTeams.map((team) => (
                       <option key={team._id} value={team._id}>
-                        📍 {team.name}
+                        {team.name}
                       </option>
                     ))
                   }
@@ -3785,37 +4042,56 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   );
                 })()
               ) : (
+                <>
+                <TableBulkActionBar
+                  selectedCount={selectedTableItemIds.length}
+                  totalFilteredCount={filteredEquipments.length}
+                  unitLabel="mặt hàng"
+                  onSelectAllFiltered={() => setSelectedTableItemIds(filteredEquipments.map((e) => e._id))}
+                  onClearSelection={() => setSelectedTableItemIds([])}
+                  onExportSelected={() => handleExportEquipmentsExcel(true)}
+                  onCloseSelected={handleBulkCloseEquipments}
+                  closeLabel="Bảo trì / Ngừng dùng"
+                  closeConfirmTitle={`Tạm ngừng ${selectedTableItemIds.length} mặt hàng đã chọn?`}
+                  closeConfirmDesc="Các mặt hàng sẽ chuyển sang trạng thái Bảo trì / Ngừng sử dụng."
+                  onDeleteSelected={handleBulkDeleteEquipments}
+                  deleteLabel="Xóa đã chọn"
+                  extraActions={
+                    selectedDepotEligibleCount > 0 ? (
+                      <button
+                        type="button"
+                        className="sos-bulk-btn"
+                        style={{
+                          background: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          borderColor: 'var(--dm-blue-border)',
+                        }}
+                        onClick={() => handleOpenBatchConsumeModal()}
+                      >
+                        <PackageCheck size={14} />
+                        <span>Xuất kho ({selectedDepotEligibleCount})</span>
+                      </button>
+                    ) : undefined
+                  }
+                />
                 <table className="ra-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '40px', textAlign: 'center', padding: '8px 4px' }}>
-                        <input
-                          type="checkbox"
-                          checked={(() => {
-                            const availableDepot = paginatedEquipments.filter((eq) => {
-                              const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
-                              return !tId && eq.quantity > 0;
-                            });
-                            return (
-                              availableDepot.length > 0 &&
-                              availableDepot.every((eq) => selectedTableItemIds.includes(eq._id))
-                            );
-                          })()}
-                          onChange={(e) => {
-                            const availableDepot = paginatedEquipments.filter((eq) => {
-                              const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
-                              return !tId && eq.quantity > 0;
-                            });
-                            if (e.target.checked) {
-                              const availableOnPage = availableDepot.map((eq) => eq._id);
-                              setSelectedTableItemIds((prev) => Array.from(new Set([...prev, ...availableOnPage])));
+                      <th className="sos-checkbox-col">
+                        <TableSelectAllCheckbox
+                          checked={allVisibleSuppliesSelected}
+                          indeterminate={someVisibleSuppliesSelected}
+                          disabled={paginatedEquipments.length === 0}
+                          onChange={() => {
+                            if (allVisibleSuppliesSelected) {
+                              const pageSet = new Set(paginatedEquipments.map((eq) => eq._id));
+                              setSelectedTableItemIds((prev) => prev.filter((id) => !pageSet.has(id)));
                             } else {
-                              const onPageDepotIds = new Set(availableDepot.map((eq) => eq._id));
-                              setSelectedTableItemIds((prev) => prev.filter((id) => !onPageDepotIds.has(id)));
+                              const pageIds = paginatedEquipments.map((eq) => eq._id);
+                              setSelectedTableItemIds((prev) => Array.from(new Set([...prev, ...pageIds])));
                             }
                           }}
-                          style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#0284c7' }}
-                          title="Chọn tất cả mặt hàng khả dụng tại Kho Tổng trên trang này"
+                          title="Chọn tất cả mặt hàng trên trang này"
                         />
                       </th>
                       <th style={{ width: '22%' }}>TÊN THIẾT BỊ / NHU YẾU PHẨM</th>
@@ -3832,56 +4108,33 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       const isDurable = eq.supplyType !== 'CONSUMABLE';
                       const teamObj = typeof eq.teamId === 'object' ? eq.teamId : null;
                       const teamName = teamObj?.name || '—';
-                      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
-                      const isDepotItem = !tId;
-                      const canSelect = isDepotItem && eq.quantity > 0;
                       const minTh = eq.minThreshold || 10;
                       const isLow = eq.quantity <= minTh * 0.3;
                       const isWarning = eq.quantity <= minTh;
-                      const isSelected = selectedTableItemIds.includes(eq._id);
+                      const isSelected = selectedSupplySet.has(eq._id);
 
                       return (
                         <tr
                           key={eq._id}
                           onClick={() => setSelectedEquipment(eq)}
-                          style={{
-                            cursor: 'pointer',
-                            background: isSelected ? 'var(--dm-blue-bg)' : undefined,
-                            transition: 'background 0.15s ease',
-                          }}
+                          style={{ cursor: 'pointer' }}
                           title="Bấm để xem chi tiết"
                         >
                           {/* Cột Checkbox chọn mặt hàng */}
                           <td
-                            style={{ textAlign: 'center', padding: '8px 4px', width: '40px' }}
+                            className="sos-checkbox-col"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <input
-                              type="checkbox"
-                              disabled={!canSelect}
+                            <TableRowCheckbox
                               checked={isSelected}
-                              onChange={(e) => {
-                                e.stopPropagation();
+                              onChange={() => {
                                 if (isSelected) {
                                   setSelectedTableItemIds((prev) => prev.filter((id) => id !== eq._id));
                                 } else {
                                   setSelectedTableItemIds((prev) => [...prev, eq._id]);
                                 }
                               }}
-                              style={{
-                                cursor: !canSelect ? 'not-allowed' : 'pointer',
-                                width: 16,
-                                height: 16,
-                                accentColor: '#0284c7',
-                                opacity: !canSelect ? 0.35 : 1,
-                              }}
-                              title={
-                                !isDepotItem
-                                  ? 'Mặt hàng này đang do Đội quản lý, phiếu xuất kho chỉ cấp từ Kho Tổng'
-                                  : eq.quantity <= 0
-                                    ? 'Mặt hàng đã hết tồn kho'
-                                    : `Tích chọn để xuất "${eq.name}"`
-                              }
+                              ariaLabel={`Chọn ${eq.name}`}
                             />
                           </td>
                           {/* Cột 1: Tên mặt hàng */}
@@ -4006,6 +4259,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     })}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
 
@@ -8488,77 +8742,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           </div>
         );
       })()}
-
-      {/* THANH TÁC VỤ NỔI KHI CÓ MẶT HÀNG ĐƯỢC TÍCH CHỌN TỪ BẢNG */}
-      {selectedTableItemIds.length > 0 && !isBatchConsumeOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 990,
-            background: '#0f172a',
-            color: '#ffffff',
-            padding: '10px 18px',
-            borderRadius: 50,
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            border: '1px solid #334155',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
-            <CheckCircle2 size={16} color="#38bdf8" />
-            <span>
-              Đã tích chọn <strong style={{ color: '#38bdf8' }}>{selectedTableItemIds.length}</strong> mặt hàng
-            </span>
-          </div>
-          <div style={{ width: 1, height: 18, background: '#334155' }} />
-          <button
-            type="button"
-            onClick={() => handleOpenBatchConsumeModal()}
-            style={{
-              background: '#0284c7',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 20,
-              padding: '7px 16px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
-            }}
-          >
-            <PackageCheck size={15} />
-            <span>Lập lệnh điều phối &amp; Xuất kho ngay</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedTableItemIds([])}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--dm-text-muted)',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              padding: '4px 6px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-            }}
-            title="Hủy bỏ tích chọn"
-          >
-            <X size={12} />
-            <span>Hủy chọn</span>
-          </button>
-        </div>
-      )}
 
       {/* MODAL 10: PHIẾU XUẤT CẤP CỨU TRỢ TỔNG HỢP (XUẤT NHIỀU MẶT HÀNG CÙNG LÚC TỪ KHO TỔNG) */}
       {isBatchConsumeOpen && (() => {
