@@ -117,6 +117,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
   const assignedVehicle = vehicles.find((v) => v.id === assignment?.vehicleId);
   const vehiclePlate = assignedVehicle?.plate || (assignment as any)?.vehiclePlate || 'Chưa cập nhật';
+  const rawVehicleTitle =
+    assignedVehicle?.name ||
+    (assignment?.vehicleName && assignment.vehicleName !== vehiclePlate ? assignment.vehicleName : '') ||
+    '';
+  const displayVehicleTitle =
+    (vehiclePlate && vehiclePlate !== 'Chưa cập nhật'
+      ? rawVehicleTitle.replace(vehiclePlate, '').trim()
+      : rawVehicleTitle.trim()) || 'Phương tiện cứu hộ';
 
   // 1. Xác định địa bàn quản lý mục tiêu của sự cố / Cán bộ
   const targetAreaInfo = useMemo(() => {
@@ -527,15 +535,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (aStatus === 'COMPLETED' && sStatus !== 'COMPLETED' && sStatus !== 'RESOLVED' && hasPendingShoreHandoff) {
       return {
         statusHeading: 'ĐỘI CỨU HỘ ĐÃ XONG • CHỜ XE TIẾP VẬN',
-        badgeText: '🛟 ĐỘI CỨU HỘ ĐÃ XONG • CHỜ XE TIẾP VẬN',
+        badgeText: 'ĐỘI CỨU HỘ ĐÃ XONG • CHỜ XE TIẾP VẬN',
         subText:
           handoffStatus === 'ASSIGNED'
             ? 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Chờ xe tiếp vận xác nhận đưa nạn nhân tới nơi an toàn.'
             : 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Vui lòng điều xe tiếp vận đón nạn nhân.',
-        bg: '#fffbeb',
-        border: '#fcd34d',
-        textColor: '#b45309',
-        dotColor: '#f59e0b',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
+        dotColor: '#d97706',
         isCompleted: false,
         showEta: false,
       };
@@ -545,11 +553,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (sStatus === 'COMPLETED' || sStatus === 'RESOLVED' || (aStatus === 'COMPLETED' && !hasPendingShoreHandoff)) {
       return {
         statusHeading: 'HOÀN TẤT CỨU HỘ',
-        badgeText: '✓ ĐÃ HOÀN TẤT NHIỆM VỤ',
+        badgeText: 'ĐÃ HOÀN TẤT NHIỆM VỤ',
         subText: 'Cứu nạn thành công, an toàn.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
         dotColor: '#16a34a',
         isCompleted: true,
         showEta: false,
@@ -560,11 +568,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (['RESCUING', 'IN_PROGRESS', 'ON_SCENE_RESCUING'].includes(aStatus) || sStatus === 'RESCUING') {
       return {
         statusHeading: 'ĐANG CỨU HỘ TẠI HIỆN TRƯỜNG',
-        badgeText: '🛟 ĐANG CỨU HỘ TẠI CHỖ',
+        badgeText: 'ĐANG CỨU HỘ TẠI CHỖ',
         subText: 'Đang đưa người dân lên ca-nô.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -575,12 +583,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (['ARRIVED', 'ON_SCENE'].includes(aStatus) || sStatus === 'ARRIVED') {
       return {
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
-        badgeText: '📍 ĐÃ ĐẾN HIỆN TRƯỜNG',
+        badgeText: 'ĐÃ ĐẾN HIỆN TRƯỜNG',
         subText: 'Đã có mặt tại hiện trường.',
-        bg: '#eff6ff',
-        border: '#93c5fd',
-        textColor: '#1d4ed8',
-        dotColor: '#2563eb',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
+        dotColor: '#0284c7',
         isCompleted: false,
         showEta: false,
       };
@@ -590,11 +598,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (['ON_THE_WAY', 'EN_ROUTE', 'ON_WAY'].includes(aStatus) || sStatus === 'ON_THE_WAY') {
       return {
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
-        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
+        badgeText: 'ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
         subText: 'Đang xuất phát tiếp cận vị trí.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -605,11 +613,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (aStatus === 'ACCEPTED') {
       return {
         statusHeading: 'ĐÃ TIẾP NHẬN LỆNH ĐIỀU ĐỘNG',
-        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
+        badgeText: 'ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
         subText: 'Đã nhận lệnh, chuẩn bị xuất phát.',
-        bg: '#f0fdf4',
-        border: '#86efac',
-        textColor: '#15803d',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
         dotColor: '#16a34a',
         isCompleted: false,
         showEta: false,
@@ -620,12 +628,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (aStatus === 'REJECTED' || sStatus === 'REJECTED') {
       return {
         statusHeading: 'ĐỘI TỪ CHỐI TIẾP NHẬN',
-        badgeText: '⚠️ TỪ CHỐI NHẬN LỆNH',
+        badgeText: 'TỪ CHỐI NHẬN LỆNH',
         subText: 'Đội từ chối • Vui lòng đổi đội.',
-        bg: '#fef2f2',
-        border: '#fca5a5',
-        textColor: '#dc2626',
-        dotColor: '#ef4444',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        textColor: '#0f172a',
+        dotColor: '#dc2626',
         isCompleted: false,
         showEta: false,
       };
@@ -634,12 +642,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     // 7. Mặc định khi vừa điều động / Chờ đội nhận lệnh (PENDING, ASSIGNED)
     return {
       statusHeading: 'CHỜ ĐỘI XÁC NHẬN LỆNH',
-      badgeText: '⏳ CHỜ ĐỘI NHẬN LỆNH',
+      badgeText: 'CHỜ ĐỘI NHẬN LỆNH',
       subText: 'Đang truyền lệnh đến cứu hộ viên.',
-      bg: '#fffbeb',
-      border: '#fde68a',
-      textColor: '#b45309',
-      dotColor: '#f59e0b',
+      bg: '#f8fafc',
+      border: '#e2e8f0',
+      textColor: '#0f172a',
+      dotColor: '#d97706',
       isCompleted: false,
       showEta: true,
     };
@@ -718,11 +726,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               </div>
               <div
                 style={{
-                  fontSize: 11,
-                  color: statusInfo.textColor,
+                  fontSize: 11.5,
+                  color: '#475569',
                   marginTop: 1,
                   lineHeight: 1.3,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -737,16 +745,16 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             {statusInfo.isCompleted ? (
               <span
                 style={{
-                  fontSize: 11.5,
-                  fontWeight: 900,
-                  color: '#15803d',
-                  background: '#dcfce7',
-                  border: '1px solid #86efac',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#334155',
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
                   padding: '3px 8px',
                   borderRadius: 6,
                 }}
               >
-                ✓ HOÀN TẤT
+                HOÀN TẤT
               </span>
             ) : statusInfo.showEta && Boolean(assignment?.etaMinutes && assignment.etaMinutes > 0) ? (
               <div
@@ -778,39 +786,35 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               margin: '8px 12px 6px 12px',
               borderRadius: 10,
-              border: '1.8px solid #f59e0b',
-              background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+              border: '1px solid #cbd5e1',
+              background: '#f8fafc',
               padding: '10px 12px',
               display: 'flex',
               flexDirection: 'column',
               gap: 7,
-              boxShadow: '0 3px 10px rgba(245, 158, 11, 0.22)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>📦</span>
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: 900,
-                    color: '#b45309',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.2px',
-                  }}
-                >
-                  Yêu Cầu Chi Viện Vật Tư
-                </span>
-              </div>
+              <span
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  color: '#1e293b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.2px',
+                }}
+              >
+                Yêu Cầu Chi Viện Vật Tư
+              </span>
               <span
                 style={{
                   fontSize: 10,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   padding: '2px 7px',
                   borderRadius: 4,
-                  background: '#fef3c7',
-                  color: '#92400e',
-                  border: '1px solid #fcd34d',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
                 }}
               >
                 CHỜ DUYỆT
@@ -832,14 +836,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     padding: '5px 8px',
                     background: '#ffffff',
                     borderRadius: 6,
-                    border: '1px solid #fde68a',
+                    border: '1px solid #e2e8f0',
                   }}
                 >
                   <span style={{ fontWeight: 700, flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
                   <span
                     style={{
-                      fontWeight: 800,
-                      color: '#b45309',
+                      fontWeight: 700,
+                      color: '#334155',
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
                     }}
@@ -859,18 +863,17 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   flex: 1,
                   height: 32,
-                  background: '#16a34a',
+                  background: '#0284c7',
                   border: 'none',
                   borderRadius: 6,
                   color: '#ffffff',
                   fontSize: 12,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 6,
-                  boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
                 }}
               >
                 <Check size={14} />
@@ -883,12 +886,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 style={{
                   padding: '0 14px',
                   height: 32,
-                  background: '#fef2f2',
-                  border: '1px solid #fca5a5',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
                   borderRadius: 6,
-                  color: '#dc2626',
+                  color: '#475569',
                   fontSize: 12,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   cursor: 'pointer',
                 }}
               >
@@ -904,8 +907,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             style={{
               margin: '6px 12px 6px 12px',
               borderRadius: 10,
-              border: '1.5px solid #86efac',
-              background: '#f0fdf4',
+              border: '1px solid #e2e8f0',
+              background: '#f8fafc',
               padding: '8px 12px',
               display: 'flex',
               flexDirection: 'column',
@@ -913,29 +916,26 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 14 }}>📦</span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 900,
-                    color: '#15803d',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.2px',
-                  }}
-                >
-                  Đã Cấp Chi Viện Vật Tư
-                </span>
-              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: '#334155',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.2px',
+                }}
+              >
+                Đã Cấp Chi Viện Vật Tư
+              </span>
               <span
                 style={{
                   fontSize: 9.5,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   padding: '2px 6px',
                   borderRadius: 4,
-                  background: '#dcfce7',
-                  color: '#166534',
-                  border: '1px solid #bbf7d0',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: '1px solid #e2e8f0',
                 }}
               >
                 ĐÃ XUẤT CẤP
@@ -956,14 +956,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     padding: '4px 8px',
                     background: '#ffffff',
                     borderRadius: 6,
-                    border: '1px solid #dcfce7',
+                    border: '1px solid #e2e8f0',
                   }}
                 >
-                  <span style={{ fontWeight: 600, color: '#166534', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
+                  <span style={{ fontWeight: 600, color: '#334155', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
                   <span
                     style={{
-                      fontWeight: 800,
-                      color: '#0284c7',
+                      fontWeight: 700,
+                      color: '#334155',
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
                     }}
@@ -1039,7 +1039,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a' }}>
-              {assignment?.vehicleName || 'Ca-nô cứu hộ'}
+              {displayVehicleTitle}
             </div>
             <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
               Sức chứa:{' '}
@@ -1092,21 +1092,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 16 }}>
               <div
                 style={{
-                  width: 12,
-                  height: 12,
+                  width: 11,
+                  height: 11,
                   borderRadius: '50%',
-                  background: '#10b981',
+                  background: '#64748b',
                   border: '2.5px solid #ffffff',
-                  boxShadow: '0 0 0 2px #10b981',
+                  boxShadow: '0 0 0 1.5px #94a3b8',
                 }}
               />
               <div style={{ width: 2, height: 32, background: '#cbd5e1', margin: '3px 0' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Điểm Xuất Phát (Trạm Cứu Hộ):
               </div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
+              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
                 {assignment?.authorityOrganizationName || 'Ban Chỉ Huy PCTT & TKCN'}
               </div>
             </div>
@@ -1117,24 +1117,24 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div style={{ width: 16, display: 'flex', justifyContent: 'center' }}>
               <div
                 style={{
-                  width: 12,
-                  height: 12,
+                  width: 11,
+                  height: 11,
                   borderRadius: '50%',
-                  background: '#ef4444',
+                  background: '#dc2626',
                   border: '2.5px solid #ffffff',
-                  boxShadow: '0 0 0 2px #ef4444',
+                  boxShadow: '0 0 0 1.5px #fca5a5',
                 }}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                 Điểm Cứu Nạn (Vị Trí Gặp Nạn):
               </div>
-              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: 14, marginTop: 2, lineHeight: 1.4 }}>
+              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13.5, marginTop: 2, lineHeight: 1.4 }}>
                 {selectedSos.locationName}
               </div>
-              <div style={{ fontSize: 12.5, color: '#334155', marginTop: 3, fontWeight: 700 }}>
-                Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: '#dc2626' }}>{selectedSos.affectedPeople} người</span>)
+              <div style={{ fontSize: 12.5, color: '#475569', marginTop: 3, fontWeight: 600 }}>
+                Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<strong style={{ color: '#0f172a' }}>{selectedSos.affectedPeople} người</strong>)
               </div>
             </div>
           </div>
@@ -1148,17 +1148,17 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     <div style={{ width: 2, height: 26, background: '#cbd5e1', margin: '-4px 0 3px 0' }} />
                     <div
                       style={{
-                        width: 12,
-                        height: 12,
+                        width: 11,
+                        height: 11,
                         borderRadius: '50%',
-                        background: '#f59e0b',
+                        background: '#475569',
                         border: '2.5px solid #ffffff',
-                        boxShadow: '0 0 0 2px #f59e0b',
+                        boxShadow: '0 0 0 1.5px #94a3b8',
                       }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: '#d97706', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                       Điểm Hẹn Bến Cập Bờ (Tiếp Vận):
                     </div>
                     {(() => {
@@ -1169,8 +1169,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                       return (
                         <>
-                          <div style={{ fontWeight: 900, color: '#b45309', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
-                            🚗 {name || address || 'Điểm đón ven bờ'}
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
+                            {name || address || 'Điểm đón ven bờ'}
                           </div>
                           {!isDuplicate && (
                             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: 600 }}>
@@ -1200,8 +1200,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     style={{
                       marginTop: 4,
                       borderRadius: 8,
-                      border: isHandoffAssignedOrDone ? '1px solid #86efac' : '1.5px solid #fdba74',
-                      background: isHandoffAssignedOrDone ? '#f0fdf4' : '#fff7ed',
+                      border: isHandoffAssignedOrDone ? '1px solid #e2e8f0' : '1px solid #cbd5e1',
+                      background: '#f8fafc',
                       padding: isHandoffAssignedOrDone ? '6px 8px' : '10px 12px',
                       display: 'flex',
                       flexDirection: 'column',
@@ -1213,12 +1213,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         {/* Dòng 1: Tiêu đề + Huy hiệu + Nút thao tác (gộp 1 hàng ngang tối ưu diện tích) */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                            <span style={{ fontSize: 13, flexShrink: 0 }}>🚑</span>
                             <span
                               style={{
                                 fontSize: 11.5,
                                 fontWeight: 800,
-                                color: '#15803d',
+                                color: '#334155',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.2px',
                                 whiteSpace: 'nowrap',
@@ -1254,10 +1253,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '2px 6px',
                                   background: '#ffffff',
-                                  border: '1px solid #93c5fd',
+                                  border: '1px solid #cbd5e1',
                                   borderRadius: 4,
-                                  color: '#1d4ed8',
-                                  fontWeight: 800,
+                                  color: '#334155',
+                                  fontWeight: 700,
                                   fontSize: 10.5,
                                   cursor: 'pointer',
                                 }}
@@ -1272,10 +1271,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 style={{
                                   padding: '2px 6px',
                                   background: '#ffffff',
-                                  border: '1px solid #fca5a5',
+                                  border: '1px solid #cbd5e1',
                                   borderRadius: 4,
-                                  color: '#b91c1c',
-                                  fontWeight: 800,
+                                  color: '#64748b',
+                                  fontWeight: 700,
                                   fontSize: 10.5,
                                   cursor: 'pointer',
                                 }}
@@ -1293,7 +1292,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             alignItems: 'center',
                             gap: 6,
                             background: '#ffffff',
-                            border: '1px solid #bbf7d0',
+                            border: '1px solid #e2e8f0',
                             borderRadius: 6,
                             padding: '3px 8px',
                             fontSize: 11,
@@ -1324,7 +1323,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             </span>
                           )}
                           <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 600 }}>
-                            • 👤 {handoff.assignedDriverName || 'Tài xế'}
+                            • {handoff.assignedDriverName || 'Tài xế'}
                             {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
                           </span>
                         </div>
@@ -1332,27 +1331,25 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     ) : (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 15 }}>⚡</span>
-                            <span
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 900,
-                                color: '#c2410c',
-                                textTransform: 'uppercase',
-                              }}
-                            >
-                              Yêu Cầu Xe Đón Nạn Nhân
-                            </span>
-                          </div>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: '#1e293b',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Yêu Cầu Xe Đón Nạn Nhân
+                          </span>
                           <span
                             style={{
                               fontSize: 10.5,
-                              fontWeight: 800,
+                              fontWeight: 700,
                               padding: '2px 7px',
                               borderRadius: 5,
-                              background: '#fed7aa',
-                              color: '#9a3412',
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              border: '1px solid #cbd5e1',
                             }}
                           >
                             CHỜ ĐIỀU XE
@@ -1375,7 +1372,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                           style={{
                             width: '100%',
                             height: 38,
-                            background: '#ea580c',
+                            background: '#0284c7',
                             border: 'none',
                             borderRadius: 8,
                             color: '#ffffff',
@@ -1386,7 +1383,6 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: 7,
-                            boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
                           }}
                         >
                           <Ambulance size={16} />

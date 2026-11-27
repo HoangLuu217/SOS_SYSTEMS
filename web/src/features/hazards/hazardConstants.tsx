@@ -243,6 +243,58 @@ export const formatPriorityGroupLabel = (value: string): string => {
   return PRIORITY_GROUP_LABELS[trimmed.toUpperCase()] || trimmed;
 };
 
+export interface SosPriorityBadgeMeta {
+  label: string;
+  semanticClass: 'critical' | 'high' | 'medium' | 'neutral';
+  bg: string;
+  color: string;
+  border: string;
+}
+
+const SOS_PRIORITY_META_MAP: Record<string, SosPriorityBadgeMeta> = {
+  CRITICAL: {
+    label: 'Nguy cấp',
+    semanticClass: 'critical',
+    bg: '#fef2f2',
+    color: '#dc2626',
+    border: '#fecaca',
+  },
+  HIGH: {
+    label: 'Khẩn cấp',
+    semanticClass: 'high',
+    bg: '#fffbeb',
+    color: '#d97706',
+    border: '#fde68a',
+  },
+  MEDIUM: {
+    label: 'Trung bình',
+    semanticClass: 'medium',
+    bg: '#e0f2fe',
+    color: '#0284c7',
+    border: '#bae6fd',
+  },
+  LOW: {
+    label: 'Thấp',
+    semanticClass: 'neutral',
+    bg: '#f1f5f9',
+    color: '#475569',
+    border: '#e2e8f0',
+  },
+  UNASSESSED: {
+    label: 'Chờ phân loại',
+    semanticClass: 'neutral',
+    bg: '#f1f5f9',
+    color: '#475569',
+    border: '#e2e8f0',
+  },
+};
+
+/** Trả về nhãn và bảng màu thống nhất cho mức độ ưu tiên SOS trên toàn bộ giao diện điều phối. */
+export const getSosPriorityBadgeMeta = (priority?: string | null): SosPriorityBadgeMeta => {
+  const key = String(priority || '').toUpperCase();
+  return SOS_PRIORITY_META_MAP[key] || SOS_PRIORITY_META_MAP.MEDIUM;
+};
+
 // Component Bản đồ nhỏ (Mini Map) cho điểm nguy hiểm với khả năng tương tác chọn tọa độ
 export const HazardMiniMap: React.FC<{
   lat: number;

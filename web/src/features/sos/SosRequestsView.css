@@ -690,11 +690,11 @@
   color: var(--sos-text-primary);
 }
 
-/* 5. BẢNG DỮ LIỆU CỨU NẠN (CUỘN NỘI BỘ BÊN TRONG BẢNG, TIÊU ĐỀ CỐ ĐỊNH) */
+/* 5. BẢNG DỮ LIỆU CỨU NẠN (CUỘN DỌC NỘI BỘ BÊN TRONG BẢNG, TIÊU ĐỀ CỐ ĐỊNH, KHÔNG TRƯỢT NGANG) */
 .executive-table-scroll {
   flex: 1;
   min-height: 240px;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--sos-border);
   border-radius: 10px;
@@ -740,27 +740,26 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.45px;
-  padding: 12px;
+  letter-spacing: 0.4px;
+  padding: 11px 10px;
   border-bottom: 1px solid var(--sos-border);
   border-right: 1px solid var(--sos-border);
   text-align: left;
-  white-space: nowrap;
 }
 
 .executive-table thead tr th:first-child {
   border-top-left-radius: 9px;
-  padding-left: 16px;
+  padding-left: 14px;
 }
 
 .executive-table thead tr th:last-child {
   border-top-right-radius: 9px;
   border-right: none;
-  padding-right: 16px;
+  padding-right: 14px;
 }
 
 .executive-table tbody tr td {
-  padding: 15px 12px;
+  padding: 14px 10px;
   border-bottom: 1px solid var(--sos-border);
   border-right: 1px solid var(--sos-surface-muted);
   font-size: 13px;
@@ -769,15 +768,16 @@
   background: var(--sos-surface);
   transition: background-color 0.15s ease;
   word-break: break-word;
+  overflow: hidden;
 }
 
 .executive-table tbody tr td:first-child {
-  padding-left: 16px;
+  padding-left: 14px;
 }
 
 .executive-table tbody tr td:last-child {
   border-right: none;
-  padding-right: 16px;
+  padding-right: 14px;
 }
 
 .executive-table tbody tr:last-child td:first-child {
@@ -825,7 +825,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 .code-mono {
@@ -859,8 +859,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 .time-text {

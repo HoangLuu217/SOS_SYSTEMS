@@ -745,7 +745,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   // Phân tách ca đang diễn ra (Active) và ca đã đóng (Completed / Cancelled)
   const activeSosList = areaScopedSosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
-  const activeCount = activeSosList.length;
   const criticalCount = activeSosList.filter((s) => s.priority === 'CRITICAL').length;
   const highCount = activeSosList.filter((s) => s.priority === 'HIGH').length;
   const pendingCount = areaScopedSosList.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
@@ -781,9 +780,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     { key: 'COMPLETED', label: 'Hoàn thành', count: progressCounts.COMPLETED },
     { key: 'CANCELLED', label: 'Đã hủy', count: progressCounts.CANCELLED },
   ] as const;
-
-  // Tổng số người gặp nạn CẦN CỨU (chỉ tính trên các ca đang hoạt động, không cộng ca đã hủy)
-  const activeVictims = activeSosList.reduce((sum, s) => sum + (s.people || 1), 0);
 
   // Lọc theo thanh Triage, tiến trình (Admin) và ô tìm kiếm
   const filteredSosList = areaScopedSosList.filter((sos) => {
@@ -834,33 +830,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   return (
     <div className="sos-views-container warm-executive-theme">
-      {/* ============================================================
-          THANH CHỈ SỐ NHANH: NÚT BẢN ĐỒ CHI TIẾT & SỐ NGƯỜI GẶP NẠN
-          ============================================================ */}
-      <div className="sos-top-strip">
-        <div className="sos-scope-tabs">
-          <button
-            type="button"
-            className="sos-btn sos-btn--primary sos-btn--sm"
-            onClick={() => onOpenMap()}
-            title="Mở ngay Bản đồ Điều hành Tác chiến"
-          >
-            <Compass size={14} />
-            <span>Bản đồ chi tiết</span>
-            <span className="sos-scope-badge" title="Số lượng ca khẩn cấp đang diễn ra trên bản đồ">
-              {activeCount}
-            </span>
-          </button>
-        </div>
-
-        <div className="sos-victims-summary">
-          <strong>Tổng số người cần cứu:</strong>
-          <strong className="sos-victims-summary-value">
-            {activeVictims} người
-          </strong>
-        </div>
-      </div>
-
       {/* ============================================================
             BẢNG DỮ LIỆU TÁC CHIẾN CỨU NẠN (CÙNG PHONG CÁCH WARM EXECUTIVE)
             ============================================================ */}
@@ -1072,22 +1041,21 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           <div className="code-line">
                             {isCritical && <span className="beacon-radar-dot" />}
                             <span className="code-mono">{sos.sosCode}</span>
-                            {(sos.priority === 'UNASSESSED' || sos.aiAssessment?.status === 'COMPLETED') && (
+                            {sos.priority === 'UNASSESSED' && (
                               <span
                                 style={{
                                   fontSize: 10,
-                                  fontWeight: 800,
+                                  fontWeight: 700,
                                   padding: '1px 5px',
                                   borderRadius: 4,
                                   marginLeft: 4,
-                                  background: sos.priority === 'UNASSESSED' ? '#fff7ed' : '#eef2ff',
-                                  color: sos.priority === 'UNASSESSED' ? '#c2410c' : '#3730a3',
+                                  background: '#f1f5f9',
+                                  color: '#475569',
+                                  border: '1px solid #cbd5e1',
                                 }}
                                 title={(sos.riskAssessment?.reasons || sos.aiAssessment?.reasons || []).join(' • ')}
                               >
-                                {sos.priority === 'UNASSESSED'
-                                  ? sos.aiAssessment?.status === 'PENDING' ? 'AI đang phân tích' : 'Cần phân loại'
-                                  : 'AI'}
+                                Cần phân loại
                               </span>
                             )}
                           </div>

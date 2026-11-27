@@ -12,7 +12,7 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
   },
   sos_requests: {
     title: 'TIẾP NHẬN & XÁC MINH YÊU CẦU SOS',
-    desc: 'Tiếp nhận dữ liệu từ App & cuộc gọi Hotline, xác minh và đánh giá mức độ khẩn cấp',
+    desc: 'Tiếp nhận yêu cầu cứu nạn từ người dân, xác minh thông tin và theo dõi tiến trình xử lý',
   },
   coordination: {
     title: 'ĐIỀU PHỐI NHIỆM VỤ CỨU HỘ',

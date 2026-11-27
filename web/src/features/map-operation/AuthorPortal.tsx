@@ -365,6 +365,37 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
   };
 }
 
+const VEHICLE_TYPE_LABEL_MAP: Record<string, string> = {
+  BOAT: 'Ca-nô',
+  MOTORBOAT: 'Xuồng máy',
+  COMPOSITE_BOAT: 'Xuồng Composite',
+  RUBBER_BOAT: 'Xuồng cao su',
+  INFLATABLE_BOAT: 'Thuyền hơi',
+  ROWBOAT: 'Thuyền chèo tay',
+  LIFE_RAFT: 'Phao bè cứu sinh',
+  JET_SKI: 'Mô-tô nước',
+  AMPHIBIOUS_VEHICLE: 'Xe lội nước',
+  AMBULANCE: 'Xe cứu thương',
+  PICKUP_4X4: 'Bán tải 4x4',
+  PICKUP_TRUCK: 'Xe bán tải',
+  HIGH_CLEARANCE_TRUCK: 'Xe tải gầm cao',
+  TRUCK: 'Xe tác chiến',
+  DRONE: 'Drone trinh sát',
+  MOTORBIKE: 'Xe máy cơ động',
+};
+
+function resolveVehicleTypeLabel(rawType?: string): string {
+  return VEHICLE_TYPE_LABEL_MAP[String(rawType || '').toUpperCase()] || 'Phương tiện cứu hộ';
+}
+
+function resolveAssignmentVehicleName(vehicleObj: any, fallbackName?: string): string {
+  if (vehicleObj && typeof vehicleObj === 'object') {
+    if (vehicleObj.name) return String(vehicleObj.name).trim();
+    if (vehicleObj.type) return resolveVehicleTypeLabel(vehicleObj.type);
+  }
+  return fallbackName ? String(fallbackName).trim() : '';
+}
+
 // Hàm ánh xạ Phương tiện từ MongoDB sang định dạng chuẩn Web
 function mapBackendVehicleToDomain(v: any): Vehicle {
   const teamObj = typeof v.teamId === 'object' && v.teamId ? v.teamId : null;
@@ -388,20 +419,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     vType = 'Tactical Truck';
   }
 
-  const typeLabelMap: Record<string, string> = {
-    BOAT: 'Ca-nô',
-    MOTORBOAT: 'Xuồng máy',
-    COMPOSITE_BOAT: 'Xuồng Composite',
-    RUBBER_BOAT: 'Xuồng cao su',
-    INFLATABLE_BOAT: 'Thuyền hơi',
-    JET_SKI: 'Mô-tô nước',
-    AMPHIBIOUS_VEHICLE: 'Xe lội nước',
-    AMBULANCE: 'Xe Cứu Thương',
-    PICKUP_4X4: 'Bán tải 4x4',
-    HIGH_CLEARANCE_TRUCK: 'Xe tải gầm cao',
-    TRUCK: 'Xe Tác Chiến',
-  };
-  const typeLabel = typeLabelMap[rawType] || 'Phương tiện';
+  const typeLabel = resolveVehicleTypeLabel(rawType);
 
   return {
     id: v._id,
@@ -621,7 +639,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                 rescuerName: assign.rescuerId?.fullName || assign.rescuerName || '',
                 rescuerRole: assign.rescuerRole || '',
                 vehicleId: assign.vehicleId?._id || assign.vehicleId || '',
-                vehicleName: assign.vehicleId?.plateNumber || assign.vehicleName || '',
+                vehicleName: resolveAssignmentVehicleName(assign.vehicleId, assign.vehicleName),
                 vehicleCapacity: String(assign.vehicleId?.capacity ?? ''),
                 status: assign.status,
                 priority: item.priority as any,
@@ -827,7 +845,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             rescuerName: assign.rescuerId?.fullName || assign.rescuerName || '',
             rescuerRole: assign.rescuerRole || '',
             vehicleId: assign.vehicleId?._id || assign.vehicleId || '',
-            vehicleName: assign.vehicleId?.plateNumber || assign.vehicleName || '',
+            vehicleName: resolveAssignmentVehicleName(assign.vehicleId, assign.vehicleName),
             vehicleCapacity: String(assign.vehicleId?.capacity ?? ''),
             status: assign.status,
             priority: updatedSos.priority as any,
@@ -909,7 +927,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
         const teamName = (typeof teamObj === 'object' && teamObj ? teamObj.name || teamObj.teamName : null) || 'Đội Cứu Hộ';
         const rescuerName = (typeof rescuerObj === 'object' && rescuerObj ? rescuerObj.fullName : null) || 'Cứu Hộ Viên';
-        const vehiclePlate = (typeof vehicleObj === 'object' && vehicleObj ? vehicleObj.plateNumber : null) || 'Phương tiện';
+        const assignedVehicleName = resolveAssignmentVehicleName(vehicleObj, assignmentData.vehicleName) || 'Phương tiện cứu hộ';
 
         const existingAssign = domainDService.getAssignmentBySosId(targetSosId);
         domainDService.syncRealAssignment({
@@ -923,7 +941,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           rescuerName: rescuerName,
           rescuerRole: 'LEADER',
           vehicleId: typeof vehicleObj === 'object' && vehicleObj ? String(vehicleObj._id || '') : String(assignmentData.vehicleId || ''),
-          vehicleName: vehiclePlate,
+          vehicleName: assignedVehicleName,
           vehicleCapacity: String(vehicleObj?.capacity ?? ''),
           status: newStatus as AssignmentStatus,
           priority: assignmentData.priority,
@@ -1294,13 +1312,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return domainDService.getAssignmentBySosId(selectedSos.id);
   }, [selectedSos]);
 
-  // Urgent local count (chỉ đếm các ca đang diễn ra, loại bỏ hoàn thành và đã hủy)
-  const localUrgentCount = useMemo(() => {
-    return authorScopedSosRequests.filter(
-      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)
-    ).length;
-  }, [authorScopedSosRequests]);
-
   // Compute officer initials for avatar badge (e.g. "TC" for Trần Văn Cường)
   const officerFullName = activeOfficer?.fullName;
   const officerInitials = useMemo(() => {
@@ -1522,7 +1533,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         {/* Left: Sector & Status (Unified, cohesive cluster) */}
         <div className="author-header-left">
           <div className="author-jurisdiction-badge" title="Địa bàn tác chiến được giao quản lý">
-            <ShieldAlert size={14} className="author-shield-icon" />
             <span className="author-jurisdiction-name">
               {activeOfficer.role === 'ADMIN' ? 'Toàn TP Đà Nẵng' : (activeOfficer.jurisdictionAreaName || 'Phường An Hải')}
             </span>
@@ -1533,16 +1543,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           <span className="author-view-label">
             {activeOfficer.role === 'ADMIN' ? 'Giám sát cứu nạn toàn thành phố' : 'Điều hành tác chiến SOS'}
           </span>
-
-          {/* Integrated live status (immediately next to sector, not floating in the middle!) */}
-          <div className={`author-live-chip ${localUrgentCount > 0 ? 'urgent' : 'normal'}`}>
-            <span className="author-chip-dot" />
-            <span>
-              {localUrgentCount > 0
-                ? `${localUrgentCount} sự cố khẩn cấp`
-                : 'Trực ban 24/7'}
-            </span>
-          </div>
         </div>
 
         {/* Right: Actions, Officer Profile, Logout */}
