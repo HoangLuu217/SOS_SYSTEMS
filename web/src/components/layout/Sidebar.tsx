@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { User } from '@/types/auth';
 import {
@@ -45,6 +45,8 @@ import {
 } from 'lucide-react';
 
 import './Sidebar.css';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /* ==========================================================================
    TYPE DEFINITIONS & MENU CONFIGURATIONS
@@ -139,10 +141,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const flyoutTimerRef = useRef<any>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const resourcesItemRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const userFooterRef = useRef<HTMLDivElement | null>(null);
   const isFetchingCountsRef = useRef(false);
+
+  const [activePillRect, setActivePillRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [pillReady, setPillReady] = useState(false);
+
+  useIsomorphicLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav || hiddenRail || typeof window === 'undefined') {
+      setActivePillRect(null);
+      return;
+    }
+
+    const measure = () => {
+      const target = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!target) {
+        setActivePillRect(null);
+        return;
+      }
+      const navBox = nav.getBoundingClientRect();
+      const elBox = target.getBoundingClientRect();
+      if (elBox.width === 0 || elBox.height === 0) return;
+      setActivePillRect({
+        top: elBox.top - navBox.top - nav.clientTop + nav.scrollTop,
+        left: elBox.left - navBox.left - nav.clientLeft + nav.scrollLeft,
+        width: elBox.width,
+        height: elBox.height,
+      });
+    };
+
+    measure();
+    const raf = window.requestAnimationFrame(() => {
+      measure();
+      setPillReady(true);
+    });
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(nav);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
+  }, [activeKey, collapsed, hiddenRail, isResourcesExpanded, currentResourceSubTab, isAdmin]);
 
   // Close sidebar popovers on outside click / Escape
   useEffect(() => {
@@ -637,10 +686,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? 'Quản trị viên'
     : (managedArea || 'TP. Đà Nẵng').split(',')[0].trim();
 
+  const isVehiclesSubActive = activeKey === 'resources' && currentResourceSubTab === 'VEHICLES';
+  const isSuppliesSubActive =
+    activeKey === 'resources' &&
+    (currentResourceSubTab === 'SUPPLIES' || currentResourceSubTab === 'CONSUMABLES');
+
   return (
     <aside
-      className={`ch-sidebar sos-sidebar ${collapsed ? 'collapsed' : ''} ${hiddenRail ? 'hidden-rail' : ''
-        }`}
+      className={`ch-sidebar sos-sidebar ${collapsed ? 'collapsed' : ''} ${
+        hiddenRail ? 'hidden-rail' : ''
+      }`}
       aria-label="Thanh điều hướng dọc Cứu Hộ Cứu Nạn"
     >
       {/* 1. CHRONICLE WORKSPACE SWITCHER HEADER */}
@@ -716,7 +771,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* 2. CHRONICLE CALM NAVMAIN */}
-      <nav className="ch-sidebar-nav sos-sidebar-nav" role="navigation">
+      <nav ref={navRef} className="ch-sidebar-nav sos-sidebar-nav" role="navigation">
+        {activePillRect && !hiddenRail && (
+          <span
+            aria-hidden="true"
+            className={`ch-nav-active-pill ${pillReady ? 'is-ready' : ''}`}
+            style={{
+              transform: `translate3d(${activePillRect.left}px, ${activePillRect.top}px, 0)`,
+              width: activePillRect.width,
+              height: activePillRect.height,
+            }}
+          />
+        )}
         {currentGroups.map((group, groupIdx) => (
           <div key={groupIdx} className="ch-nav-group">
             {!collapsed && group.title && (
@@ -726,11 +792,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {group.items.map((item) => {
                 const active = isItemActive(item.key);
                 const isResources = item.key === 'resources';
+                const hasActiveSubitem = isResources && active && !collapsed && isResourcesExpanded;
+                const isDirectActive = active && !hasActiveSubitem;
                 return (
                   <React.Fragment key={item.key}>
                     <div
                       ref={isResources ? resourcesItemRef : undefined}
-                      className={`ch-nav-item ${active ? 'active' : ''}`}
+                      aria-current={isDirectActive ? 'page' : undefined}
+                      className={`ch-nav-item ${isDirectActive ? 'active' : ''} ${
+                        hasActiveSubitem ? 'has-active-child' : ''
+                      }`}
                       onMouseEnter={isResources && collapsed ? handleResourcesMouseEnter : undefined}
                       onMouseLeave={isResources && collapsed ? handleResourcesMouseLeave : undefined}
                       onClick={() => handleItemClick(item.key)}
@@ -739,6 +810,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
                           handleItemClick(item.key);
                         }
                       }}
@@ -778,24 +850,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="ch-nav-submenu">
                         <button
                           type="button"
-                          className={`ch-nav-subitem ${activeKey === 'resources' && currentResourceSubTab === 'VEHICLES'
-                            ? 'active'
-                            : ''
-                            }`}
+                          aria-current={isVehiclesSubActive ? 'page' : undefined}
+                          className={`ch-nav-subitem ${isVehiclesSubActive ? 'active' : ''}`}
                           onClick={() => handleSelectResourceSubTab('VEHICLES')}
                         >
-                          <Truck size={14} />
+                          <Truck size={14} className="ch-nav-subicon" />
                           <span>Phương tiện</span>
                         </button>
                         <button
                           type="button"
-                          className={`ch-nav-subitem ${activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES'
-                            ? 'active'
-                            : ''
-                            }`}
+                          aria-current={isSuppliesSubActive ? 'page' : undefined}
+                          className={`ch-nav-subitem ${isSuppliesSubActive ? 'active' : ''}`}
                           onClick={() => handleSelectResourceSubTab('SUPPLIES')}
                         >
-                          <Package size={14} />
+                          <Package size={14} className="ch-nav-subicon" />
                           <span>Vật tư cứu trợ</span>
                         </button>
                       </div>
@@ -808,7 +876,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* 3. CHRONICLE NAVUSER FOOTER (MATCHING overview.webp BOTTOM USER ROW) */}
+      {/* 3. CHRONICLE NAVUSER FOOTER */}
       <div className="ch-sidebar-footer" ref={userFooterRef}>
         <button
           type="button"
@@ -925,8 +993,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="sos-nav-flyout-menu">
               <div
-                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'VEHICLES' ? 'active' : ''
-                  }`}
+                className={`sos-nav-flyout-item ${isVehiclesSubActive ? 'active' : ''}`}
                 onClick={() => handleSelectResourceSubTab('VEHICLES')}
                 role="button"
                 tabIndex={0}
@@ -939,8 +1006,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               <div
-                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES' ? 'active' : ''
-                  }`}
+                className={`sos-nav-flyout-item ${isSuppliesSubActive ? 'active' : ''}`}
                 onClick={() => handleSelectResourceSubTab('SUPPLIES')}
                 role="button"
                 tabIndex={0}

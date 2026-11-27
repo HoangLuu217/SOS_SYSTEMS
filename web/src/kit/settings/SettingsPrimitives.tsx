@@ -297,6 +297,7 @@ export function SaveBar({
   onDiscard,
   saveLabel = 'Lưu thay đổi',
   message = 'Bạn có thay đổi chưa lưu',
+  className,
 }: {
   dirty: boolean;
   saving: boolean;
@@ -304,6 +305,7 @@ export function SaveBar({
   onDiscard: () => void;
   saveLabel?: string;
   message?: string;
+  className?: string;
 }) {
   if (!dirty) return null;
 
@@ -311,16 +313,19 @@ export function SaveBar({
     <div
       role="region"
       aria-label="Thay đổi chưa lưu"
-      className="sticky bottom-4 z-20 mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-xl border border-border bg-popover p-2 ps-4 text-popover-foreground shadow-lg"
+      className={cn(
+        'ch-savebar-pop sticky bottom-4 z-20 mx-auto flex w-full max-w-2xl items-center justify-between gap-3 rounded-xl border border-border bg-popover p-2 ps-4 text-popover-foreground shadow-lg',
+        className
+      )}
     >
       <p role="status" className="text-sm font-medium text-foreground">
         {message}
       </p>
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onDiscard} disabled={saving}>
+        <Button type="button" variant="ghost" size="sm" onClick={onDiscard} disabled={saving}>
           Hủy thay đổi
         </Button>
-        <Button size="sm" onClick={onSave} disabled={saving}>
+        <Button type="button" size="sm" onClick={onSave} disabled={saving}>
           {saving && <Loader2 className="size-3.5 animate-spin" />}
           {saveLabel}
         </Button>

@@ -353,7 +353,7 @@ export const LoginPage = ({
     localStorage.removeItem('sos_access_token');
     localStorage.removeItem('sos_refresh_token');
     localStorage.removeItem('sos_active_portal');
-    window.history.replaceState(null, '', '/login');
+    window.history.replaceState(null, '', '/');
     setUser(null);
     if (!rememberPassword) {
       setAccount('');
@@ -605,7 +605,7 @@ export const LoginPage = ({
       if (onCloseResetMode) {
         onCloseResetMode();
       } else {
-        window.history.replaceState(null, '', '/login');
+        window.history.replaceState(null, '', '/');
       }
     };
 
@@ -1981,7 +1981,7 @@ export const LoginPage = ({
             <div className="grid md:grid-cols-2">
               {/* Cột trái: Dark Coastal Auth Panel */}
               <div
-                className="relative hidden flex-col justify-between overflow-hidden bg-auth-panel bg-cover bg-center p-8 text-auth-panel-foreground md:flex"
+                className="relative hidden flex-col justify-center overflow-hidden bg-auth-panel bg-cover bg-center p-8 text-auth-panel-foreground md:flex"
                 style={{ backgroundImage: `url('/assets/landing/coastal-storm.jpg')` }}
               >
                 <div className="absolute inset-0 bg-linear-to-b from-slate-950/75 via-slate-950/70 to-slate-950/92" />
@@ -1996,25 +1996,6 @@ export const LoginPage = ({
                   <p className="text-sm leading-relaxed text-slate-200/90">
                     Đăng nhập bằng tài khoản được cấp để vào bảng điều khiển theo phân quyền.
                   </p>
-                </div>
-
-                <div className="relative z-10 mt-8 flex flex-col gap-3">
-                  <div className="rounded-xl border border-white/15 bg-white/10 p-3.5 backdrop-blur-md">
-                    <strong className="block text-sm font-semibold text-white">
-                      Quản trị viên (ADMIN)
-                    </strong>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-200/85">
-                      Điều hành toàn thành phố, thời tiết, địa bàn &amp; thông báo khẩn
-                    </span>
-                  </div>
-                  <div className="rounded-xl border border-white/15 bg-white/10 p-3.5 backdrop-blur-md">
-                    <strong className="block text-sm font-semibold text-white">
-                      Chính quyền cơ sở (LOCAL_AUTHORITY)
-                    </strong>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-200/85">
-                      Điều phối SOS, đội cứu hộ, kho vật tư, trú ẩn &amp; điểm nguy hiểm
-                    </span>
-                  </div>
                 </div>
               </div>
 

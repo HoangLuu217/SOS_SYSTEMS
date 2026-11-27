@@ -48,6 +48,8 @@ import {
   ExternalLink,
   AlertTriangle,
 } from 'lucide-react';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import './SafetyCheckView.css';
 
 export interface SafetyCheckViewProps {
@@ -64,7 +66,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   );
 
   const [safetyChecks, setSafetyChecks] = useState<SafetyCheckItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [areas, setAreas] = useState<any[]>([]);
 
   // Filter & Search
@@ -1082,9 +1084,8 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--dm-text-muted)' }}>
-                    <RefreshCw size={28} className="fa-spin" style={{ margin: '0 auto 10px auto', color: 'var(--dm-blue-text)' }} />
-                    <div style={{ fontSize: '13.5px', fontWeight: 600 }}>Đang tải danh sách đợt kiểm tra an toàn...</div>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang tải danh sách đợt kiểm tra an toàn..." />
                   </td>
                 </tr>
               ) : totalItems === 0 ? (
@@ -1133,7 +1134,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         />
                       </td>
                       {/* 0. STT */}
-                      <td style={{ textAlign: 'center', width: '45px', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
+                      <td style={{ textAlign: 'center', width: '45px', color: 'var(--muted-foreground)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                         {startIndex + idx + 1}
                       </td>
 
@@ -1158,14 +1159,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                             <span>{disasterInfo.icon}</span>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontWeight: 700,
-                                color: 'var(--dm-blue-text)',
-                                fontSize: '13.5px',
-                                lineHeight: '1.4',
-                              }}
-                            >
+                            <div className="ch-tbl-primary">
                               {check.title}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
@@ -1174,9 +1168,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '4px',
-                                  padding: '1px 6px',
+                                  padding: '1px 7px',
                                   borderRadius: '4px',
-                                  fontSize: '11px',
+                                  fontSize: '11.5px',
                                   fontWeight: 600,
                                   backgroundColor: disasterInfo.bg,
                                   color: disasterInfo.color,
@@ -1192,63 +1186,45 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
                       {/* 2. Địa bàn & Phạm vi */}
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              background: 'var(--dm-surface-subtle)',
-                              color: 'var(--dm-text-body)',
-                              border: '1px solid var(--dm-border-strong)',
-                              width: 'fit-content',
-                            }}
-                          >
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0284c7' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span className="ch-tbl-body" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />
                             {check.areaName || 'Toàn hệ thống'}
                           </span>
-                          <span style={{ fontSize: '11px', color: 'var(--dm-text-muted)', paddingLeft: '4px' }}>
+                          <span className="ch-tbl-meta" style={{ paddingLeft: '12px' }}>
                             Phạm vi:{' '}
-                            <strong>
-                              {check.scope === 'WARD'
-                                ? 'Phường / Xã'
-                                : check.scope === 'PROVINCE'
-                                  ? 'Tỉnh / TP'
-                                  : 'Toàn hệ thống'}
-                            </strong>
+                            {check.scope === 'WARD'
+                              ? 'Phường / Xã'
+                              : check.scope === 'PROVINCE'
+                                ? 'Tỉnh / TP'
+                                : 'Toàn hệ thống'}
                           </span>
                         </div>
                       </td>
 
                       {/* 3. Thống kê phản hồi */}
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ fontSize: '12px' }}>
-                            <span style={{ color: 'var(--dm-text-strong)', fontWeight: 600 }}>
-                              <strong style={{ color: 'var(--dm-green-text)' }}>{safeCount}</strong> an toàn •{' '}
-                              <strong style={{ color: needHelpCount > 0 ? 'var(--dm-red-text)' : 'var(--dm-text-muted)' }}>
-                                {needHelpCount}
-                              </strong>{' '}
-                              cần trợ giúp
-                            </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div className="ch-tbl-body" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            <strong style={{ color: 'var(--dm-green-text)', fontWeight: 600 }}>{safeCount}</strong> an toàn ·{' '}
+                            <strong style={{ color: needHelpCount > 0 ? 'var(--dm-red-text)' : 'var(--muted-foreground)', fontWeight: 600 }}>
+                              {needHelpCount}
+                            </strong>{' '}
+                            cần trợ giúp
                           </div>
 
-                          <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}>
-                            Đã phản hồi: <strong>{totalResp}</strong> người dân
+                          <div className="ch-tbl-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            Đã phản hồi: {totalResp} người dân
                           </div>
                         </div>
                       </td>
 
                       {/* 4. Thời gian phát động */}
                       <td>
-                        <div style={{ fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
+                        <div className="ch-tbl-body" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {formatDateTime(check.createdAt)}
                         </div>
-                        <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
+                        <div className="ch-tbl-meta" style={{ marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
                           {check.endTime ? `Kết thúc: ${formatDateTime(check.endTime)}` : 'Đang duy trì'}
                         </div>
                       </td>
@@ -1421,87 +1397,119 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
       </div>
 
       {/* 6. SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT ĐỢT & BẢNG PHẢN HỒI CỦA NGƯỜI DÂN */}
-      {viewingCheck && (
-        <div className="sc-drawer-overlay" onClick={() => setViewingCheck(null)}>
-          <div className="sc-drawer-card" onClick={(e) => e.stopPropagation()}>
-            <div className="sc-drawer-header">
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                    {viewingCheck.title}
-                  </h3>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      padding: '2px 8px',
-                      borderRadius: '5px',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      background: viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
-                      color: viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
-                      border: `1px solid ${viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: viewingCheck.status === 'ACTIVE' ? '#16a34a' : '#94a3b8',
-                      }}
-                    />
-                    {viewingCheck.status === 'ACTIVE' ? 'Đang mở' : 'Đã kết thúc'}
-                  </span>
-                </div>
+      <DetailSheet
+        open={Boolean(viewingCheck)}
+        onOpenChange={(open) => {
+          if (!open) setViewingCheck(null);
+        }}
+        size="2xl"
+        icon={<ShieldCheck className="size-4" />}
+        title={viewingCheck?.title || ''}
+        badges={
+          viewingCheck && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 8px',
+                borderRadius: '5px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                background:
+                  viewingCheck.status === 'ACTIVE'
+                    ? 'var(--dm-green-bg)'
+                    : 'var(--dm-surface-subtle)',
+                color:
+                  viewingCheck.status === 'ACTIVE'
+                    ? 'var(--dm-green-text)'
+                    : 'var(--dm-text-muted)',
+                border: `1px solid ${viewingCheck.status === 'ACTIVE' ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: viewingCheck.status === 'ACTIVE' ? '#16a34a' : '#94a3b8',
+                }}
+              />
+              {viewingCheck.status === 'ACTIVE' ? 'Đang mở' : 'Đã kết thúc'}
+            </span>
+          )
+        }
+        description={
+          viewingCheck && (
+            <>
+              Địa bàn: <strong>{viewingCheck.areaName || 'Toàn hệ thống'}</strong> • Người phát động:{' '}
+              <strong>{viewingCheck.createdBy?.fullName || 'Hệ thống'}</strong> (
+              {viewingCheck.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'}) •{' '}
+              <strong>{formatDateTime(viewingCheck.createdAt)}</strong>
+            </>
+          )
+        }
+        headerActions={
+          viewingCheck && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ExcelExportButton
+                onClick={handleExportResponsesCsv}
+                loading={exportingSingleCheckId === viewingCheck._id}
+                label="Xuất Excel"
+                title="Xuất riêng biểu mẫu đợt kiểm tra này (1 tab Excel kèm đầy đủ người phản hồi)"
+              />
 
-                <p style={{ margin: '6px 0 0 0', fontSize: '12.5px', color: 'var(--dm-text-secondary)', lineHeight: 1.4 }}>
-                  Địa bàn: <strong>{viewingCheck.areaName || 'Toàn hệ thống'}</strong> • Người phát động:{' '}
-                  <strong>{viewingCheck.createdBy?.fullName || 'Hệ thống'}</strong> (
-                  {viewingCheck.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'}) • Thời gian:{' '}
-                  <strong>{formatDateTime(viewingCheck.createdAt)}</strong>
-                </p>
-
-                <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: 'var(--dm-text-muted)' }}>
-                  Tổng phản hồi: <strong>{viewingCheck.stats?.totalResponses || 0}</strong> | An toàn:{' '}
-                  <strong style={{ color: 'var(--dm-green-text)' }}>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
-                  <strong style={{ color: 'var(--dm-red-text)' }}>{viewingCheck.stats?.needHelpCount || 0}</strong>
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ExcelExportButton
-                  onClick={handleExportResponsesCsv}
-                  loading={exportingSingleCheckId === viewingCheck._id}
-                  label="Xuất Excel"
-                  title="Xuất riêng biểu mẫu đợt kiểm tra này (1 tab Excel kèm đầy đủ người phản hồi)"
-                />
-
-                {viewingCheck.status === 'ACTIVE' && (
-                  <button
-                    type="button"
-                    className="sos-btn-flat danger"
-                    onClick={() => handleCloseCheck(viewingCheck)}
-                    title="Đóng đợt kiểm tra an toàn"
-                  >
-                    <Square size={13} />
-                    <span>Đóng đợt</span>
-                  </button>
-                )}
-
+              {viewingCheck.status === 'ACTIVE' && (
                 <button
                   type="button"
-                  className="sc-modal-close"
-                  onClick={() => setViewingCheck(null)}
-                  title="Đóng bảng chi tiết"
+                  className="sos-btn-flat danger"
+                  onClick={() => handleCloseCheck(viewingCheck)}
+                  title="Đóng đợt kiểm tra an toàn"
                 >
-                  <X size={18} />
+                  <Square size={13} />
+                  <span>Đóng đợt</span>
                 </button>
-              </div>
+              )}
             </div>
-
-            <div className="sc-drawer-body">
+          )
+        }
+        headerExtra={
+          viewingCheck && (
+            <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-xs text-muted-foreground">
+              <span>
+                Tổng phản hồi: <strong className="text-foreground">{viewingCheck.stats?.totalResponses || 0}</strong>
+              </span>
+              <span>•</span>
+              <span>
+                An toàn:{' '}
+                <strong style={{ color: 'var(--dm-green-text)' }}>
+                  {viewingCheck.stats?.safeCount || 0}
+                </strong>
+              </span>
+              <span>•</span>
+              <span>
+                Cần cứu hộ:{' '}
+                <strong style={{ color: 'var(--dm-red-text)' }}>
+                  {viewingCheck.stats?.needHelpCount || 0}
+                </strong>
+              </span>
+            </div>
+          )
+        }
+        footer={
+          <div className="flex w-full justify-end">
+            <button
+              type="button"
+              className="sos-btn-flat"
+              onClick={() => setViewingCheck(null)}
+            >
+              Đóng lại
+            </button>
+          </div>
+        }
+      >
+        {viewingCheck && (
+          <div className="sc-drawer-body">
               {/* Thanh lọc phản hồi */}
               <div
                 style={{
@@ -1603,9 +1611,8 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     <tbody>
                       {loadingResponses ? (
                         <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
-                            <RefreshCw size={24} className="fa-spin" style={{ margin: '0 auto 8px auto', color: 'var(--dm-blue-text)' }} />
-                            <div>Đang tải phản hồi của người dân...</div>
+                          <td colSpan={8} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                            <SyncLogoLoader size="sm" message="Đang tải phản hồi của người dân..." />
                           </td>
                         </tr>
                       ) : totalResponseItems === 0 ? (
@@ -1621,18 +1628,18 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       ) : (
                         paginatedResponses.map((item, idx) => (
                           <tr key={item._id}>
-                            <td style={{ textAlign: 'center', color: 'var(--dm-text-muted)', fontWeight: 600 }}>
+                            <td className="ch-tbl-meta" style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                               {responseStartIndex + idx + 1}
                             </td>
 
                             <td>
-                              <div style={{ fontWeight: 700, color: 'var(--dm-text-strong)' }}>
+                              <div className="ch-tbl-primary">
                                 {item.userFullName || item.userId?.fullName || 'Người dân'}
                               </div>
                             </td>
 
                             <td>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
+                              <span className="ch-tbl-phone">
                                 {item.userPhone || item.userId?.phone || '—'}
                               </span>
                             </td>
@@ -1667,12 +1674,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                 <div style={{ marginTop: 4 }}>
                                   <span
                                     style={{
-                                      fontSize: '10.5px',
+                                      fontSize: '11px',
                                       backgroundColor: 'var(--dm-red-bg)',
                                       color: 'var(--dm-red-text)',
                                       padding: '2px 6px',
                                       borderRadius: 4,
-                                      fontWeight: 700,
+                                      fontWeight: 600,
                                       border: '1px solid var(--dm-red-border)',
                                     }}
                                   >
@@ -1682,29 +1689,28 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                               )}
                             </td>
 
-                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                            <td className="ch-tbl-body" style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                               {item.peopleCount || 1} người
                             </td>
 
                             <td>
-                              <div style={{ fontSize: '12.5px', color: 'var(--dm-text-secondary)', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                              <div className="ch-tbl-body" style={{ wordBreak: 'break-word' }}>
                                 {item.message || (item.status === 'SAFE' ? 'Đã an toàn' : 'Cần lực lượng hỗ trợ')}
                               </div>
                             </td>
 
                             <td>
                               {item.location?.coordinates ? (
-                                <div style={{ fontSize: '12px' }}>
+                                <div>
                                   <a
                                     href={`https://www.google.com/maps?q=${item.location.coordinates[1]},${item.location.coordinates[0]}`}
                                     target="_blank"
                                     rel="noreferrer"
+                                    className="ch-tbl-link"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       gap: 4,
-                                      color: 'var(--dm-blue-text)',
-                                      fontWeight: 600,
                                       textDecoration: 'none',
                                     }}
                                     title="Mở Google Maps dẫn đường"
@@ -1717,17 +1723,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                     <ExternalLink size={11} />
                                   </a>
                                   {item.address && (
-                                    <div style={{ color: 'var(--dm-text-secondary)', fontSize: '11.5px', marginTop: 2, lineHeight: 1.35 }}>
+                                    <div className="ch-tbl-meta" style={{ marginTop: 2 }}>
                                       {item.address}
                                     </div>
                                   )}
                                 </div>
                               ) : (
-                                <span style={{ color: 'var(--dm-text-muted)', fontSize: '12px' }}>Chưa có GPS</span>
+                                <span className="ch-tbl-meta">Chưa có GPS</span>
                               )}
                             </td>
 
-                            <td style={{ fontSize: '12px', color: 'var(--dm-text-muted)', whiteSpace: 'nowrap' }}>
+                            <td className="ch-tbl-meta" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                               {formatDateTime(item.respondedAt)}
                             </td>
                           </tr>
@@ -1825,20 +1831,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="sc-drawer-footer">
-              <button
-                type="button"
-                className="sos-btn-flat"
-                onClick={() => setViewingCheck(null)}
-              >
-                Đóng lại
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </DetailSheet>
 
       {/* 7. MODAL TẠO ĐỢT KIỂM TRA AN TOÀN MỚI */}
       {isCreateOpen && (

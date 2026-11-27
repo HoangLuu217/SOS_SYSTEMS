@@ -55,6 +55,8 @@ import { AreaPreviewMap, getAreaCoordinates } from './AreaPreviewMap';
 import { toast } from '@/components/common/toast';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import '@/features/sos/SosRequestsView.css';
 import './AuthoritiesView.css';
 
@@ -457,7 +459,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
   const [authorities, setAuthorities] = useState<any[]>([]);
   const [, setOrgs] = useState<AuthorityOrgItem[]>([]);
   const [, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
   const [vietnamProvinces, setVietnamProvinces] = useState<any[]>(VIETNAM_34_PROVINCES_STANDARD);
@@ -518,6 +520,11 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     position: '',
     password: '',
   });
+  const [editAuthInitial, setEditAuthInitial] = useState<typeof editAuthForm | null>(null);
+  const isDetailAuthDirty = useMemo(() => {
+    if (!detailAuthority || !isDetailEditing || !editAuthInitial) return false;
+    return JSON.stringify(editAuthForm) !== JSON.stringify(editAuthInitial);
+  }, [detailAuthority, isDetailEditing, editAuthForm, editAuthInitial]);
   const [detailMapState, setDetailMapState] = useState<{
     mapUrl: string;
     latitude: number | null;
@@ -697,12 +704,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     const lat = hasPinned ? a.authority.latitude : parsedFromUrl ? parsedFromUrl.lat : fallback.lat;
     const lng = hasPinned ? a.authority.longitude : parsedFromUrl ? parsedFromUrl.lng : fallback.lng;
 
-    setDetailAuthority(a);
-    setDetailTab('overview');
-    setIsDetailEditing(startEditing);
-    setEditAuthError(null);
-    setEditAuthSuccess(null);
-    setEditAuthForm({
+    const nextEditForm = {
       fullName: a.fullName || '',
       phone: a.phone || '',
       email: a.email || '',
@@ -712,7 +714,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       department: officerDept,
       position: a.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến',
       password: '',
-    });
+    };
+    setDetailAuthority(a);
+    setDetailTab('overview');
+    setIsDetailEditing(startEditing);
+    setEditAuthError(null);
+    setEditAuthSuccess(null);
+    setEditAuthForm(nextEditForm);
+    setEditAuthInitial(nextEditForm);
     setDetailMapState({
       mapUrl: a.authority?.mapUrl || (hasPinned || parsedFromUrl ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
       latitude: lat,
@@ -721,9 +730,13 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     });
   };
 
-  const handleEditAuthoritySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEditAuthoritySubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!detailAuthority) return;
+    if (!editAuthForm.fullName.trim() || !editAuthForm.phone.trim() || !editAuthForm.email.trim()) {
+      setEditAuthError('Vui lòng nhập đầy đủ Họ và tên, Số điện thoại và Email công vụ.');
+      return;
+    }
     setEditAuthSubmitting(true);
     setEditAuthError(null);
     setEditAuthSuccess(null);
@@ -761,7 +774,19 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             ...payload.authority,
           },
         };
+        const savedSnapshot = {
+          ...editAuthForm,
+          fullName: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          areaName: finalAreaName,
+          department: payload.authority.department,
+          position: payload.authority.position,
+          password: '',
+        };
         setDetailAuthority(updatedOfficer);
+        setEditAuthForm(savedSnapshot);
+        setEditAuthInitial(savedSnapshot);
         setIsDetailEditing(false);
         setEditAuthSuccess(`Đã cập nhật thông tin cho cán bộ ${payload.fullName}!`);
         toast.success(`Đã cập nhật thông tin cho cán bộ ${payload.fullName}`, 'Cập nhật thành công');
@@ -1054,11 +1079,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-                      <Loader2 size={16} className="executive-spin" />
-                      <span>Đang tải danh sách cán bộ...</span>
-                    </div>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang tải danh sách cán bộ..." />
                   </td>
                 </tr>
               ) : filteredAuthorities.length === 0 ? (
@@ -1178,71 +1200,121 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
         </div>
       </div>
 
-      {/* SLIDE-OVER DRAWER: XEM CHI TIẾT & CHỈNH SỬA CÁN BỘ + BẢN ĐỒ (Chuẩn design.md) */}
-      {detailAuthority &&
-        createPortal(
-          <div className="auth-drawer-backdrop" onClick={() => setDetailAuthority(null)}>
-            <div className="auth-drawer-panel" onClick={(e) => e.stopPropagation()}>
-              {/* Header */}
-              <div className="auth-drawer-header">
-                <div className="auth-drawer-header-top">
-                  <div className="auth-drawer-title-group">
-                    <div className="auth-drawer-icon">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="auth-drawer-title-row">
-                        <h3 className="auth-drawer-title">{detailAuthority.fullName}</h3>
-                        <span
-                          className={`officer-status-badge ${detailAuthority.status === 'ACTIVE' ? 'active' : 'inactive'}`}
-                          style={{ cursor: 'default' }}
-                        >
-                          <span className="officer-status-dot" />
-                          <span>{detailAuthority.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm khóa'}</span>
-                        </span>
-                      </div>
-                      <p className="auth-drawer-subtitle">
-                        {detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'} •{' '}
-                        {detailAuthority.authority?.areaName || 'Chưa gán địa bàn'}
-                      </p>
-                    </div>
-                  </div>
+      {/* SLIDE-OVER DRAWER: XEM CHI TIẾT & CHỈNH SỬA CÁN BỘ + BẢN ĐỒ (Chronicle DetailSheet) */}
+      <DetailSheet
+        open={Boolean(detailAuthority)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDetailAuthority(null);
+            setIsDetailEditing(false);
+          }
+        }}
+        size="xl"
+        icon={<ShieldCheck className="size-4" />}
+        title={detailAuthority?.fullName || ''}
+        saveBar={
+          detailAuthority && detailTab === 'overview' && isDetailEditing
+            ? {
+                dirty: isDetailAuthDirty,
+                saving: editAuthSubmitting,
+                onSave: () => handleEditAuthoritySubmit(),
+                onDiscard: () => {
+                  if (editAuthInitial) setEditAuthForm(editAuthInitial);
+                  setEditAuthError(null);
+                },
+                saveLabel: 'Lưu cán bộ',
+              }
+            : undefined
+        }
+        badges={
+          detailAuthority && (
+            <span
+              className={`officer-status-badge ${detailAuthority.status === 'ACTIVE' ? 'active' : 'inactive'}`}
+              style={{ cursor: 'default' }}
+            >
+              <span className="officer-status-dot" />
+              <span>{detailAuthority.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm khóa'}</span>
+            </span>
+          )
+        }
+        description={
+          detailAuthority
+            ? `${detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'} • ${detailAuthority.authority?.areaName || 'Chưa gán địa bàn'}`
+            : undefined
+        }
+        headerExtra={
+          detailAuthority && (
+            <div className="auth-drawer-tabs" style={{ padding: '0 20px', margin: 0 }}>
+              <button
+                type="button"
+                className={`auth-drawer-tab ${detailTab === 'overview' ? 'active' : ''}`}
+                onClick={() => setDetailTab('overview')}
+              >
+                <Info size={14} />
+                <span>Tổng quan</span>
+              </button>
+              <button
+                type="button"
+                className={`auth-drawer-tab ${detailTab === 'map' ? 'active' : ''}`}
+                onClick={() => {
+                  setDetailTab('map');
+                  setIsDetailEditing(false);
+                }}
+              >
+                <MapPin size={14} />
+                <span>Bản đồ &amp; Vị trí Ủy ban</span>
+              </button>
+            </div>
+          )
+        }
+        footer={
+          detailAuthority && (
+            <>
+              <span className="auth-drawer-footer-meta">
+                Mã cán bộ: {detailAuthority._id}
+              </span>
+              <div className="auth-drawer-footer-actions">
+                <button
+                  type="button"
+                  className={
+                    detailAuthority.status === 'ACTIVE'
+                      ? 'sos-btn sos-btn--outline-danger sos-btn--md'
+                      : 'sos-btn sos-btn--soft-success sos-btn--md'
+                  }
+                  onClick={async () => {
+                    await handleQuickToggleAuthStatus(detailAuthority);
+                    setDetailAuthority((prev: any) =>
+                      prev ? { ...prev, status: prev.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : null
+                    );
+                  }}
+                >
+                  {detailAuthority.status === 'ACTIVE' ? <Lock size={14} /> : <Unlock size={14} />}
+                  <span>{detailAuthority.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa'}</span>
+                </button>
+                {detailTab === 'overview' && !isDetailEditing && (
                   <button
                     type="button"
-                    className="auth-drawer-close-btn"
-                    onClick={() => setDetailAuthority(null)}
-                    aria-label="Đóng chi tiết"
+                    className="sos-btn sos-btn--outline sos-btn--md"
+                    onClick={() => setIsDetailEditing(true)}
                   >
-                    <X size={18} />
+                    <Edit size={14} />
+                    <span>Chỉnh sửa</span>
                   </button>
-                </div>
-
-                {/* Tabs */}
-                <div className="auth-drawer-tabs">
-                  <button
-                    type="button"
-                    className={`auth-drawer-tab ${detailTab === 'overview' ? 'active' : ''}`}
-                    onClick={() => setDetailTab('overview')}
-                  >
-                    <Info size={14} />
-                    <span>Tổng quan</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`auth-drawer-tab ${detailTab === 'map' ? 'active' : ''}`}
-                    onClick={() => {
-                      setDetailTab('map');
-                      setIsDetailEditing(false);
-                    }}
-                  >
-                    <MapPin size={14} />
-                    <span>Bản đồ &amp; Vị trí Ủy ban</span>
-                  </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  className="sos-btn sos-btn--primary sos-btn--md"
+                  onClick={() => setDetailAuthority(null)}
+                >
+                  <span>Đóng</span>
+                </button>
               </div>
-
-              {/* Body */}
-              <div className="auth-drawer-body">
+            </>
+          )
+        }
+      >
+        {detailAuthority && (
+          <div className="auth-drawer-body">
                 {detailTab === 'overview' ? (
                   <>
                     {/* Top 4 Summary Cards */}
@@ -1326,7 +1398,11 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             type="button"
                             className="auth-drawer-inline-edit-btn"
                             style={{ color: 'var(--dm-text-muted)' }}
-                            onClick={() => setIsDetailEditing(false)}
+                            onClick={() => {
+                              if (editAuthInitial) setEditAuthForm(editAuthInitial);
+                              setEditAuthError(null);
+                              setIsDetailEditing(false);
+                            }}
                           >
                             <X size={13} />
                             <span>Hủy chỉnh sửa</span>
@@ -1567,33 +1643,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                               </button>
                             </div>
                           </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                            <button
-                              type="button"
-                              className="sos-btn sos-btn--outline sos-btn--md"
-                              onClick={() => setIsDetailEditing(false)}
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={editAuthSubmitting}
-                              className="sos-btn sos-btn--primary sos-btn--md"
-                            >
-                              {editAuthSubmitting ? (
-                                <>
-                                  <Loader2 size={15} className="animate-spin" />
-                                  <span>Đang lưu...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Check size={15} />
-                                  <span>Lưu thay đổi</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
                         </form>
                       )}
                     </div>
@@ -1623,53 +1672,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Footer */}
-              <div className="auth-drawer-footer">
-                <span className="auth-drawer-footer-meta">
-                  Mã cán bộ: {detailAuthority._id}
-                </span>
-                <div className="auth-drawer-footer-actions">
-                  <button
-                    type="button"
-                    className={
-                      detailAuthority.status === 'ACTIVE'
-                        ? 'sos-btn sos-btn--outline-danger sos-btn--md'
-                        : 'sos-btn sos-btn--soft-success sos-btn--md'
-                    }
-                    onClick={async () => {
-                      await handleQuickToggleAuthStatus(detailAuthority);
-                      setDetailAuthority((prev: any) =>
-                        prev ? { ...prev, status: prev.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : null
-                      );
-                    }}
-                  >
-                    {detailAuthority.status === 'ACTIVE' ? <Lock size={14} /> : <Unlock size={14} />}
-                    <span>{detailAuthority.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa'}</span>
-                  </button>
-                  {detailTab === 'overview' && !isDetailEditing && (
-                    <button
-                      type="button"
-                      className="sos-btn sos-btn--outline sos-btn--md"
-                      onClick={() => setIsDetailEditing(true)}
-                    >
-                      <Edit size={14} />
-                      <span>Chỉnh sửa</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="sos-btn sos-btn--primary sos-btn--md"
-                    onClick={() => setDetailAuthority(null)}
-                  >
-                    <span>Đóng</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
         )}
+      </DetailSheet>
 
       {/* MODAL: TẠO TÀI KHOẢN CÁN BỘ ĐỊA PHƯƠNG */}
       {showCreateAuthModal && (

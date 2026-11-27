@@ -20,6 +20,8 @@ import {
 } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import { exportWeatherArticlesExcel } from './exportWeatherExcel';
 import {
@@ -168,6 +170,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [editingItem, setEditingItem] = useState<WeatherArticleItem | null>(null);
   const [detailItem, setDetailItem] = useState<WeatherArticleItem | null>(null);
+  const [isDetailEditing, setIsDetailEditing] = useState<boolean>(false);
+  const [editFormInitial, setEditFormInitial] = useState<CreateWeatherPayload | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [runningWorkflow, setRunningWorkflow] = useState<boolean>(false);
   const [exportingWeather, setExportingWeather] = useState<boolean>(false);
@@ -375,8 +379,30 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     [todayDateMax]
   );
 
+  const buildWeatherEditSnapshot = (item: WeatherArticleItem): CreateWeatherPayload => ({
+    title: item.title,
+    content: item.content,
+    summary: item.summary || '',
+    category: item.category || 'mua_lu',
+    score:
+      typeof item.relevance_score === 'number' && item.relevance_score > 0
+        ? item.relevance_score
+        : typeof item.score === 'number' && item.score > 0
+          ? item.score
+          : item.relevance_score ?? item.score ?? 80,
+    area: item.area || '',
+    imageUrl: item.imageUrl || item.image_url || '',
+    articleUrl: item.articleUrl || item.source_url || '',
+    articleTitle: item.articleTitle || item.source_name || '',
+    sourceName: item.sourceName || item.source_name || '',
+    publishedAt: toDateInputValue(item.published_at || item.publishedAt),
+    status: item.status || 'ACTIVE',
+  });
+
   const handleOpenCreateModal = () => {
     setEditingItem(null);
+    setIsDetailEditing(false);
+    setEditFormInitial(null);
     setFormValues({
       title: '',
       content: '',
@@ -395,31 +421,22 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   };
 
   const handleOpenEditModal = (item: WeatherArticleItem) => {
+    const snapshot = buildWeatherEditSnapshot(item);
+    setDetailItem(item);
     setEditingItem(item);
-    setFormValues({
-      title: item.title,
-      content: item.content,
-      summary: item.summary || '',
-      category: item.category || 'mua_lu',
-      score:
-        typeof item.relevance_score === 'number' && item.relevance_score > 0
-          ? item.relevance_score
-          : typeof item.score === 'number' && item.score > 0
-            ? item.score
-            : item.relevance_score ?? item.score ?? 80,
-      area: item.area || '',
-      imageUrl: item.imageUrl || item.image_url || '',
-      articleUrl: item.articleUrl || item.source_url || '',
-      articleTitle: item.articleTitle || item.source_name || '',
-      sourceName: item.sourceName || item.source_name || '',
-      publishedAt: toDateInputValue(item.published_at || item.publishedAt),
-      status: item.status || 'ACTIVE',
-    });
-    setIsFormOpen(true);
+    setFormValues(snapshot);
+    setEditFormInitial(snapshot);
+    setIsDetailEditing(true);
+    setIsFormOpen(false);
   };
 
-  const handleSubmitForm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const isWeatherEditDirty = useMemo(() => {
+    if (!detailItem || !isDetailEditing || !editFormInitial) return false;
+    return JSON.stringify(formValues) !== JSON.stringify(editFormInitial);
+  }, [detailItem, isDetailEditing, formValues, editFormInitial]);
+
+  const handleSubmitForm = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!formValues.title.trim()) {
       toast.warning('Vui lòng nhập tiêu đề bản tin');
       return;
@@ -437,12 +454,36 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       setSubmitting(true);
       if (editingItem) {
         await updateWeatherArticleApi(editingItem._id, formValues);
+        const updatedDetail: WeatherArticleItem = {
+          ...editingItem,
+          title: formValues.title,
+          content: formValues.content,
+          summary: formValues.summary,
+          category: formValues.category as any,
+          score: formValues.score,
+          relevance_score: formValues.score,
+          area: formValues.area,
+          imageUrl: formValues.imageUrl,
+          image_url: formValues.imageUrl,
+          articleUrl: formValues.articleUrl,
+          source_url: formValues.articleUrl,
+          articleTitle: formValues.articleTitle,
+          sourceName: formValues.sourceName,
+          source_name: formValues.sourceName,
+          publishedAt: formValues.publishedAt || undefined,
+          published_at: formValues.publishedAt || undefined,
+          status: (formValues.status as any) || editingItem.status,
+        };
+        setDetailItem(updatedDetail);
+        setEditingItem(null);
+        setEditFormInitial(null);
+        setIsDetailEditing(false);
         toast.success('Cập nhật bản tin thời tiết thành công!');
       } else {
         await createWeatherArticleApi(formValues);
         toast.success('Khởi tạo bản tin thời tiết thành công!');
+        setIsFormOpen(false);
       }
-      setIsFormOpen(false);
       fetchArticles();
     } catch (err: any) {
       toast.error(err.message || 'Thao tác không thành công');
@@ -1056,8 +1097,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       {/* 5. Main Content Area: Table View or Grid View */}
       {loading && articles.length === 0 ? (
         <div className="weather-empty-state">
-          <RefreshCw size={36} className="animate-spin text-blue" />
-          <p>Đang tải dữ liệu bản tin thời tiết từ hệ thống...</p>
+          <SyncLogoLoader size="md" message="Đang tải dữ liệu bản tin thời tiết từ hệ thống..." />
         </div>
       ) : articles.length === 0 ? (
         <div className="weather-empty-state">
@@ -1385,31 +1425,412 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
       )}
 
-      {/* 7. Modal: KIỂM DUYỆT & CHI TIẾT BẢN TIN (Admin Review Detail Desk - Right Drawer) */}
-      {detailItem && (
-        <div className="weather-modal-backdrop weather-drawer-backdrop" onClick={() => setDetailItem(null)}>
-          <div
-            className="weather-modal weather-modal-detail"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="weather-modal-header">
-              <div className="weather-modal-header-title">
-                <ShieldAlert size={20} color="#0284c7" />
-                <h3>CHI TIẾT &amp; PHÊ DUYỆT BẢN TIN KHÍ TƯỢNG</h3>
+      {/* 7. Drawer: KIỂM DUYỆT & CHI TIẾT BẢN TIN (Chronicle DetailSheet) */}
+      <DetailSheet
+        open={Boolean(detailItem)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDetailItem(null);
+            setIsDetailEditing(false);
+            setEditingItem(null);
+            setEditFormInitial(null);
+          }
+        }}
+        size="xl"
+        icon={<ShieldAlert className="size-4" />}
+        title={isDetailEditing ? 'Chỉnh sửa bản tin khí tượng' : 'Chi tiết & phê duyệt bản tin khí tượng'}
+        badges={detailItem ? renderStatusBadge(detailItem.status) : undefined}
+        description={
+          detailItem
+            ? detailItem.area ||
+              (detailItem.regions && detailItem.regions.join(', ')) ||
+              'Toàn quốc'
+            : undefined
+        }
+        saveBar={
+          detailItem && isDetailEditing
+            ? {
+                dirty: isWeatherEditDirty,
+                saving: submitting,
+                onSave: () => handleSubmitForm(),
+                onDiscard: () => {
+                  if (editFormInitial) setFormValues(editFormInitial);
+                },
+                saveLabel: 'Lưu bản tin',
+              }
+            : undefined
+        }
+        footer={
+          detailItem && (
+            isDetailEditing ? (
+              <>
+                <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 500 }}>
+                  Thay đổi thông tin bên trên để bật thanh lưu thay đổi
+                </span>
+                <div className="weather-modal-footer-right">
+                  <button
+                    type="button"
+                    className="btn-secondary-weather"
+                    disabled={submitting}
+                    onClick={() => {
+                      if (editFormInitial) setFormValues(editFormInitial);
+                      setIsDetailEditing(false);
+                      setEditingItem(null);
+                    }}
+                  >
+                    Quay lại xem chi tiết
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary-weather"
+                    disabled={submitting}
+                    onClick={() => {
+                      setDetailItem(null);
+                      setIsDetailEditing(false);
+                      setEditingItem(null);
+                      setEditFormInitial(null);
+                    }}
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </>
+            ) : (
+            <>
+              <div className="weather-modal-footer-left">
+                {(detailItem.articleUrl || detailItem.source_url) && (
+                  <a
+                    href={detailItem.articleUrl || detailItem.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary-weather"
+                    title="Mở tab mới xem bài gốc trên trang báo điện tử"
+                  >
+                    <ExternalLink size={15} />
+                    Xem bài báo gốc
+                  </a>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {renderStatusBadge(detailItem.status)}
+
+              <div className="weather-modal-footer-right">
+                {canManage && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-secondary-weather"
+                      onClick={() => handleOpenEditModal(detailItem)}
+                      title="Chỉnh sửa câu từ, địa bàn, độ khẩn cấp"
+                    >
+                      <Edit2 size={15} />
+                      Chỉnh sửa
+                    </button>
+
+                    {detailItem.status === 'pending' ? (
+                      <>
+                        <button
+                          className="btn-reject-weather"
+                          onClick={() => handleArchive(detailItem)}
+                          title="Từ chối và chuyển bản tin vào lưu trữ"
+                        >
+                          <Trash2 size={15} />
+                          Từ chối / Lưu trữ
+                        </button>
+
+                        <button
+                          className="btn-approve-primary"
+                          onClick={() => handleApprove(detailItem)}
+                          title="Phê duyệt bản tin và phát hành lên ứng dụng di động ngay lập tức"
+                        >
+                          <CheckCircle2 size={16} />
+                          Duyệt &amp; Phát hành ngay
+                        </button>
+                      </>
+                    ) : detailItem.status === 'ARCHIVED' || detailItem.status === 'rejected' ? (
+                      <>
+                        <button
+                          className="btn-secondary-weather"
+                          onClick={() => handleRevertToPending(detailItem)}
+                          title="Thu hồi bản tin về trạng thái chờ duyệt"
+                        >
+                          <RotateCcw size={15} />
+                          Thu hồi
+                        </button>
+                        <button
+                          className="btn-reject-weather"
+                          onClick={() => handleDeletePermanent(detailItem)}
+                          title="Xóa vĩnh viễn khỏi CSDL ngay"
+                        >
+                          <Trash2 size={15} />
+                          Xóa vĩnh viễn
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="btn-secondary-weather"
+                          onClick={() => handleRevertToPending(detailItem)}
+                          title="Thu hồi bản tin về trạng thái chờ duyệt"
+                        >
+                          <RotateCcw size={15} />
+                          Thu hồi
+                        </button>
+                        <button
+                          className="btn-reject-weather"
+                          onClick={() => handleArchive(detailItem)}
+                          title="Lưu trữ bản tin này"
+                        >
+                          <Trash2 size={15} />
+                          Lưu trữ
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+
                 <button
-                  className="weather-modal-close"
-                  onClick={() => setDetailItem(null)}
-                  title="Đóng cửa sổ"
+                  type="button"
+                  className="btn-secondary-weather"
+                  onClick={() => {
+                    setDetailItem(null);
+                    setIsDetailEditing(false);
+                    setEditingItem(null);
+                    setEditFormInitial(null);
+                  }}
                 >
-                  <X size={20} />
+                  Đóng
                 </button>
               </div>
-            </div>
+            </>
+            )
+          )
+        }
+      >
+        {detailItem && (
+          isDetailEditing ? (
+            <form onSubmit={handleSubmitForm} className="weather-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="weather-form-group">
+                <label className="weather-form-label">
+                  Tiêu đề bản tin <span className="required">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={300}
+                  placeholder="VD: Cảnh báo mưa to diện rộng và ngập lụt cục bộ tại Đà Nẵng..."
+                  className="weather-form-input"
+                  value={formValues.title}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, title: e.target.value })
+                  }
+                />
+              </div>
 
-            <div className="weather-modal-body">
+              <div className="weather-form-row">
+                <div className="weather-form-group">
+                  <label className="weather-form-label">
+                    Phân loại hiện tượng <span className="required">*</span>
+                  </label>
+                  <select
+                    className="weather-form-select"
+                    value={formValues.category}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, category: e.target.value })
+                    }
+                  >
+                    <option value="mua_lu">Mưa lớn &amp; Ngập lụt</option>
+                    <option value="bao_ap_thap">Bão &amp; Áp thấp nhiệt đới</option>
+                    <option value="canh_bao">Cảnh báo thiên tai</option>
+                    <option value="du_bao">Dự báo thời tiết thường kỳ</option>
+                    <option value="nang_nong">Nắng nóng gay gắt</option>
+                    <option value="ret_dam">Rét đậm / Rét hại</option>
+                    <option value="khac">Hiện tượng khác</option>
+                  </select>
+                </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">
+                    Khu vực cảnh báo (Đà Nẵng) <span className="required">*</span>
+                  </label>
+                  {(() => {
+                    const daNangOptions = daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards;
+                    const currentAreaName = formValues.area || '';
+                    const hasMatchingName = daNangOptions.some(
+                      (a) => a.name.toLowerCase() === currentAreaName.trim().toLowerCase()
+                    );
+                    const areaOptions = [
+                      ...(currentAreaName.trim() && !hasMatchingName
+                        ? [{ value: currentAreaName, label: currentAreaName, keywords: currentAreaName }]
+                        : []),
+                      ...daNangOptions.map((area) => ({
+                        value: area.name,
+                        label: area.name,
+                        badgeText:
+                          area.type === 'PROVINCE'
+                            ? 'Toàn TP'
+                            : area.name.startsWith('Đặc khu')
+                              ? 'Đặc khu'
+                              : area.code || 'Phường/Xã',
+                        keywords: `${area.name} ${area.code || ''} ${area.type === 'PROVINCE' ? 'tat ca toan thanh pho da nang' : ''}`,
+                      })),
+                    ];
+                    return (
+                      <SearchableSelect
+                        className="weather-form-input"
+                        ariaLabel="Chọn khu vực cảnh báo Đà Nẵng"
+                        placeholder="Chọn khu vực cảnh báo..."
+                        searchPlaceholder="Tìm nhanh Phường / Xã tại Đà Nẵng..."
+                        value={currentAreaName}
+                        onChange={(val) => {
+                          const matched = daNangOptions.find(
+                            (a) => a.name.toLowerCase() === val.trim().toLowerCase()
+                          );
+                          setFormValues({
+                            ...formValues,
+                            area: val,
+                            areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
+                          });
+                        }}
+                        triggerStyle={{ width: '100%', background: 'var(--dm-surface)', color: 'var(--dm-text-strong)' }}
+                        options={areaOptions}
+                      />
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="weather-form-row weather-form-row-3">
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Độ khẩn cấp (0 - 100)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="weather-form-input"
+                    value={formValues.score}
+                    onChange={(e) =>
+                      setFormValues({
+                        ...formValues,
+                        score: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Trạng thái phát hành</label>
+                  <select
+                    className="weather-form-select"
+                    value={formValues.status}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, status: e.target.value })
+                    }
+                  >
+                    <option value="ACTIVE">ACTIVE (Kích hoạt ngay)</option>
+                    <option value="approved">Approved (Đã phê duyệt)</option>
+                    <option value="pending">Pending (Chờ duyệt)</option>
+                  </select>
+                </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Ngày đăng trên báo</label>
+                  <input
+                    type="date"
+                    max={todayDateMax}
+                    className="weather-form-input"
+                    style={
+                      isFuturePublishedDate(formValues.publishedAt)
+                        ? { borderColor: '#dc2626', background: 'var(--dm-red-bg)' }
+                        : undefined
+                    }
+                    value={formValues.publishedAt || ''}
+                    onChange={(e) => {
+                      const nextDate = e.target.value || null;
+                      if (nextDate && isFuturePublishedDate(nextDate)) {
+                        toast.warning('Không được chọn ngày đăng trong tương lai!');
+                      }
+                      setFormValues({ ...formValues, publishedAt: nextDate });
+                    }}
+                  />
+                  {isFuturePublishedDate(formValues.publishedAt) ? (
+                    <small style={{ color: 'var(--dm-red-text)', fontWeight: 600, fontSize: '11.5px' }}>
+                      Ngày đăng không được vượt quá hôm nay ({formatDate(todayDateMax)}).
+                    </small>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="weather-form-group">
+                <label className="weather-form-label">Tóm tắt ngắn (Summary)</label>
+                <input
+                  type="text"
+                  placeholder="Tóm tắt 1-2 câu ngắn để gửi thông báo đẩy nhanh cho người dân..."
+                  className="weather-form-input"
+                  value={formValues.summary}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, summary: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="weather-form-group">
+                <label className="weather-form-label">
+                  Nội dung chi tiết <span className="required">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={5}
+                  placeholder="Chi tiết dự báo lượng mưa, mức nước sông, thời gian cao điểm và các hướng dẫn an toàn cho người dân..."
+                  className="weather-form-textarea"
+                  value={formValues.content}
+                  onChange={(e) =>
+                    setFormValues({ ...formValues, content: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="weather-form-row weather-form-row-3">
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Nguồn cấp tin / Báo</label>
+                  <input
+                    type="text"
+                    placeholder="VD: Trung tâm DBKTTV Quốc gia..."
+                    className="weather-form-input"
+                    value={formValues.sourceName}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, sourceName: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">URL Ảnh minh họa</label>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/radar-map.jpg"
+                    className="weather-form-input"
+                    value={formValues.imageUrl}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, imageUrl: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Link bài viết gốc (nếu có)</label>
+                  <input
+                    type="url"
+                    placeholder="https://nchmf.gov.vn/kttv/..."
+                    className="weather-form-input"
+                    value={formValues.articleUrl}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, articleUrl: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </form>
+          ) : (
+          <div className="weather-modal-body">
               {/* Ảnh Hero lớn nếu có */}
               {(detailItem.imageUrl || detailItem.image_url) && (
                 <div className="weather-detail-hero">
@@ -1516,120 +1937,19 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 <h4>NỘI DUNG TOÀN VĂN BẢN TIN:</h4>
                 <div className="weather-detail-content">{detailItem.content}</div>
               </div>
-            </div>
-
-            {/* Modal Footer: Thanh hành động kiểm duyệt của Admin */}
-            <div className="weather-modal-footer-review">
-              <div className="weather-modal-footer-left">
-                {(detailItem.articleUrl || detailItem.source_url) && (
-                  <a
-                    href={detailItem.articleUrl || detailItem.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary-weather"
-                    title="Mở tab mới xem bài gốc trên trang báo điện tử"
-                  >
-                    <ExternalLink size={15} />
-                    Xem bài báo gốc
-                  </a>
-                )}
-              </div>
-
-              <div className="weather-modal-footer-right">
-                {canManage && (
-                  <>
-                    <button
-                      className="btn-secondary-weather"
-                      onClick={() => {
-                        const it = detailItem;
-                        setDetailItem(null);
-                        handleOpenEditModal(it);
-                      }}
-                      title="Chỉnh sửa câu từ, địa bàn, độ khẩn cấp"
-                    >
-                      <Edit2 size={15} />
-                      Chỉnh sửa
-                    </button>
-
-                    {detailItem.status === 'pending' ? (
-                      <>
-                        <button
-                          className="btn-reject-weather"
-                          onClick={() => handleArchive(detailItem)}
-                          title="Từ chối và chuyển bản tin vào lưu trữ"
-                        >
-                          <Trash2 size={15} />
-                          Từ chối / Lưu trữ
-                        </button>
-
-                        <button
-                          className="btn-approve-primary"
-                          onClick={() => handleApprove(detailItem)}
-                          title="Phê duyệt bản tin và phát hành lên ứng dụng di động ngay lập tức"
-                        >
-                          <CheckCircle2 size={16} />
-                          Duyệt &amp; Phát hành ngay
-                        </button>
-                      </>
-                    ) : detailItem.status === 'ARCHIVED' || detailItem.status === 'rejected' ? (
-                      <>
-                        <button
-                          className="btn-secondary-weather"
-                          onClick={() => handleRevertToPending(detailItem)}
-                          title="Thu hồi bản tin về trạng thái chờ duyệt"
-                        >
-                          <RotateCcw size={15} />
-                          Thu hồi
-                        </button>
-                        <button
-                          className="btn-reject-weather"
-                          onClick={() => handleDeletePermanent(detailItem)}
-                          title="Xóa vĩnh viễn khỏi CSDL ngay"
-                        >
-                          <Trash2 size={15} />
-                          Xóa vĩnh viễn
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="btn-secondary-weather"
-                          onClick={() => handleRevertToPending(detailItem)}
-                          title="Thu hồi bản tin về trạng thái chờ duyệt"
-                        >
-                          <RotateCcw size={15} />
-                          Thu hồi
-                        </button>
-                        <button
-                          className="btn-reject-weather"
-                          onClick={() => handleArchive(detailItem)}
-                          title="Lưu trữ bản tin này"
-                        >
-                          <Trash2 size={15} />
-                          Lưu trữ
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-
-                <button className="btn-secondary-weather" onClick={() => setDetailItem(null)}>
-                  Đóng
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+          )
+        )}
+      </DetailSheet>
 
-      {/* 8. Modal: Tạo / Chỉnh sửa bản tin */}
-      {isFormOpen && (
+      {/* 8. Modal: Tạo bản tin thủ công (chỉnh sửa đã chuyển trực tiếp vào DetailSheet) */}
+      {isFormOpen && !editingItem && (
         <div className="weather-modal-backdrop" onClick={() => setIsFormOpen(false)}>
           <div className="weather-modal weather-modal-compact" onClick={(e) => e.stopPropagation()}>
             <div className="weather-modal-header">
               <h3>
                 <CloudSun size={19} color="#0284c7" />
-                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO BẢN TIN THỜI TIẾT THỦ CÔNG'}
+                TẠO BẢN TIN THỜI TIẾT THỦ CÔNG
               </h3>
               <button
                 className="weather-modal-close"
@@ -1891,7 +2211,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       {broadcastModalItem && (
         <div
           className="weather-modal-backdrop"
-          style={{ zIndex: 1200 }}
+          style={{ zIndex: 10000 }}
           onClick={() => !broadcasting && setBroadcastModalItem(null)}
         >
           <div

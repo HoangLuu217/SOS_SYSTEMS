@@ -895,38 +895,37 @@ export const AdminMapHud = ({
             top: 16,
             left: 16,
             zIndex: 1000,
-            background: 'rgba(255, 255, 255, 0.46)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            border: '1px solid rgba(226, 232, 240, 0.65)',
-            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+            background: 'var(--card)',
+            border: '1px solid color-mix(in oklch, var(--foreground) 18%, var(--border))',
+            boxShadow: '0 4px 14px rgba(15, 23, 42, 0.16)',
             borderRadius: 10,
-            padding: '7px 12px',
+            padding: '8px 14px',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
             cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: 12.5,
-            color: 'rgba(15, 23, 42, 0.52)',
-            opacity: 0.72,
-            transition: 'opacity 0.15s ease, background 0.15s ease, color 0.15s ease',
+            fontWeight: 700,
+            fontSize: 13,
+            color: 'var(--foreground)',
+            opacity: 1,
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '1';
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.88)';
-            e.currentTarget.style.color = '#0f172a';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.borderColor = 'var(--primary)';
+            e.currentTarget.style.boxShadow = '0 6px 18px rgba(15, 23, 42, 0.22)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '0.72';
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.46)';
-            e.currentTarget.style.color = 'rgba(15, 23, 42, 0.52)';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.borderColor =
+              'color-mix(in oklch, var(--foreground) 18%, var(--border))';
+            e.currentTarget.style.boxShadow = '0 4px 14px rgba(15, 23, 42, 0.16)';
           }}
         >
           <span>
             {selectedWard ? `Giám sát — ${selectedWard.name}` : 'Giám sát SOS'} ({totalInArea})
           </span>
-          <ChevronRight size={14} style={{ opacity: 0.75 }} />
+          <ChevronRight size={15} strokeWidth={2.4} />
         </button>
       ) : (
         <div

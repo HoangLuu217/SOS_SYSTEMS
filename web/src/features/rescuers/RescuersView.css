@@ -2053,13 +2053,13 @@
   margin-left: 4px;
 }
 
-/* Đảm bảo toàn bộ Modal trong Quản lý Cứu hộ luôn nổi phía trước Drawer (z-index > 1050) */
+/* Đảm bảo toàn bộ Modal luôn nổi phía trước DetailSheet (z-index: 1400), vẫn cho phép modal con (10010-10050) và Global ConfirmModal (99999) nổi lên trên */
 .executive-modal-backdrop {
-  z-index: 999999 !important;
+  z-index: 10000;
 }
 
 .executive-modal-card {
-  z-index: 1000000 !important;
+  z-index: 10001;
 }
 
 .ra-clear-filter-btn {

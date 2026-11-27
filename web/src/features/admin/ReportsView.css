@@ -105,15 +105,15 @@
 }
 
 .rpt-excel-btn {
-  border-color: var(--dm-green-border);
-  background: var(--dm-green-bg);
-  color: var(--dm-green-text);
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
 }
 
 .rpt-excel-btn:hover:not(:disabled) {
-  background: var(--dm-green-bg);
-  border-color: var(--dm-green-border);
-  color: var(--dm-green-text);
+  background: var(--muted);
+  border-color: var(--border);
+  color: var(--foreground);
 }
 
 .rpt-action-btn:disabled {

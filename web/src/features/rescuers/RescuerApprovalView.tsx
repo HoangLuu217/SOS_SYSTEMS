@@ -36,6 +36,8 @@ import {
 import { exportTableToExcel } from '@/utils/tableExcelExport';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import { SKILL_LABELS, getApplicantInitials } from './rescuersConstants';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import './RescuerApprovalView.css';
 
 export interface RescuerApprovalViewProps {
@@ -138,7 +140,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
   // 2. States dữ liệu
   const [applicants, setApplicants] = useState<RescuerApplicant[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshSpin, setRefreshSpin] = useState(false);
   // Hook bộ lọc hành chính toàn quốc từ API
   const {
@@ -180,7 +182,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
   // 5. Drawer & Modals
   const [selectedApplicant, setSelectedApplicant] = useState<RescuerApplicant | null>(null);
-  const [isDrawerClosing, setIsDrawerClosing] = useState(false);
 
   // Modals hành động
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
@@ -197,21 +198,15 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
   // Mở drawer chi tiết
   const handleOpenDetail = (app: RescuerApplicant) => {
-    setIsDrawerClosing(false);
     setSelectedApplicant(app);
   };
 
   // Đóng drawer
   const handleCloseDetail = useCallback(() => {
-    if (isDrawerClosing) return;
-    setIsDrawerClosing(true);
-    setTimeout(() => {
-      setSelectedApplicant(null);
-      setIsDrawerClosing(false);
-    }, 200);
-  }, [isDrawerClosing]);
+    setSelectedApplicant(null);
+  }, []);
 
-  // Phím Esc để đóng drawer & modal
+  // Phím Esc để đóng các modal con trước khi đóng drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -225,7 +220,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
           setIsRejectModalOpen(false);
         } else if (isSupplementModalOpen) {
           setIsSupplementModalOpen(false);
-        } else if (selectedApplicant && !isDrawerClosing) {
+        } else if (selectedApplicant) {
           handleCloseDetail();
         }
       }
@@ -239,7 +234,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     isRejectModalOpen,
     isSupplementModalOpen,
     selectedApplicant,
-    isDrawerClosing,
     handleCloseDetail,
   ]);
 
@@ -1024,13 +1018,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         {/* 4. BẢNG DỮ LIỆU */}
         <div className="ra-table-wrap">
           {loading ? (
-            <div style={{ padding: '20px 0' }}>
-              <div className="ra-skeleton-row" />
-              <div className="ra-skeleton-row" />
-              <div className="ra-skeleton-row" />
-              <div className="ra-skeleton-row" />
-              <div className="ra-skeleton-row" />
-            </div>
+            <SyncLogoLoader size="md" message="Đang tải danh sách hồ sơ cứu hộ viên..." />
           ) : paginatedApplicants.length === 0 ? (
             <div className="ra-state-container">
               {stats.pending === 0 && statusFilter === 'PENDING' ? (
@@ -1074,13 +1062,13 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       onChange={appSelection.toggleSelectVisible}
                     />
                   </th>
-                  <th style={{ width: '23%' }}>ỨNG VIÊN</th>
-                  <th style={{ width: '15%' }}>ĐỊNH DANH</th>
-                  <th style={{ width: '18%' }}>ĐỊA BÀN ĐĂNG KÝ</th>
-                  <th style={{ width: '18%' }}>CHUYÊN MÔN CỨU HỘ</th>
-                  <th style={{ width: '12%' }}>NGÀY ĐĂNG KÝ</th>
-                  <th style={{ width: '11%' }}>TRẠNG THÁI</th>
-                  <th style={{ width: '8%', textAlign: 'center' }}>THAO TÁC</th>
+                  <th style={{ width: '23%' }}>Ứng viên</th>
+                  <th style={{ width: '15%' }}>Định danh</th>
+                  <th style={{ width: '18%' }}>Địa bàn đăng ký</th>
+                  <th style={{ width: '18%' }}>Chuyên môn cứu hộ</th>
+                  <th style={{ width: '12%' }}>Ngày đăng ký</th>
+                  <th style={{ width: '11%' }}>Trạng thái</th>
+                  <th style={{ width: '8%', textAlign: 'center' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1315,45 +1303,114 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         </div>
       </section>
 
-      {/* 6. SLIDE-OVER DRAWER CHI TIẾT HỒ SƠ (740px) */}
-      {selectedApplicant && (
-        <div className="ra-drawer-backdrop" onClick={handleCloseDetail}>
-          <div
-            className={`ra-drawer ${isDrawerClosing ? 'closing' : ''}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header Drawer */}
-            <div className="ra-drawer-header">
-              <div className="ra-drawer-title-wrap">
-                <h3 className="ra-drawer-title">CHI TIẾT HỒ SƠ CỨU HỘ VIÊN</h3>
-                {selectedApplicant.status === 'PENDING' && (
-                  <span className="ra-status-badge pending">Chờ duyệt</span>
-                )}
-                {selectedApplicant.status === 'IN_REVIEW' && (
-                  <span className="ra-status-badge in_review">Đang thẩm định</span>
-                )}
-                {selectedApplicant.status === 'REQUIRES_UPDATE' && (
-                  <span className="ra-status-badge requires_update">Yêu cầu bổ sung</span>
-                )}
-                {selectedApplicant.status === 'VERIFIED' && (
-                  <span className="ra-status-badge verified">Đã duyệt</span>
-                )}
-                {selectedApplicant.status === 'REJECTED' && (
-                  <span className="ra-status-badge rejected">Từ chối</span>
-                )}
-              </div>
+      {/* 6. SLIDE-OVER DRAWER CHI TIẾT HỒ SƠ (Chronicle DetailSheet) */}
+      <DetailSheet
+        open={Boolean(selectedApplicant)}
+        onOpenChange={(open) => {
+          if (
+            !open &&
+            !zoomedImage &&
+            !isApproveModalOpen &&
+            !isRejectModalOpen &&
+            !isRevokeModalOpen &&
+            !isSupplementModalOpen
+          ) {
+            handleCloseDetail();
+          }
+        }}
+        size="2xl"
+        icon={<FileCheck className="size-4" />}
+        title={selectedApplicant?.fullName || 'Chi tiết hồ sơ cứu hộ viên'}
+        description={
+          selectedApplicant
+            ? `Hồ sơ cứu hộ viên • ${selectedApplicant.areaName || 'Chưa rõ địa bàn'}`
+            : undefined
+        }
+        badges={
+          selectedApplicant && (
+            <>
+              {selectedApplicant.status === 'PENDING' && (
+                <span className="ra-status-badge pending">Chờ duyệt</span>
+              )}
+              {selectedApplicant.status === 'IN_REVIEW' && (
+                <span className="ra-status-badge in_review">Đang thẩm định</span>
+              )}
+              {selectedApplicant.status === 'REQUIRES_UPDATE' && (
+                <span className="ra-status-badge requires_update">Yêu cầu bổ sung</span>
+              )}
+              {selectedApplicant.status === 'VERIFIED' && (
+                <span className="ra-status-badge verified">Đã duyệt</span>
+              )}
+              {selectedApplicant.status === 'REJECTED' && (
+                <span className="ra-status-badge rejected">Từ chối</span>
+              )}
+            </>
+          )
+        }
+        footer={
+          selectedApplicant && (
+            <div className="w-full">
+              {selectedApplicant.status === 'VERIFIED' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', flexWrap: 'wrap' }}>
+                  <div className="ra-resolved-banner verified" style={{ flex: 1 }}>
+                    <CheckCircle2 size={18} />
+                    <span>
+                      Hồ sơ đã được phê duyệt tư cách Cứu hộ viên. Ứng viên đủ điều kiện hoạt động
+                      và tham gia Đội cứu hộ trên địa bàn.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ra-btn ra-btn-danger ra-revoke-btn"
+                    onClick={() => {
+                      setRevokeReasonText('');
+                      setIsRevokeModalOpen(true);
+                    }}
+                    title="Thu hồi tư cách Cứu hộ viên và chuyển về vai trò Người dân"
+                    disabled={submittingAction}
+                  >
+                    <XCircle size={15} />
+                    <span>Thu hồi quyền cứu hộ</span>
+                  </button>
+                </div>
+              ) : selectedApplicant.status === 'REJECTED' ? (
+                <div className="ra-resolved-banner rejected">
+                  <XCircle size={18} />
+                  <span>
+                    Hồ sơ đã bị từ chối / thu hồi quyền. Lý do:{' '}
+                    {selectedApplicant.rejectionReason || 'Không đủ điều kiện tiêu chuẩn.'}
+                  </span>
+                </div>
+              ) : (
+                <div className="ra-actions-row">
+                  <button
+                    className="ra-btn ra-btn-danger"
+                    onClick={() => {
+                      setRejectionReasonText('');
+                      setIsRejectModalOpen(true);
+                    }}
+                    disabled={submittingAction}
+                  >
+                    <XCircle size={15} />
+                    <span>Từ chối hồ sơ</span>
+                  </button>
 
-              <button
-                className="ra-drawer-close-btn"
-                onClick={handleCloseDetail}
-                title="Đóng (ESC)"
-              >
-                <X size={18} />
-              </button>
+                  <button
+                    className="ra-btn ra-btn-primary"
+                    onClick={() => setIsApproveModalOpen(true)}
+                    disabled={submittingAction}
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Phê duyệt hồ sơ</span>
+                  </button>
+                </div>
+              )}
             </div>
-
-            {/* Body Drawer — Phương án 1: Tối giản phẳng (Linear / Apple Inset) */}
-            <div className="ra-drawer-body ra-drawer-body--minimal">
+          )
+        }
+      >
+        {selectedApplicant && (
+          <div className="ra-drawer-body ra-drawer-body--minimal">
               {/* 1. Hero Summary Card */}
               <div className="ra-hero-summary">
                 <div className="ra-hero-top">
@@ -1612,71 +1669,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                 </div>
               </div>
             </div>
-
-            {/* Sticky Action Footer */}
-            <div className="ra-drawer-footer">
-              {selectedApplicant.status === 'VERIFIED' ? (
-                <div className="ra-verified-footer-wrap">
-                  <div className="ra-resolved-banner verified" style={{ flex: 1 }}>
-                    <CheckCircle2 size={18} />
-                    <span>
-                      Hồ sơ đã được phê duyệt tư cách Cứu hộ viên. Ứng viên đủ điều kiện hoạt động
-                      và tham gia Đội cứu hộ trên địa bàn.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ra-btn ra-btn-danger ra-revoke-btn"
-                    onClick={() => {
-                      setRevokeReasonText('');
-                      setIsRevokeModalOpen(true);
-                    }}
-                    title="Thu hồi tư cách Cứu hộ viên và chuyển về vai trò Người dân"
-                    disabled={submittingAction}
-                  >
-                    <XCircle size={15} />
-                    <span>Thu hồi quyền cứu hộ</span>
-                  </button>
-                </div>
-              ) : selectedApplicant.status === 'REJECTED' ? (
-                <div className="ra-resolved-banner rejected">
-                  <XCircle size={18} />
-                  <span>
-                    Hồ sơ đã bị từ chối / thu hồi quyền. Lý do: {selectedApplicant.rejectionReason || 'Không đủ điều kiện tiêu chuẩn.'}
-                  </span>
-                </div>
-              ) : (
-                <div className="ra-actions-row">
-                  {/* Nút từ chối */}
-                  <button
-                    className="ra-btn ra-btn-danger"
-                    onClick={() => {
-                      setRejectionReasonText('');
-                      setIsRejectModalOpen(true);
-                    }}
-                    disabled={submittingAction}
-                  >
-                    <XCircle size={15} />
-                    <span>Từ chối hồ sơ</span>
-                  </button>
-
-
-
-                  {/* Nút phê duyệt chính */}
-                  <button
-                    className="ra-btn ra-btn-primary"
-                    onClick={() => setIsApproveModalOpen(true)}
-                    disabled={submittingAction}
-                  >
-                    <CheckCircle2 size={15} />
-                    <span>Phê duyệt hồ sơ</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </DetailSheet>
 
       {/* 7. MODAL XÁC NHẬN PHÊ DUYỆT */}
       {isApproveModalOpen && selectedApplicant && (

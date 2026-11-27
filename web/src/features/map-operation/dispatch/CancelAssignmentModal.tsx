@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
 interface Props {
@@ -26,8 +27,9 @@ export const CancelAssignmentModal = ({
     onClose();
   };
 
-  return (
+  const modalContent = (
     <div
+      data-modal-layer="confirm"
       style={{
         position: 'fixed',
         inset: 0,
@@ -268,4 +270,7 @@ export const CancelAssignmentModal = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return modalContent;
+  return createPortal(modalContent, document.body);
 };

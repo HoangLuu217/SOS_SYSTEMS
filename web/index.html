@@ -9,10 +9,88 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('rescuesos_theme_v1');
+          var isDark = theme === 'dark' || (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      #app-boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #f6f8fc;
+        transition: opacity 0.36s ease, visibility 0.36s ease;
+      }
+      html.dark #app-boot-loader {
+        background: #0c1220;
+      }
+      #app-boot-loader.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #app-boot-loader .sync-loader {
+        --duration: 2.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 28px;
+      }
+      #app-boot-loader .logo-loader {
+        position: relative;
+        width: 150px;
+        height: 110px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #app-boot-loader .logo-layer {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+      }
+      #app-boot-loader .layer-1 { z-index: 3; animation: bootCorePulse var(--duration) infinite ease-in-out; }
+      #app-boot-loader .layer-2 { z-index: 2; opacity: 0; animation: bootFlashLayer2 var(--duration) infinite ease-out; }
+      #app-boot-loader .layer-3 { z-index: 1; opacity: 0; animation: bootFlashLayer3 var(--duration) infinite ease-out; }
+      @keyframes bootCorePulse {
+        0%, 100% { transform: scale(1); }
+        22% { transform: scale(1.06); }
+        55% { transform: scale(1.02); }
+      }
+      @keyframes bootFlashLayer2 {
+        0%, 15% { opacity: 0; transform: scale(1.13); }
+        38% { opacity: 0.70; transform: scale(1.25); }
+        68%, 100% { opacity: 0; transform: scale(1.33); }
+      }
+      @keyframes bootFlashLayer3 {
+        0%, 35% { opacity: 0; transform: scale(1.35); }
+        58% { opacity: 0.30; transform: scale(1.55); }
+        88%, 100% { opacity: 0; transform: scale(1.65); }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-boot-loader" role="status" aria-label="Đang tải hệ thống">
+      <div class="sync-loader">
+        <div class="logo-loader">
+          <img src="/logoSOS.png" alt="Logo Cứu Hộ Cứu Nạn" class="logo-layer layer-1" />
+          <img src="/logoSOS.png" alt="" aria-hidden="true" class="logo-layer layer-2" />
+          <img src="/logoSOS.png" alt="" aria-hidden="true" class="logo-layer layer-3" />
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

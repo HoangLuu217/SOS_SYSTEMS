@@ -50,6 +50,8 @@ import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import './SosRequestsView.css';
 
 export interface SosRequestsViewProps {
@@ -1041,24 +1043,24 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
           {/* Ô tìm kiếm */}
           <div className={`executive-search-input-wrap ${isAdmin ? 'is-admin-search' : ''}`}>
-              <Search size={14} className="search-icon" />
-              <input
-                type="text"
-                placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="executive-search-input"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="search-clear-btn"
-                  onClick={() => setSearchQuery('')}
-                  title="Xóa tìm kiếm"
-                >
-                  <X size={12} />
-                </button>
-              )}
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="executive-search-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                title="Xóa tìm kiếm"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           <ExcelExportButton
@@ -1130,9 +1132,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <tbody>
               {loading && displaySosList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '45px 20px' }}>
-                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
-                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu cứu nạn...</p>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang nạp dữ liệu cứu nạn..." />
                   </td>
                 </tr>
               ) : filteredSosList.length === 0 ? (
@@ -1476,995 +1477,86 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       </div>
 
       {/* ============================================================
-          PANEL CHI TIẾT TOÀN DIỆN (CHIẾM 4/10 MÀN HÌNH BÊN PHẢI)
+          PANEL CHI TIẾT TOÀN DIỆN (CHUẨN CHRONICLE DETAIL SHEET)
           ============================================================ */}
-      {selectedSosDetail && (
-        <>
-          {/* Backdrop bán trong suốt */}
-          <div
-            className="sos-detail-panel-backdrop"
-            onClick={() => setSelectedSosDetail(null)}
-          />
-
-          {/* Panel trượt từ bên phải - Chiếm 4/10 màn hình */}
-          <aside className="sos-detail-side-panel" onClick={(e) => e.stopPropagation()}>
-            {/* Header Panel */}
-            <div className="sos-panel-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span className="sos-panel-code">{selectedSosDetail.sosCode}</span>
-
-                {/* Badge phân biệt RESCUER hay CITIZEN */}
-                {(() => {
-                  const detailCitizen = typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId !== null ? selectedSosDetail.citizenId : null;
-                  const isDetailRescuer = Array.isArray(detailCitizen?.roles) && detailCitizen.roles.includes('RESCUER');
-                  return (
-                    <span className="source-tag">
-                      {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
-                    </span>
-                  );
-                })()}
-
-                {/* Badge Báo lại nhiều lần */}
-                {selectedSosDetail.repeatCount && selectedSosDetail.repeatCount > 1 ? (
-                  <span className="source-pill repeat-pill" title={`Người dân đã gửi lại ${selectedSosDetail.repeatCount} lần tại cùng vị trí này`}>
-                    BÁO LẠI {selectedSosDetail.repeatCount} LẦN
-                  </span>
-                ) : null}
-
-                {/* Badge Báo hộ người thân */}
-                {selectedSosDetail.isSecondaryRequest ? (
-                  <span className="source-pill secondary-pill" title="Ca cứu hộ bổ sung / Báo nạn hộ người thân tại vị trí khác">
-                    BÁO HỘ
-                  </span>
-                ) : null}
-
-                <span className={`sos-panel-priority ${selectedSosDetail.priority.toLowerCase()}`}>
-                  {selectedSosDetail.priority === 'UNASSESSED' ? 'CHỜ PHÂN LOẠI' : selectedSosDetail.priority === 'CRITICAL' ? 'NGUY CẤP' : selectedSosDetail.priority === 'HIGH' ? 'KHẨN CẤP' : selectedSosDetail.priority === 'LOW' ? 'THẤP' : 'TRUNG BÌNH'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="sos-panel-close-btn"
-                onClick={() => setSelectedSosDetail(null)}
-                title="Đóng (Esc)"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Body Panel Cuộn */}
-            <div className="sos-panel-body">
-              {/* BLOCK 0: PHÂN TÍCH SOS BẰNG AI */}
-              {(selectedSosDetail.aiAssessment || selectedSosDetail.riskAssessment) && (
-                <div className="sos-panel-card" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)', borderColor: 'var(--dm-blue-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <div className="sos-panel-card-title" style={{ marginBottom: 0 }}>
-                      <span>✨</span>
-                      <span>PHÂN TÍCH SOS BẰNG AI</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 900,
-                          padding: '2px 8px',
-                          borderRadius: 6,
-                          background: selectedSosDetail.priority === 'CRITICAL'
-                              ? 'var(--dm-red-bg)'
-                              : selectedSosDetail.priority === 'HIGH'
-                              ? 'var(--dm-orange-bg)'
-                              : 'var(--dm-amber-bg)',
-                          color: selectedSosDetail.priority === 'CRITICAL'
-                              ? 'var(--dm-red-text)'
-                              : selectedSosDetail.priority === 'HIGH'
-                              ? 'var(--dm-orange-text)'
-                              : 'var(--dm-amber-text)',
-                        }}
-                      >
-                        {selectedSosDetail.priority === 'UNASSESSED' ? 'CHƯA PHÂN LOẠI' : selectedSosDetail.priority}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await reanalyzeSosAiApi(selectedSosDetail._id);
-                            if (res?.success && res.data) {
-                              setSelectedSosDetail(res.data);
-                              loadData();
-                            }
-                          } catch {}
-                        }}
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 800,
-                          padding: '2px 7px',
-                          borderRadius: 5,
-                          border: '1px solid var(--dm-purple-border)',
-                          background: 'var(--dm-surface)',
-                          color: 'var(--dm-purple-text)',
-                          cursor: 'pointer',
-                        }}
-                        title="Chạy lại phân tích AI Gemini cho ca này"
-                      >
-                        Phân tích lại AI
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--dm-text-secondary)' }}>
-                    {selectedSosDetail.priorityLockedByAuthority
-                      ? 'Mức ưu tiên đã được cán bộ xác minh.'
-                      : selectedSosDetail.priority === 'UNASSESSED'
-                        ? 'Chưa có mức ưu tiên; cần AI phân tích hoặc cán bộ phân loại thủ công.'
-                        : 'Mức ưu tiên hiện tại do AI đề xuất.'}
-                    {selectedSosDetail.riskAssessment?.priorityOutdatedByNewInfo &&
-                      ' Thông tin SOS đã thay đổi sau khi xác minh; cần cán bộ xem lại mức ưu tiên.'}
-                    {selectedSosDetail.aiAssessment?.status === 'PENDING' && ' AI đang phân tích; kết quả chưa hoàn tất.'}
-                    {selectedSosDetail.aiAssessment?.status === 'FAILED' && ' AI phân tích thất bại; cần cán bộ đánh giá thủ công.'}
-                    {selectedSosDetail.aiAssessment?.status === 'UNAVAILABLE' && ' AI chưa được cấu hình; cần cán bộ đánh giá thủ công.'}
-                  </div>
-                  {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).length > 0 && (
-                    <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: 'var(--dm-text-secondary)', lineHeight: 1.45 }}>
-                      {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).map((r, i) => (
-                        <li key={i}>{r}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {selectedSosDetail.aiAssessment?.status === 'COMPLETED' && (
-                    <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid var(--dm-blue-border)', fontSize: 11, color: 'var(--dm-purple-text)' }}>
-                      AI đề xuất: {selectedSosDetail.aiAssessment.recommendedPriority || 'chưa phân loại'}
-                      {selectedSosDetail.aiAssessment.confidence && ` • Mức chắc chắn tự đánh giá: ${selectedSosDetail.aiAssessment.confidence.toLowerCase()} (chưa hiệu chuẩn)`}
-                      {selectedSosDetail.aiAssessment.evidence?.length ? (
-                        <div style={{ marginTop: 3, color: 'var(--dm-text-secondary)' }}>Căn cứ AI: {selectedSosDetail.aiAssessment.evidence.join(' • ')}</div>
-                      ) : null}
-                      {selectedSosDetail.aiAssessment.unknowns?.length ? (
-                        <div style={{ marginTop: 3, color: 'var(--dm-amber-text)' }}>Chưa rõ: {selectedSosDetail.aiAssessment.unknowns.join(' • ')}</div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* BLOCK 1: LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (THÔNG TIN ĐỘI NÀO ĐI CỨU) */}
-              <div className="sos-panel-card rescue-team-card">
-                <div className="sos-panel-card-title">
-                  <span>LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (XUẤT KÍCH)</span>
-                </div>
-
-                {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
-                  <div style={{ background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border-strong)', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-text-secondary)', fontWeight: 800, fontSize: 13 }}>
-                      <XCircle size={15} color="#64748b" />
-                      <span>Yêu cầu cứu nạn đã hủy (An toàn)</span>
-                    </div>
-                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--dm-text-muted)', lineHeight: 1.5 }}>
-                      Người dân đã xác nhận tự thoát hiểm an toàn hoặc hủy bỏ yêu cầu cứu nạn trên ứng dụng di động. Không cần điều động thêm lực lượng.
-                    </p>
-                  </div>
-                ) : selectedSosDetail.assignment ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13.5, color: 'var(--dm-text-strong)', minWidth: 0 }}>
-                          <Shield size={14} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span>{getAssignedTeamName(selectedSosDetail) || 'Đội cứu hộ tác chiến'}</span>
-                        </div>
-                        <span className="sos-team-status-badge" style={{ flexShrink: 0 }}>
-                          {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? 'Đã hủy' : 'Đang tác chiến'}
-                        </span>
-                      </div>
-                      {getAssignedVehicle(selectedSosDetail) && (
-                        <div style={{ fontSize: 12, color: 'var(--dm-text-strong)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Truck size={14} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span>Phương tiện: <strong>{getAssignedVehicle(selectedSosDetail)}</strong></span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Chỉ huy đội & SĐT gọi trực tiếp */}
-                    {getAssignedLeader(selectedSosDetail) && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--dm-surface)', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dm-blue-border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Users size={13} color="#0284c7" />
-                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-body)' }}>
-                            Chỉ huy: {getAssignedLeader(selectedSosDetail)?.name}
-                          </span>
-                        </div>
-                        {getAssignedLeader(selectedSosDetail)?.phone && (
-                          <a
-                            href={`tel:${getAssignedLeader(selectedSosDetail)?.phone}`}
-                            className="btn-call-team"
-                            title="Gọi trực tiếp cho chỉ huy đội cứu hộ"
-                          >
-                            <Phone size={11} />
-                            <span>{getAssignedLeader(selectedSosDetail)?.phone}</span>
-                          </a>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Danh sách vật tư kho khu vực đã cấp phát */}
-                    {Array.isArray(selectedSosDetail.assignment.supplies) && selectedSosDetail.assignment.supplies.length > 0 && (
-                      <div style={{ marginTop: 2, paddingTop: 6, borderTop: '1px dashed var(--dm-blue-border)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--dm-blue-text)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Package size={12} />
-                          <span>Vật tư kho khu vực đã cấp phát:</span>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {selectedSosDetail.assignment.supplies.map((s: any, sIdx: number) => (
-                            <span key={sIdx} className="sos-supply-chip">
-                              {s.name} (<strong>{s.quantity}</strong> {s.unit})
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ background: 'var(--dm-amber-bg)', border: '1px solid var(--dm-amber-border)', borderRadius: 8, padding: '10px 12px', marginTop: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-amber-text)', fontWeight: 800, fontSize: 12.5 }}>
-                      <span>Chưa phân công đội cứu hộ</span>
-                    </div>
-                    <p style={{ margin: '4px 0 8px', fontSize: 11.5, color: 'var(--dm-amber-text)', lineHeight: 1.4 }}>
-                      Ca SOS này đang chờ ban chỉ huy điều động lực lượng và phương tiện từ bản đồ tác chiến.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn-dispatch-now"
-                      onClick={() => {
-                        const targetId = selectedSosDetail._id;
-                        setSelectedSosDetail(null);
-                        onOpenMap(targetId);
-                      }}
-                    >
-                      <Compass size={13} />
-                      <span>Mở Bản Đồ &amp; Điều Động Ngay</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* BLOCK 2: TIẾN TRÌNH CỨU NẠN & ĐIỀU PHỐI (STEPPER) */}
-              <div className="sos-panel-card">
-                <div className="sos-panel-card-title">
-                  <Compass size={15} color="#0284c7" />
-                  <span>TIẾN TRÌNH CỨU NẠN &amp; ĐIỀU PHỐI</span>
-                </div>
-                {renderStepper(getEffectiveStatus(selectedSosDetail))}
-              </div>
-
-              {/* BLOCK 4: THÔNG TIN NGƯỜI BÁO & NẠN NHÂN (KHÔI PHỤC TOÀN BỘ 100% CÁC TRƯỜNG FORM CŨ) */}
-              <div className="sos-panel-card">
-                <div className="sos-panel-card-title">
-                  <Users size={15} color="#0284c7" />
-                  <span>THÔNG TIN NGƯỜI BÁO &amp; NẠN NHÂN</span>
-                </div>
-
-                {/* Banner Profile Người Dân */}
-                <div className="sos-citizen-profile-banner">
-                  <div className="sos-citizen-avatar-large">
-                    <SafeAvatar
-                      src={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.avatarUrl : undefined}
-                      name={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : ''}
-                    />
-                  </div>
-                  <div className="sos-citizen-profile-info">
-                    <div className="profile-name-row">
-                      <span className="profile-name">
-                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.fullName
-                          ? selectedSosDetail.citizenId.fullName
-                          : 'Người dân'}
-                      </span>
-                      <span className="profile-verified-badge">Tài khoản xác thực</span>
-                    </div>
-                    <div className="profile-sub-badges">
-                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.email && (
-                        <span className="profile-sub-item">
-                          {selectedSosDetail.citizenId.email}
-                        </span>
-                      )}
-                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.address && (
-                        <span className="profile-sub-item">
-                          Thường trú: {selectedSosDetail.citizenId.address}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Lưới thông tin số điện thoại & liên lạc đầy đủ */}
-                <div className="sos-detail-grid-2">
-                  {/* SĐT tài khoản người gửi */}
-                  <div className="sos-info-box">
-                    <span className="info-label">SĐT tài khoản người gửi</span>
-                    <span className="info-value">
-                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.phone ? (
-                        <span className="phone-static">
-                          <Phone size={13} />
-                          <span>{selectedSosDetail.citizenId.phone}</span>
-                        </span>
-                      ) : (
-                        <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Chưa cập nhật SĐT</span>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* SĐT liên hệ khẩn cấp tại hiện trường */}
-                  <div className="sos-info-box highlight-phone">
-                    <span className="info-label">SĐT khẩn cấp (Hiện trường)</span>
-                    <span className="info-value">
-                      {selectedSosDetail.contactPhone ? (
-                        <span className="phone-static">
-                          <Phone size={13} />
-                          <span>{selectedSosDetail.contactPhone}</span>
-                        </span>
-                      ) : (
-                        <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Dùng SĐT tài khoản người gửi</span>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* SĐT dự phòng hoặc người thân */}
-                  {selectedSosDetail.secondaryPhone && (
-                    <div className="sos-info-box relative-phone" style={{ gridColumn: 'span 2' }}>
-                      <span className="info-label" style={{ color: 'var(--dm-green-text)', fontWeight: 800 }}>SĐT dự phòng hoặc người thân</span>
-                      <span className="info-value">
-                        <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: 'var(--dm-green-text)' }}>
-                          <PhoneCall size={14} />
-                          <strong style={{ fontSize: 13.5 }}>{selectedSosDetail.secondaryPhone}</strong>
-                          <span className="badge-call" style={{ backgroundColor: '#16a34a' }}>Gọi số phụ</span>
-                        </a>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Số lượng nạn nhân mắc kẹt */}
-                  <div className="sos-info-box">
-                    <span className="info-label">Số nạn nhân mắc kẹt</span>
-                    <span className="info-value" style={{ fontSize: 12 }}>
-                      {selectedSosDetail.people} người
-                    </span>
-                  </div>
-
-                  {/* Người thân trong hồ sơ cá nhân */}
-                  {typeof selectedSosDetail.citizenId === 'object' && (selectedSosDetail.citizenId as any)?.citizenProfile?.emergencyContact?.phone ? (
-                    <div className="sos-info-box relative-phone">
-                      <span className="info-label" style={{ color: 'var(--dm-green-text)' }}>Người thân trong hồ sơ cá nhân</span>
-                      <span className="info-value">
-                        <a
-                          href={`tel:${(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}`}
-                          className="phone-clickable"
-                          style={{ color: 'var(--dm-green-text)' }}
-                        >
-                          <Phone size={12} />
-                          <span>
-                            {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.name || 'Người thân'} (
-                            {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.relation || 'Liên hệ'}
-                            ): {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}
-                          </span>
-                        </a>
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="sos-info-box">
-                      <span className="info-label">Phương thức nhận tin</span>
-                      <span className="info-value" style={{ fontSize: 12 }}>Ứng dụng di động (Cứu nạn 1-chạm)</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Nhóm đối tượng ưu tiên đặc biệt */}
-                {selectedSosDetail.priorityGroups && selectedSosDetail.priorityGroups.length > 0 && (
-                  <div className="sos-priority-groups-wrap">
-                    <span className="priority-groups-label" style={{ color: 'var(--dm-text-strong)' }}>
-                      Đối tượng cần ưu tiên đặc biệt:
-                    </span>
-                    <div className="priority-chips">
-                      {selectedSosDetail.priorityGroups.map((grp, idx) => (
-                        <span key={idx} className="priority-chip-item" style={{ color: 'var(--dm-text-strong)' }}>
-                          {formatPriorityGroupLabel(grp)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* BLOCK 5: ĐỊA ĐIỂM & TỌA ĐỘ VỆ TINH (GPS) */}
-              <div className="sos-panel-card">
-                <div className="sos-panel-card-title">
-                  <MapPin size={15} color="#0284c7" />
-                  <span>ĐỊA ĐIỂM &amp; TỌA ĐỘ VỆ TINH (GPS)</span>
-                </div>
-
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-strong)', lineHeight: 1.4 }}>
-                  {selectedSosDetail.address}
-                </div>
-                {selectedSosDetail.location?.coordinates && (
-                  <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 3 }}>
-                    Tọa độ GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(6)}, {selectedSosDetail.location.coordinates[0]?.toFixed(6)}]
-                  </div>
-                )}
-              </div>
-
-              {/* BLOCK 6: TÌNH HUỐNG KHẨN CẤP & MÔ TẢ TỪ NGƯỜI DÂN */}
-              <div className="sos-panel-card">
-                <div className="sos-panel-card-title">
-                  <AlertTriangle size={15} color="#dc2626" />
-                  <span>TÌNH HUỐNG KHẨN CẤP &amp; DIỄN BIẾN</span>
-                </div>
-
-                <div className="sos-detail-grid-2" style={{ marginBottom: 8 }}>
-                  <div className="sos-info-box">
-                    <span className="info-label">Loại tình huống</span>
-                    <span className="info-value emergency-type-badge">
-                      {EMERGENCY_TYPE_LABELS[selectedSosDetail.emergencyType] || selectedSosDetail.emergencyType}
-                    </span>
-                  </div>
-                  <div className="sos-info-box">
-                    <span className="info-label">Thời điểm phát SOS</span>
-                    <span className="info-value" style={{ fontSize: 12 }}>
-                      {new Date(selectedSosDetail.createdAt).toLocaleString('vi-VN')} ({formatTimeAgo(selectedSosDetail.createdAt)})
-                    </span>
-                  </div>
-                </div>
-
-                {selectedSosDetail.description && (
-                  <div style={{ padding: '8px 12px', background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border)', borderRadius: 8, fontSize: 12, fontStyle: 'italic', color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
-                    "{selectedSosDetail.description.replace(/⚡\s*/g, '').trim()}"
-                  </div>
-                )}
-              </div>
-
+      <DetailSheet
+        open={Boolean(selectedSosDetail)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSosDetail(null);
+        }}
+        size="xl"
+        icon={<AlertTriangle className="size-4" />}
+        title={
+          selectedSosDetail ? (
+            <span className="sos-panel-code">{selectedSosDetail.sosCode}</span>
+          ) : (
+            ''
+          )
+        }
+        badges={
+          selectedSosDetail && (
+            <>
+              {/* Badge phân biệt RESCUER hay CITIZEN */}
               {(() => {
-                const rawCitizenPhotos: string[] = Array.isArray(selectedSosDetail.images) && selectedSosDetail.images.length > 0
-                  ? selectedSosDetail.images
-                  : selectedSosDetail.imageUrl
-                    ? [selectedSosDetail.imageUrl]
-                    : [];
-
-                const rescueTeamPhotos: string[] = Array.from(
-                  new Set<string>(
-                    Array.isArray(selectedSosDetail.assignment?.proofImages)
-                      ? selectedSosDetail.assignment.proofImages.filter(Boolean)
-                      : []
-                  )
-                );
-                const handoffTeamPhotos: string[] = Array.from(
-                  new Set<string>(
-                    Array.isArray(selectedSosDetail.shoreHandoffAssignment?.proofImages)
-                      ? selectedSosDetail.shoreHandoffAssignment.proofImages.filter(Boolean)
-                      : []
-                  )
-                );
-                const sosLevelProofPhotos: string[] = Array.from(
-                  new Set<string>(
-                    Array.isArray((selectedSosDetail as any).proofImages)
-                      ? (selectedSosDetail as any).proofImages.filter(Boolean)
-                      : []
-                  )
-                );
-                const extraSosProofPhotos = sosLevelProofPhotos.filter(
-                  (url) => !rescueTeamPhotos.includes(url) && !handoffTeamPhotos.includes(url)
-                );
-
-                const hasShoreHandoffTeam = Boolean(
-                  selectedSosDetail.shoreHandoffAssignment ||
-                  (selectedSosDetail.shoreHandoff &&
-                    ['ASSIGNED', 'COMPLETED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase())) ||
-                  selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
-                  selectedSosDetail.shoreHandoff?.assignedVehicleName
-                );
-
-                const primarySectionPhotos = [
-                  ...new Set([...rescueTeamPhotos, ...extraSosProofPhotos]),
-                ];
-                const combinedSectionPhotos = hasShoreHandoffTeam
-                  ? [...primarySectionPhotos, ...handoffTeamPhotos]
-                  : [...new Set([...primarySectionPhotos, ...handoffTeamPhotos])];
-
-                const teamProofPhotos: string[] = [
-                  ...new Set([
-                    ...rescueTeamPhotos,
-                    ...handoffTeamPhotos,
-                    ...sosLevelProofPhotos,
-                  ]),
-                ].filter(Boolean);
-
-                const rescueTeamLabel =
-                  selectedSosDetail.assignment?.rescueTeamId?.name || 'Đội đi cứu trực tiếp';
-                const handoffVehiclePlate =
-                  selectedSosDetail.shoreHandoffAssignment?.vehicleId?.plateNumber ||
-                  selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
-                  '';
-                const handoffTeamLabel =
-                  selectedSosDetail.shoreHandoff?.assignedRoadTeamName ||
-                  selectedSosDetail.shoreHandoffAssignment?.rescueTeamId?.name ||
-                  'Đội xe tiếp vận / cứu thương';
-
-                // Tách bạch: ảnh người dân gửi lúc tạo SOS không bị trùng với ảnh nghiệm thu của đội cứu hộ
-                const citizenPhotos = rawCitizenPhotos.filter((url) => !teamProofPhotos.includes(url));
-
+                const detailCitizen =
+                  typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId !== null
+                    ? selectedSosDetail.citizenId
+                    : null;
+                const isDetailRescuer =
+                  Array.isArray(detailCitizen?.roles) && detailCitizen.roles.includes('RESCUER');
                 return (
-                  <>
-                    {/* BLOCK 7A: HÌNH ẢNH DO NGƯỜI DÂN GỬI LÚC BÁO SOS */}
-                    <div
-                      className="sos-panel-card"
-                      style={{
-                        background: citizenPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
-                        borderColor: citizenPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
-                      }}
-                    >
-                      <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Camera size={16} color={citizenPhotos.length > 0 ? '#16a34a' : '#64748b'} />
-                          <span style={{ color: citizenPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
-                            ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)
-                          </span>
-                        </div>
-                        {citizenPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
-                            {citizenPhotos.length} ảnh
-                          </span>
-                        )}
-                      </div>
-
-                      {citizenPhotos.length > 0 ? (
-                        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-                          {citizenPhotos.map((imgUrl, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                width: 84,
-                                height: 64,
-                                borderRadius: 8,
-                                overflow: 'hidden',
-                                border: '1.5px solid var(--dm-green-border)',
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                                position: 'relative',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                              }}
-                              onClick={() =>
-                                setPreviewPhotos({
-                                  images: citizenPhotos,
-                                  activeIndex: i,
-                                  title: `Ảnh người dân gửi (${selectedSosDetail.sosCode})`,
-                                })
-                              }
-                              title="Bấm để xem ảnh phóng to"
-                            >
-                              <img src={imgUrl} alt={`Ảnh người dân gửi ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
-                          <span>Người dân không đính kèm hình ảnh khi phát tín hiệu SOS</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* BLOCK 7B: HÌNH ẢNH DO ĐỘI CỨU HỘ & XE TIẾP VẬN CHỤP KHI HOÀN THÀNH NHIỆM VỤ */}
-                    <div
-                      className="sos-panel-card"
-                      style={{
-                        background: teamProofPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
-                        borderColor: teamProofPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
-                      }}
-                    >
-                      <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <ShieldCheck size={16} color={teamProofPhotos.length > 0 ? '#16a34a' : '#64748b'} />
-                          <span style={{ color: teamProofPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
-                            ẢNH ĐỘI CỨU HỘ CHỤP (HOÀN THÀNH NHIỆM VỤ)
-                          </span>
-                        </div>
-                        {teamProofPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
-                            {teamProofPhotos.length} ảnh nghiệm thu
-                          </span>
-                        )}
-                      </div>
-
-                      {hasShoreHandoffTeam ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          {/* Nhóm ảnh 1: Đội đi cứu */}
-                          <div>
-                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-green-text)', marginBottom: 5 }}>
-                              Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
-                            </div>
-                            {primarySectionPhotos.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-                                {primarySectionPhotos.map((imgUrl, i) => (
-                                  <div
-                                    key={`rescue-${i}`}
-                                    style={{
-                                      width: 84,
-                                      height: 64,
-                                      borderRadius: 8,
-                                      overflow: 'hidden',
-                                      border: '1.5px solid var(--dm-green-border)',
-                                      cursor: 'pointer',
-                                      flexShrink: 0,
-                                      position: 'relative',
-                                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                                    }}
-                                    onClick={() =>
-                                      setPreviewPhotos({
-                                        images: combinedSectionPhotos,
-                                        activeIndex: i,
-                                        title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
-                                      })
-                                    }
-                                    title="Bấm để phóng to ảnh đội đi cứu"
-                                  >
-                                    <img src={imgUrl} alt={`Ảnh đội cứu ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
-                                {selectedSosDetail.assignment?.status === 'COMPLETED'
-                                  ? 'Đội đi cứu chưa tải ảnh nghiệm thu'
-                                  : 'Chờ đội đi cứu hoàn tất & tải ảnh nghiệm thu'}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Nhóm ảnh 2: Đội xe cứu thương / tiếp vận */}
-                          <div style={{ borderTop: '1px dashed var(--dm-green-border)', paddingTop: 8 }}>
-                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-blue-text)', marginBottom: 5 }}>
-                              Đội xe tiếp vận: {handoffTeamLabel}
-                              {handoffVehiclePlate ? ` (${handoffVehiclePlate})` : ''} ({handoffTeamPhotos.length} ảnh)
-                            </div>
-                            {handoffTeamPhotos.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-                                {handoffTeamPhotos.map((imgUrl, i) => (
-                                  <div
-                                    key={`handoff-${i}`}
-                                    style={{
-                                      width: 84,
-                                      height: 64,
-                                      borderRadius: 8,
-                                      overflow: 'hidden',
-                                      border: '1.5px solid var(--dm-blue-border)',
-                                      cursor: 'pointer',
-                                      flexShrink: 0,
-                                      position: 'relative',
-                                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                                    }}
-                                    onClick={() =>
-                                      setPreviewPhotos({
-                                        images: combinedSectionPhotos,
-                                        activeIndex: primarySectionPhotos.length + i,
-                                        title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
-                                      })
-                                    }
-                                    title="Bấm để phóng to ảnh đội xe tiếp vận"
-                                  >
-                                    <img src={imgUrl} alt={`Ảnh đội xe ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
-                                {selectedSosDetail.shoreHandoff?.status === 'COMPLETED' ||
-                                  selectedSosDetail.shoreHandoffAssignment?.status === 'COMPLETED'
-                                  ? 'Đội xe tiếp vận chưa tải ảnh nghiệm thu'
-                                  : 'Chờ đội xe tiếp vận hoàn tất & tải ảnh nghiệm thu'}
-                              </div>
-                            )}
-                          </div>
-
-                          {(selectedSosDetail.assignment?.actualRecipient ||
-                            selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
-                            (selectedSosDetail as any).actualRecipient) && (
-                              <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', fontWeight: 600 }}>
-                                ✓ Người tiếp nhận:{' '}
-                                <strong>
-                                  {selectedSosDetail.assignment?.actualRecipient ||
-                                    selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
-                                    (selectedSosDetail as any).actualRecipient}
-                                </strong>
-                              </div>
-                            )}
-                        </div>
-                      ) : teamProofPhotos.length > 0 ? (
-                        <>
-                          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-                            {teamProofPhotos.map((imgUrl, i) => (
-                              <div
-                                key={i}
-                                style={{
-                                  width: 84,
-                                  height: 64,
-                                  borderRadius: 8,
-                                  overflow: 'hidden',
-                                  border: '1.5px solid var(--dm-green-border)',
-                                  cursor: 'pointer',
-                                  flexShrink: 0,
-                                  position: 'relative',
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                                }}
-                                onClick={() =>
-                                  setPreviewPhotos({
-                                    images: teamProofPhotos,
-                                    activeIndex: i,
-                                    title: `Ảnh nghiệm thu cứu hộ (${selectedSosDetail.sosCode})`,
-                                  })
-                                }
-                                title="Bấm để phóng to ảnh nghiệm thu hoàn tất"
-                              >
-                                <img src={imgUrl} alt={`Ảnh đội cứu hộ ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              </div>
-                            ))}
-                          </div>
-                          {(selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient) && (
-                            <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', marginTop: 4, fontWeight: 600 }}>
-                              ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient}</strong>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
-                          <span>
-                            {getEffectiveStatus(selectedSosDetail) === 'COMPLETED'
-                              ? 'Đội cứu hộ chưa tải ảnh nghiệm thu bàn giao'
-                              : 'Chờ đội cứu hộ chụp và tải lên khi hoàn tất nhiệm vụ'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </>
+                  <span className="source-tag">
+                    {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
+                  </span>
                 );
               })()}
 
-              {/* PHẢN HỒI TỪ NGƯỜI DÂN SAU CỨU HỘ */}
-              {(selectedSosDetail as any).citizenFeedback?.submittedAt && (() => {
-                const fb = (selectedSosDetail as any).citizenFeedback;
-                const isNeg = fb.sentiment === 'NEEDS_IMPROVEMENT';
-                const isNeutral = fb.sentiment === 'NEUTRAL';
-                const sentimentLabel = isNeg
-                  ? 'Cần cải thiện'
-                  : isNeutral
-                  ? 'Bình thường'
-                  : 'Hài lòng';
-                const pillBg = isNeg ? '#fef2f2' : isNeutral ? '#fffbeb' : '#eff6ff';
-                const pillColor = isNeg ? '#dc2626' : isNeutral ? '#d97706' : '#1d4ed8';
-                const pillBorder = isNeg ? '#fecaca' : isNeutral ? '#fde68a' : '#bfdbfe';
-                return (
-                  <div className="sos-panel-card">
-                    <div
-                      className="sos-panel-card-title"
-                      style={{ justifyContent: 'space-between', width: '100%', marginBottom: 8 }}
-                    >
-                      <span>PHẢN HỒI TỪ NGƯỜI DÂN</span>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          padding: '2px 10px',
-                          borderRadius: 999,
-                          background: pillBg,
-                          color: pillColor,
-                          border: `1px solid ${pillBorder}`,
-                          textTransform: 'none',
-                        }}
-                      >
-                        {sentimentLabel}
-                      </span>
-                    </div>
-                    {Array.isArray(fb.tags) && fb.tags.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: fb.comment ? 8 : 0 }}>
-                        {fb.tags.map((tag: string, idx: number) => (
-                          <span
-                            key={idx}
-                            style={{
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              padding: '3px 8px',
-                              borderRadius: 999,
-                              background: 'var(--dm-surface-subtle)',
-                              color: 'var(--dm-text-secondary)',
-                              border: '1px solid var(--dm-border)',
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {fb.comment && (
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          color: 'var(--dm-text-secondary)',
-                          fontStyle: 'italic',
-                          lineHeight: 1.5,
-                          background: 'var(--dm-surface-subtle)',
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          border: '1px solid var(--dm-border)',
-                        }}
-                      >
-                        "{fb.comment}"
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Badge Báo lại nhiều lần */}
+              {selectedSosDetail.repeatCount && selectedSosDetail.repeatCount > 1 ? (
+                <span
+                  className="source-pill repeat-pill"
+                  title={`Người dân đã gửi lại ${selectedSosDetail.repeatCount} lần tại cùng vị trí này`}
+                >
+                  BÁO LẠI {selectedSosDetail.repeatCount} LẦN
+                </span>
+              ) : null}
 
+              {/* Badge Báo hộ người thân */}
+              {selectedSosDetail.isSecondaryRequest ? (
+                <span
+                  className="source-pill secondary-pill"
+                  title="Ca cứu hộ bổ sung / Báo nạn hộ người thân tại vị trí khác"
+                >
+                  BÁO HỘ
+                </span>
+              ) : null}
 
-              {/* ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN (ĐƯỢC CHUYỂN XUỐNG DƯỚI CÙNG VỚI TONE MÀU NHẸ NHÀNG, KHÔNG CHÓI) */}
-              {selectedSosDetail.shoreHandoff &&
-                !['NONE', 'CANCELLED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase()) && (
-                  <div
-                    className="sos-panel-card"
-                    style={{
-                      background: 'var(--dm-surface-subtle)',
-                      borderColor: 'var(--dm-border)',
-                      borderStyle: 'solid',
-                    }}
-                  >
-                    <div className="sos-panel-card-title" style={{ color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
-                      <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
-                    </div>
-                    {(() => {
-                      const landing = selectedSosDetail.shoreHandoff.landingPoint;
-                      const name = (landing?.name || '').trim();
-                      const address = (landing?.address || '').trim();
-                      const isDuplicate = !address || name.toLowerCase() === address.toLowerCase();
-
-                      return (
-                        <>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
-                            {name || address || 'Điểm đón ven bờ'}
-                          </div>
-                          {!isDuplicate && (
-                            <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 2 }}>
-                              {address}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                    {(() => {
-                      const handoff = selectedSosDetail.shoreHandoff;
-                      const hasVehicleAssigned =
-                        handoff.status === 'ASSIGNED' ||
-                        handoff.status === 'COMPLETED' ||
-                        Boolean(handoff.assignedVehiclePlate || handoff.assignedVehicleId || handoff.assignedVehicleName);
-                      const handoffMeta = getShoreHandoffVehicleStatusMeta(
-                        handoff.status,
-                        selectedSosDetail.shoreHandoffAssignment?.status
-                      );
-                      const hasDetailInfo = Boolean(
-                        handoff.assignedVehiclePlate ||
-                        handoff.assignedVehicleName ||
-                        handoff.assignedRoadTeamName ||
-                        handoff.assignedDriverName
-                      );
-
-                      return (
-                        <>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 8,
-                              flexWrap: 'wrap',
-                              marginTop: 8,
-                              background: 'var(--dm-surface)',
-                              padding: '7px 10px',
-                              borderRadius: 6,
-                              border: '1px solid var(--dm-border)',
-                            }}
-                          >
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
-                              {handoff.vehicleTypeNeeded === 'AMBULANCE' ? '🚑 Xe Cứu Thương 115' : '🚒 Xe Tải Cứu Hộ'}{' '}
-                              ({handoff.peopleCount} người)
-                            </span>
-                            {hasVehicleAssigned ? (
-                              <span
-                                style={{
-                                  fontSize: 10.5,
-                                  fontWeight: 800,
-                                  color: handoffMeta.color,
-                                  background: handoffMeta.bg,
-                                  border: `1px solid ${handoffMeta.borderColor}`,
-                                  padding: '2px 8px',
-                                  borderRadius: 4,
-                                }}
-                              >
-                                {handoffMeta.label} (
-                                {handoff.assignedVehiclePlate || handoff.assignedVehicleName || 'Đã phân bổ'})
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: 10.5,
-                                  fontWeight: 700,
-                                  color: 'var(--dm-text-muted)',
-                                  background: 'var(--dm-surface-muted)',
-                                  border: '1px solid var(--dm-border)',
-                                  padding: '2px 8px',
-                                  borderRadius: 4,
-                                }}
-                              >
-                                ⏳ Chờ xe đón
-                              </span>
-                            )}
-                          </div>
-
-                          {hasVehicleAssigned && hasDetailInfo && (
-                            <div
-                              style={{
-                                marginTop: 6,
-                                background: 'var(--dm-surface)',
-                                padding: '7px 10px',
-                                borderRadius: 6,
-                                border: '1px solid var(--dm-green-border)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 3,
-                                fontSize: 11.5,
-                                color: 'var(--dm-text-secondary)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <strong style={{ color: 'var(--dm-text-strong)' }}>
-                                  {handoff.assignedVehicleName ||
-                                    (handoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ')}
-                                </strong>
-                                {handoff.assignedVehiclePlate && (
-                                  <span
-                                    style={{
-                                      fontSize: 10.5,
-                                      fontWeight: 800,
-                                      fontFamily: 'monospace',
-                                      padding: '1px 6px',
-                                      borderRadius: 4,
-                                      background: 'var(--dm-surface-muted)',
-                                      border: '1px solid var(--dm-border-strong)',
-                                      color: 'var(--dm-text-strong)',
-                                    }}
-                                  >
-                                    {handoff.assignedVehiclePlate}
-                                  </span>
-                                )}
-                              </div>
-                              {handoff.assignedRoadTeamName && (
-                                <div style={{ fontSize: 11, color: 'var(--dm-text-secondary)' }}>
-                                  Đội tiếp ứng: <strong style={{ color: 'var(--dm-text-body)' }}>{handoff.assignedRoadTeamName}</strong>
-                                </div>
-                              )}
-                              {handoff.assignedDriverName && (
-                                <div style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
-                                  Phụ trách / Tài xế: <strong style={{ color: 'var(--dm-text-secondary)' }}>{handoff.assignedDriverName}</strong>
-                                  {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-            </div>
-
-            {/* Footer Quick Action Buttons */}
-            {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
-              <div className="sos-panel-footer">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
+              <span className={`sos-panel-priority ${selectedSosDetail.priority.toLowerCase()}`}>
+                {selectedSosDetail.priority === 'UNASSESSED'
+                  ? 'CHỜ PHÂN LOẠI'
+                  : selectedSosDetail.priority === 'CRITICAL'
+                    ? 'NGUY CẤP'
+                    : selectedSosDetail.priority === 'HIGH'
+                      ? 'KHẨN CẤP'
+                      : selectedSosDetail.priority === 'LOW'
+                        ? 'THẤP'
+                        : 'TRUNG BÌNH'}
+              </span>
+            </>
+          )
+        }
+        footer={
+          selectedSosDetail && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
+                  getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 6,
-                        padding: '8px 14px',
+                        padding: '6px 12px',
                         borderRadius: 8,
                         background: 'var(--dm-surface-muted)',
                         border: '1px solid var(--dm-border-strong)',
@@ -2473,7 +1565,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         fontWeight: 700,
                       }}
                     >
-                      <XCircle size={16} color="#64748b" />
+                      <XCircle size={15} color="#64748b" />
                       <span>Đã hủy / Tự an toàn</span>
                     </div>
                   ) : (
@@ -2490,17 +1582,947 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       <Compass size={15} />
                       <span>Bản đồ tác chiến</span>
                     </button>
-                  )}
+                  )
+                )}
+              </div>
+              <button
+                type="button"
+                className="sos-btn sos-btn--outline sos-btn--sm"
+                onClick={() => setSelectedSosDetail(null)}
+              >
+                Đóng
+              </button>
+            </>
+          )
+        }
+      >
+        {selectedSosDetail && (
+          <div className="sos-panel-body">
+            {/* BLOCK 0: PHÂN TÍCH SOS BẰNG AI */}
+            {(selectedSosDetail.aiAssessment || selectedSosDetail.riskAssessment) && (
+              <div className="sos-panel-card" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)', borderColor: 'var(--dm-blue-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div className="sos-panel-card-title" style={{ marginBottom: 0 }}>
+                    <span>✨</span>
+                    <span>PHÂN TÍCH SOS BẰNG AI</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 900,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        background: selectedSosDetail.priority === 'CRITICAL'
+                          ? 'var(--dm-red-bg)'
+                          : selectedSosDetail.priority === 'HIGH'
+                            ? 'var(--dm-orange-bg)'
+                            : 'var(--dm-amber-bg)',
+                        color: selectedSosDetail.priority === 'CRITICAL'
+                          ? 'var(--dm-red-text)'
+                          : selectedSosDetail.priority === 'HIGH'
+                            ? 'var(--dm-orange-text)'
+                            : 'var(--dm-amber-text)',
+                      }}
+                    >
+                      {selectedSosDetail.priority === 'UNASSESSED' ? 'CHƯA PHÂN LOẠI' : selectedSosDetail.priority}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await reanalyzeSosAiApi(selectedSosDetail._id);
+                          if (res?.success && res.data) {
+                            setSelectedSosDetail(res.data);
+                            loadData();
+                          }
+                        } catch { }
+                      }}
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        padding: '2px 7px',
+                        borderRadius: 5,
+                        border: '1px solid var(--dm-purple-border)',
+                        background: 'var(--dm-surface)',
+                        color: 'var(--dm-purple-text)',
+                        cursor: 'pointer',
+                      }}
+                      title="Chạy lại phân tích AI Gemini cho ca này"
+                    >
+                      Phân tích lại AI
+                    </button>
+                  </div>
                 </div>
+                <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--dm-text-secondary)' }}>
+                  {selectedSosDetail.priorityLockedByAuthority
+                    ? 'Mức ưu tiên đã được cán bộ xác minh.'
+                    : selectedSosDetail.priority === 'UNASSESSED'
+                      ? 'Chưa có mức ưu tiên; cần AI phân tích hoặc cán bộ phân loại thủ công.'
+                      : 'Mức ưu tiên hiện tại do AI đề xuất.'}
+                  {selectedSosDetail.riskAssessment?.priorityOutdatedByNewInfo &&
+                    ' Thông tin SOS đã thay đổi sau khi xác minh; cần cán bộ xem lại mức ưu tiên.'}
+                  {selectedSosDetail.aiAssessment?.status === 'PENDING' && ' AI đang phân tích; kết quả chưa hoàn tất.'}
+                  {selectedSosDetail.aiAssessment?.status === 'FAILED' && ' AI phân tích thất bại; cần cán bộ đánh giá thủ công.'}
+                  {selectedSosDetail.aiAssessment?.status === 'UNAVAILABLE' && ' AI chưa được cấu hình; cần cán bộ đánh giá thủ công.'}
+                </div>
+                {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).length > 0 && (
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: 'var(--dm-text-secondary)', lineHeight: 1.45 }}>
+                    {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+                {selectedSosDetail.aiAssessment?.status === 'COMPLETED' && (
+                  <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid var(--dm-blue-border)', fontSize: 11, color: 'var(--dm-purple-text)' }}>
+                    AI đề xuất: {selectedSosDetail.aiAssessment.recommendedPriority || 'chưa phân loại'}
+                    {selectedSosDetail.aiAssessment.confidence && ` • Mức chắc chắn tự đánh giá: ${selectedSosDetail.aiAssessment.confidence.toLowerCase()} (chưa hiệu chuẩn)`}
+                    {selectedSosDetail.aiAssessment.evidence?.length ? (
+                      <div style={{ marginTop: 3, color: 'var(--dm-text-secondary)' }}>Căn cứ AI: {selectedSosDetail.aiAssessment.evidence.join(' • ')}</div>
+                    ) : null}
+                    {selectedSosDetail.aiAssessment.unknowns?.length ? (
+                      <div style={{ marginTop: 3, color: 'var(--dm-amber-text)' }}>Chưa rõ: {selectedSosDetail.aiAssessment.unknowns.join(' • ')}</div>
+                    ) : null}
+                  </div>
+                )}
               </div>
             )}
-          </aside>
-        </>
-      )}
+
+            {/* BLOCK 1: LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (THÔNG TIN ĐỘI NÀO ĐI CỨU) */}
+            <div className="sos-panel-card rescue-team-card">
+              <div className="sos-panel-card-title">
+                <span>LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (XUẤT KÍCH)</span>
+              </div>
+
+              {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
+                <div style={{ background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border-strong)', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-text-secondary)', fontWeight: 800, fontSize: 13 }}>
+                    <XCircle size={15} color="#64748b" />
+                    <span>Yêu cầu cứu nạn đã hủy (An toàn)</span>
+                  </div>
+                  <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--dm-text-muted)', lineHeight: 1.5 }}>
+                    Người dân đã xác nhận tự thoát hiểm an toàn hoặc hủy bỏ yêu cầu cứu nạn trên ứng dụng di động. Không cần điều động thêm lực lượng.
+                  </p>
+                </div>
+              ) : selectedSosDetail.assignment ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13.5, color: 'var(--dm-text-strong)', minWidth: 0 }}>
+                        <Shield size={14} color="#0284c7" style={{ flexShrink: 0 }} />
+                        <span>{getAssignedTeamName(selectedSosDetail) || 'Đội cứu hộ tác chiến'}</span>
+                      </div>
+                      <span className="sos-team-status-badge" style={{ flexShrink: 0 }}>
+                        {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? 'Đã hủy' : 'Đang tác chiến'}
+                      </span>
+                    </div>
+                    {getAssignedVehicle(selectedSosDetail) && (
+                      <div style={{ fontSize: 12, color: 'var(--dm-text-strong)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Truck size={14} color="#0284c7" style={{ flexShrink: 0 }} />
+                        <span>Phương tiện: <strong>{getAssignedVehicle(selectedSosDetail)}</strong></span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Chỉ huy đội & SĐT gọi trực tiếp */}
+                  {getAssignedLeader(selectedSosDetail) && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--dm-surface)', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dm-blue-border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Users size={13} color="#0284c7" />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dm-text-body)' }}>
+                          Chỉ huy: {getAssignedLeader(selectedSosDetail)?.name}
+                        </span>
+                      </div>
+                      {getAssignedLeader(selectedSosDetail)?.phone && (
+                        <a
+                          href={`tel:${getAssignedLeader(selectedSosDetail)?.phone}`}
+                          className="btn-call-team"
+                          title="Gọi trực tiếp cho chỉ huy đội cứu hộ"
+                        >
+                          <Phone size={11} />
+                          <span>{getAssignedLeader(selectedSosDetail)?.phone}</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Danh sách vật tư kho khu vực đã cấp phát */}
+                  {Array.isArray(selectedSosDetail.assignment.supplies) && selectedSosDetail.assignment.supplies.length > 0 && (
+                    <div style={{ marginTop: 2, paddingTop: 6, borderTop: '1px dashed var(--dm-blue-border)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--dm-blue-text)', textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Package size={12} />
+                        <span>Vật tư kho khu vực đã cấp phát:</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {selectedSosDetail.assignment.supplies.map((s: any, sIdx: number) => (
+                          <span key={sIdx} className="sos-supply-chip">
+                            {s.name} (<strong>{s.quantity}</strong> {s.unit})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ background: 'var(--dm-amber-bg)', border: '1px solid var(--dm-amber-border)', borderRadius: 8, padding: '10px 12px', marginTop: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--dm-amber-text)', fontWeight: 800, fontSize: 12.5 }}>
+                    <span>Chưa phân công đội cứu hộ</span>
+                  </div>
+                  <p style={{ margin: '4px 0 8px', fontSize: 11.5, color: 'var(--dm-amber-text)', lineHeight: 1.4 }}>
+                    Ca SOS này đang chờ ban chỉ huy điều động lực lượng và phương tiện từ bản đồ tác chiến.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-dispatch-now"
+                    onClick={() => {
+                      const targetId = selectedSosDetail._id;
+                      setSelectedSosDetail(null);
+                      onOpenMap(targetId);
+                    }}
+                  >
+                    <Compass size={13} />
+                    <span>Mở Bản Đồ &amp; Điều Động Ngay</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* BLOCK 2: TIẾN TRÌNH CỨU NẠN & ĐIỀU PHỐI (STEPPER) */}
+            <div className="sos-panel-card">
+              <div className="sos-panel-card-title">
+                <Compass size={15} color="#0284c7" />
+                <span>TIẾN TRÌNH CỨU NẠN &amp; ĐIỀU PHỐI</span>
+              </div>
+              {renderStepper(getEffectiveStatus(selectedSosDetail))}
+            </div>
+
+            {/* BLOCK 4: THÔNG TIN NGƯỜI BÁO & NẠN NHÂN (KHÔI PHỤC TOÀN BỘ 100% CÁC TRƯỜNG FORM CŨ) */}
+            <div className="sos-panel-card">
+              <div className="sos-panel-card-title">
+                <Users size={15} color="#0284c7" />
+                <span>THÔNG TIN NGƯỜI BÁO &amp; NẠN NHÂN</span>
+              </div>
+
+              {/* Banner Profile Người Dân */}
+              <div className="sos-citizen-profile-banner">
+                <div className="sos-citizen-avatar-large">
+                  <SafeAvatar
+                    src={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.avatarUrl : undefined}
+                    name={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : ''}
+                  />
+                </div>
+                <div className="sos-citizen-profile-info">
+                  <div className="profile-name-row">
+                    <span className="profile-name">
+                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.fullName
+                        ? selectedSosDetail.citizenId.fullName
+                        : 'Người dân'}
+                    </span>
+                    <span className="profile-verified-badge">Tài khoản xác thực</span>
+                  </div>
+                  <div className="profile-sub-badges">
+                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.email && (
+                      <span className="profile-sub-item">
+                        {selectedSosDetail.citizenId.email}
+                      </span>
+                    )}
+                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.address && (
+                      <span className="profile-sub-item">
+                        Thường trú: {selectedSosDetail.citizenId.address}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lưới thông tin số điện thoại & liên lạc đầy đủ */}
+              <div className="sos-detail-grid-2">
+                {/* SĐT tài khoản người gửi */}
+                <div className="sos-info-box">
+                  <span className="info-label">SĐT tài khoản người gửi</span>
+                  <span className="info-value">
+                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.phone ? (
+                      <span className="phone-static">
+                        <Phone size={13} />
+                        <span>{selectedSosDetail.citizenId.phone}</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Chưa cập nhật SĐT</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* SĐT liên hệ khẩn cấp tại hiện trường */}
+                <div className="sos-info-box highlight-phone">
+                  <span className="info-label">SĐT khẩn cấp (Hiện trường)</span>
+                  <span className="info-value">
+                    {selectedSosDetail.contactPhone ? (
+                      <span className="phone-static">
+                        <Phone size={13} />
+                        <span>{selectedSosDetail.contactPhone}</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 12, color: 'var(--dm-text-muted)' }}>Dùng SĐT tài khoản người gửi</span>
+                    )}
+                  </span>
+                </div>
+
+                {/* SĐT dự phòng hoặc người thân */}
+                {selectedSosDetail.secondaryPhone && (
+                  <div className="sos-info-box relative-phone" style={{ gridColumn: 'span 2' }}>
+                    <span className="info-label" style={{ color: 'var(--dm-green-text)', fontWeight: 800 }}>SĐT dự phòng hoặc người thân</span>
+                    <span className="info-value">
+                      <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: 'var(--dm-green-text)' }}>
+                        <PhoneCall size={14} />
+                        <strong style={{ fontSize: 13.5 }}>{selectedSosDetail.secondaryPhone}</strong>
+                        <span className="badge-call" style={{ backgroundColor: '#16a34a' }}>Gọi số phụ</span>
+                      </a>
+                    </span>
+                  </div>
+                )}
+
+                {/* Số lượng nạn nhân mắc kẹt */}
+                <div className="sos-info-box">
+                  <span className="info-label">Số nạn nhân mắc kẹt</span>
+                  <span className="info-value" style={{ fontSize: 12 }}>
+                    {selectedSosDetail.people} người
+                  </span>
+                </div>
+
+                {/* Người thân trong hồ sơ cá nhân */}
+                {typeof selectedSosDetail.citizenId === 'object' && (selectedSosDetail.citizenId as any)?.citizenProfile?.emergencyContact?.phone ? (
+                  <div className="sos-info-box relative-phone">
+                    <span className="info-label" style={{ color: 'var(--dm-green-text)' }}>Người thân trong hồ sơ cá nhân</span>
+                    <span className="info-value">
+                      <a
+                        href={`tel:${(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}`}
+                        className="phone-clickable"
+                        style={{ color: 'var(--dm-green-text)' }}
+                      >
+                        <Phone size={12} />
+                        <span>
+                          {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.name || 'Người thân'} (
+                          {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.relation || 'Liên hệ'}
+                          ): {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}
+                        </span>
+                      </a>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="sos-info-box">
+                    <span className="info-label">Phương thức nhận tin</span>
+                    <span className="info-value" style={{ fontSize: 12 }}>Ứng dụng di động (Cứu nạn 1-chạm)</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Nhóm đối tượng ưu tiên đặc biệt */}
+              {selectedSosDetail.priorityGroups && selectedSosDetail.priorityGroups.length > 0 && (
+                <div className="sos-priority-groups-wrap">
+                  <span className="priority-groups-label" style={{ color: 'var(--dm-text-strong)' }}>
+                    Đối tượng cần ưu tiên đặc biệt:
+                  </span>
+                  <div className="priority-chips">
+                    {selectedSosDetail.priorityGroups.map((grp, idx) => (
+                      <span key={idx} className="priority-chip-item" style={{ color: 'var(--dm-text-strong)' }}>
+                        {formatPriorityGroupLabel(grp)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* BLOCK 5: ĐỊA ĐIỂM & TỌA ĐỘ VỆ TINH (GPS) */}
+            <div className="sos-panel-card">
+              <div className="sos-panel-card-title">
+                <MapPin size={15} color="#0284c7" />
+                <span>ĐỊA ĐIỂM &amp; TỌA ĐỘ VỆ TINH (GPS)</span>
+              </div>
+
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dm-text-strong)', lineHeight: 1.4 }}>
+                {selectedSosDetail.address}
+              </div>
+              {selectedSosDetail.location?.coordinates && (
+                <div style={{ fontSize: 11, color: 'var(--dm-text-muted)', marginTop: 3 }}>
+                  Tọa độ GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(6)}, {selectedSosDetail.location.coordinates[0]?.toFixed(6)}]
+                </div>
+              )}
+            </div>
+
+            {/* BLOCK 6: TÌNH HUỐNG KHẨN CẤP & MÔ TẢ TỪ NGƯỜI DÂN */}
+            <div className="sos-panel-card">
+              <div className="sos-panel-card-title">
+                <AlertTriangle size={15} color="#dc2626" />
+                <span>TÌNH HUỐNG KHẨN CẤP &amp; DIỄN BIẾN</span>
+              </div>
+
+              <div className="sos-detail-grid-2" style={{ marginBottom: 8 }}>
+                <div className="sos-info-box">
+                  <span className="info-label">Loại tình huống</span>
+                  <span className="info-value emergency-type-badge">
+                    {EMERGENCY_TYPE_LABELS[selectedSosDetail.emergencyType] || selectedSosDetail.emergencyType}
+                  </span>
+                </div>
+                <div className="sos-info-box">
+                  <span className="info-label">Thời điểm phát SOS</span>
+                  <span className="info-value" style={{ fontSize: 12 }}>
+                    {new Date(selectedSosDetail.createdAt).toLocaleString('vi-VN')} ({formatTimeAgo(selectedSosDetail.createdAt)})
+                  </span>
+                </div>
+              </div>
+
+              {selectedSosDetail.description && (
+                <div style={{ padding: '8px 12px', background: 'var(--dm-surface-subtle)', border: '1px solid var(--dm-border)', borderRadius: 8, fontSize: 12, fontStyle: 'italic', color: 'var(--dm-text-secondary)', lineHeight: 1.5 }}>
+                  "{selectedSosDetail.description.replace(/⚡\s*/g, '').trim()}"
+                </div>
+              )}
+            </div>
+
+            {(() => {
+              const rawCitizenPhotos: string[] = Array.isArray(selectedSosDetail.images) && selectedSosDetail.images.length > 0
+                ? selectedSosDetail.images
+                : selectedSosDetail.imageUrl
+                  ? [selectedSosDetail.imageUrl]
+                  : [];
+
+              const rescueTeamPhotos: string[] = Array.from(
+                new Set<string>(
+                  Array.isArray(selectedSosDetail.assignment?.proofImages)
+                    ? selectedSosDetail.assignment.proofImages.filter(Boolean)
+                    : []
+                )
+              );
+              const handoffTeamPhotos: string[] = Array.from(
+                new Set<string>(
+                  Array.isArray(selectedSosDetail.shoreHandoffAssignment?.proofImages)
+                    ? selectedSosDetail.shoreHandoffAssignment.proofImages.filter(Boolean)
+                    : []
+                )
+              );
+              const sosLevelProofPhotos: string[] = Array.from(
+                new Set<string>(
+                  Array.isArray((selectedSosDetail as any).proofImages)
+                    ? (selectedSosDetail as any).proofImages.filter(Boolean)
+                    : []
+                )
+              );
+              const extraSosProofPhotos = sosLevelProofPhotos.filter(
+                (url) => !rescueTeamPhotos.includes(url) && !handoffTeamPhotos.includes(url)
+              );
+
+              const hasShoreHandoffTeam = Boolean(
+                selectedSosDetail.shoreHandoffAssignment ||
+                (selectedSosDetail.shoreHandoff &&
+                  ['ASSIGNED', 'COMPLETED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase())) ||
+                selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
+                selectedSosDetail.shoreHandoff?.assignedVehicleName
+              );
+
+              const primarySectionPhotos = [
+                ...new Set([...rescueTeamPhotos, ...extraSosProofPhotos]),
+              ];
+              const combinedSectionPhotos = hasShoreHandoffTeam
+                ? [...primarySectionPhotos, ...handoffTeamPhotos]
+                : [...new Set([...primarySectionPhotos, ...handoffTeamPhotos])];
+
+              const teamProofPhotos: string[] = [
+                ...new Set([
+                  ...rescueTeamPhotos,
+                  ...handoffTeamPhotos,
+                  ...sosLevelProofPhotos,
+                ]),
+              ].filter(Boolean);
+
+              const rescueTeamLabel =
+                selectedSosDetail.assignment?.rescueTeamId?.name || 'Đội đi cứu trực tiếp';
+              const handoffVehiclePlate =
+                selectedSosDetail.shoreHandoffAssignment?.vehicleId?.plateNumber ||
+                selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
+                '';
+              const handoffTeamLabel =
+                selectedSosDetail.shoreHandoff?.assignedRoadTeamName ||
+                selectedSosDetail.shoreHandoffAssignment?.rescueTeamId?.name ||
+                'Đội xe tiếp vận / cứu thương';
+
+              // Tách bạch: ảnh người dân gửi lúc tạo SOS không bị trùng với ảnh nghiệm thu của đội cứu hộ
+              const citizenPhotos = rawCitizenPhotos.filter((url) => !teamProofPhotos.includes(url));
+
+              return (
+                <>
+                  {/* BLOCK 7A: HÌNH ẢNH DO NGƯỜI DÂN GỬI LÚC BÁO SOS */}
+                  <div
+                    className="sos-panel-card"
+                    style={{
+                      background: citizenPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                      borderColor: citizenPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
+                    }}
+                  >
+                    <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Camera size={16} color={citizenPhotos.length > 0 ? '#16a34a' : '#64748b'} />
+                        <span style={{ color: citizenPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
+                          ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)
+                        </span>
+                      </div>
+                      {citizenPhotos.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
+                          {citizenPhotos.length} ảnh
+                        </span>
+                      )}
+                    </div>
+
+                    {citizenPhotos.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                        {citizenPhotos.map((imgUrl, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              width: 84,
+                              height: 64,
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              border: '1.5px solid var(--dm-green-border)',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                              position: 'relative',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                            }}
+                            onClick={() =>
+                              setPreviewPhotos({
+                                images: citizenPhotos,
+                                activeIndex: i,
+                                title: `Ảnh người dân gửi (${selectedSosDetail.sosCode})`,
+                              })
+                            }
+                            title="Bấm để xem ảnh phóng to"
+                          >
+                            <img src={imgUrl} alt={`Ảnh người dân gửi ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
+                        <span>Người dân không đính kèm hình ảnh khi phát tín hiệu SOS</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BLOCK 7B: HÌNH ẢNH DO ĐỘI CỨU HỘ & XE TIẾP VẬN CHỤP KHI HOÀN THÀNH NHIỆM VỤ */}
+                  <div
+                    className="sos-panel-card"
+                    style={{
+                      background: teamProofPhotos.length > 0 ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
+                      borderColor: teamProofPhotos.length > 0 ? 'var(--dm-green-border)' : 'var(--dm-border)',
+                    }}
+                  >
+                    <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ShieldCheck size={16} color={teamProofPhotos.length > 0 ? '#16a34a' : '#64748b'} />
+                        <span style={{ color: teamProofPhotos.length > 0 ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)', fontWeight: 800 }}>
+                          ẢNH ĐỘI CỨU HỘ CHỤP (HOÀN THÀNH NHIỆM VỤ)
+                        </span>
+                      </div>
+                      {teamProofPhotos.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dm-green-text)', background: 'var(--dm-green-bg)', padding: '1px 7px', borderRadius: 10, border: '1px solid var(--dm-green-border)' }}>
+                          {teamProofPhotos.length} ảnh nghiệm thu
+                        </span>
+                      )}
+                    </div>
+
+                    {hasShoreHandoffTeam ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {/* Nhóm ảnh 1: Đội đi cứu */}
+                        <div>
+                          <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-green-text)', marginBottom: 5 }}>
+                            Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
+                          </div>
+                          {primarySectionPhotos.length > 0 ? (
+                            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                              {primarySectionPhotos.map((imgUrl, i) => (
+                                <div
+                                  key={`rescue-${i}`}
+                                  style={{
+                                    width: 84,
+                                    height: 64,
+                                    borderRadius: 8,
+                                    overflow: 'hidden',
+                                    border: '1.5px solid var(--dm-green-border)',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    position: 'relative',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                  }}
+                                  onClick={() =>
+                                    setPreviewPhotos({
+                                      images: combinedSectionPhotos,
+                                      activeIndex: i,
+                                      title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
+                                    })
+                                  }
+                                  title="Bấm để phóng to ảnh đội đi cứu"
+                                >
+                                  <img src={imgUrl} alt={`Ảnh đội cứu ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
+                              {selectedSosDetail.assignment?.status === 'COMPLETED'
+                                ? 'Đội đi cứu chưa tải ảnh nghiệm thu'
+                                : 'Chờ đội đi cứu hoàn tất & tải ảnh nghiệm thu'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Nhóm ảnh 2: Đội xe cứu thương / tiếp vận */}
+                        <div style={{ borderTop: '1px dashed var(--dm-green-border)', paddingTop: 8 }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--dm-blue-text)', marginBottom: 5 }}>
+                            Đội xe tiếp vận: {handoffTeamLabel}
+                            {handoffVehiclePlate ? ` (${handoffVehiclePlate})` : ''} ({handoffTeamPhotos.length} ảnh)
+                          </div>
+                          {handoffTeamPhotos.length > 0 ? (
+                            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                              {handoffTeamPhotos.map((imgUrl, i) => (
+                                <div
+                                  key={`handoff-${i}`}
+                                  style={{
+                                    width: 84,
+                                    height: 64,
+                                    borderRadius: 8,
+                                    overflow: 'hidden',
+                                    border: '1.5px solid var(--dm-blue-border)',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    position: 'relative',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                  }}
+                                  onClick={() =>
+                                    setPreviewPhotos({
+                                      images: combinedSectionPhotos,
+                                      activeIndex: primarySectionPhotos.length + i,
+                                      title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
+                                    })
+                                  }
+                                  title="Bấm để phóng to ảnh đội xe tiếp vận"
+                                >
+                                  <img src={imgUrl} alt={`Ảnh đội xe ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)' }}>
+                              {selectedSosDetail.shoreHandoff?.status === 'COMPLETED' ||
+                                selectedSosDetail.shoreHandoffAssignment?.status === 'COMPLETED'
+                                ? 'Đội xe tiếp vận chưa tải ảnh nghiệm thu'
+                                : 'Chờ đội xe tiếp vận hoàn tất & tải ảnh nghiệm thu'}
+                            </div>
+                          )}
+                        </div>
+
+                        {(selectedSosDetail.assignment?.actualRecipient ||
+                          selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
+                          (selectedSosDetail as any).actualRecipient) && (
+                            <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', fontWeight: 600 }}>
+                              ✓ Người tiếp nhận:{' '}
+                              <strong>
+                                {selectedSosDetail.assignment?.actualRecipient ||
+                                  selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
+                                  (selectedSosDetail as any).actualRecipient}
+                              </strong>
+                            </div>
+                          )}
+                      </div>
+                    ) : teamProofPhotos.length > 0 ? (
+                      <>
+                        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                          {teamProofPhotos.map((imgUrl, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                width: 84,
+                                height: 64,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '1.5px solid var(--dm-green-border)',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                position: 'relative',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                              }}
+                              onClick={() =>
+                                setPreviewPhotos({
+                                  images: teamProofPhotos,
+                                  activeIndex: i,
+                                  title: `Ảnh nghiệm thu cứu hộ (${selectedSosDetail.sosCode})`,
+                                })
+                              }
+                              title="Bấm để phóng to ảnh nghiệm thu hoàn tất"
+                            >
+                              <img src={imgUrl} alt={`Ảnh đội cứu hộ ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
+                        </div>
+                        {(selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient) && (
+                          <div style={{ fontSize: 11.5, color: 'var(--dm-green-text)', marginTop: 4, fontWeight: 600 }}>
+                            ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient}</strong>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', color: 'var(--dm-text-muted)', fontSize: 12, padding: '4px 0' }}>
+                        <span>
+                          {getEffectiveStatus(selectedSosDetail) === 'COMPLETED'
+                            ? 'Đội cứu hộ chưa tải ảnh nghiệm thu bàn giao'
+                            : 'Chờ đội cứu hộ chụp và tải lên khi hoàn tất nhiệm vụ'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* PHẢN HỒI TỪ NGƯỜI DÂN SAU CỨU HỘ */}
+            {(selectedSosDetail as any).citizenFeedback?.submittedAt && (() => {
+              const fb = (selectedSosDetail as any).citizenFeedback;
+              const isNeg = fb.sentiment === 'NEEDS_IMPROVEMENT';
+              const isNeutral = fb.sentiment === 'NEUTRAL';
+              const sentimentLabel = isNeg
+                ? 'Cần cải thiện'
+                : isNeutral
+                  ? 'Bình thường'
+                  : 'Hài lòng';
+              const pillBg = isNeg ? '#fef2f2' : isNeutral ? '#fffbeb' : '#eff6ff';
+              const pillColor = isNeg ? '#dc2626' : isNeutral ? '#d97706' : '#1d4ed8';
+              const pillBorder = isNeg ? '#fecaca' : isNeutral ? '#fde68a' : '#bfdbfe';
+              return (
+                <div className="sos-panel-card">
+                  <div
+                    className="sos-panel-card-title"
+                    style={{ justifyContent: 'space-between', width: '100%', marginBottom: 8 }}
+                  >
+                    <span>PHẢN HỒI TỪ NGƯỜI DÂN</span>
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        padding: '2px 10px',
+                        borderRadius: 999,
+                        background: pillBg,
+                        color: pillColor,
+                        border: `1px solid ${pillBorder}`,
+                        textTransform: 'none',
+                      }}
+                    >
+                      {sentimentLabel}
+                    </span>
+                  </div>
+                  {Array.isArray(fb.tags) && fb.tags.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: fb.comment ? 8 : 0 }}>
+                      {fb.tags.map((tag: string, idx: number) => (
+                        <span
+                          key={idx}
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            padding: '3px 8px',
+                            borderRadius: 999,
+                            background: 'var(--dm-surface-subtle)',
+                            color: 'var(--dm-text-secondary)',
+                            border: '1px solid var(--dm-border)',
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {fb.comment && (
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: 'var(--dm-text-secondary)',
+                        fontStyle: 'italic',
+                        lineHeight: 1.5,
+                        background: 'var(--dm-surface-subtle)',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: '1px solid var(--dm-border)',
+                      }}
+                    >
+                      "{fb.comment}"
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+
+            {/* ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN (ĐƯỢC CHUYỂN XUỐNG DƯỚI CÙNG VỚI TONE MÀU NHẸ NHÀNG, KHÔNG CHÓI) */}
+            {selectedSosDetail.shoreHandoff &&
+              !['NONE', 'CANCELLED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase()) && (
+                <div
+                  className="sos-panel-card"
+                  style={{
+                    background: 'var(--dm-surface-subtle)',
+                    borderColor: 'var(--dm-border)',
+                    borderStyle: 'solid',
+                  }}
+                >
+                  <div className="sos-panel-card-title" style={{ color: 'var(--dm-text-secondary)', marginBottom: 6 }}>
+                    <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
+                  </div>
+                  {(() => {
+                    const landing = selectedSosDetail.shoreHandoff.landingPoint;
+                    const name = (landing?.name || '').trim();
+                    const address = (landing?.address || '').trim();
+                    const isDuplicate = !address || name.toLowerCase() === address.toLowerCase();
+
+                    return (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dm-text-strong)' }}>
+                          {name || address || 'Điểm đón ven bờ'}
+                        </div>
+                        {!isDuplicate && (
+                          <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 2 }}>
+                            {address}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {(() => {
+                    const handoff = selectedSosDetail.shoreHandoff;
+                    const hasVehicleAssigned =
+                      handoff.status === 'ASSIGNED' ||
+                      handoff.status === 'COMPLETED' ||
+                      Boolean(handoff.assignedVehiclePlate || handoff.assignedVehicleId || handoff.assignedVehicleName);
+                    const handoffMeta = getShoreHandoffVehicleStatusMeta(
+                      handoff.status,
+                      selectedSosDetail.shoreHandoffAssignment?.status
+                    );
+                    const hasDetailInfo = Boolean(
+                      handoff.assignedVehiclePlate ||
+                      handoff.assignedVehicleName ||
+                      handoff.assignedRoadTeamName ||
+                      handoff.assignedDriverName
+                    );
+
+                    return (
+                      <>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                            marginTop: 8,
+                            background: 'var(--dm-surface)',
+                            padding: '7px 10px',
+                            borderRadius: 6,
+                            border: '1px solid var(--dm-border)',
+                          }}
+                        >
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--dm-text-secondary)' }}>
+                            {handoff.vehicleTypeNeeded === 'AMBULANCE' ? '🚑 Xe Cứu Thương 115' : '🚒 Xe Tải Cứu Hộ'}{' '}
+                            ({handoff.peopleCount} người)
+                          </span>
+                          {hasVehicleAssigned ? (
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 800,
+                                color: handoffMeta.color,
+                                background: handoffMeta.bg,
+                                border: `1px solid ${handoffMeta.borderColor}`,
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                              }}
+                            >
+                              {handoffMeta.label} (
+                              {handoff.assignedVehiclePlate || handoff.assignedVehicleName || 'Đã phân bổ'})
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                color: 'var(--dm-text-muted)',
+                                background: 'var(--dm-surface-muted)',
+                                border: '1px solid var(--dm-border)',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                              }}
+                            >
+                              ⏳ Chờ xe đón
+                            </span>
+                          )}
+                        </div>
+
+                        {hasVehicleAssigned && hasDetailInfo && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              background: 'var(--dm-surface)',
+                              padding: '7px 10px',
+                              borderRadius: 6,
+                              border: '1px solid var(--dm-green-border)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 3,
+                              fontSize: 11.5,
+                              color: 'var(--dm-text-secondary)',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <strong style={{ color: 'var(--dm-text-strong)' }}>
+                                {handoff.assignedVehicleName ||
+                                  (handoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ')}
+                              </strong>
+                              {handoff.assignedVehiclePlate && (
+                                <span
+                                  style={{
+                                    fontSize: 10.5,
+                                    fontWeight: 800,
+                                    fontFamily: 'monospace',
+                                    padding: '1px 6px',
+                                    borderRadius: 4,
+                                    background: 'var(--dm-surface-muted)',
+                                    border: '1px solid var(--dm-border-strong)',
+                                    color: 'var(--dm-text-strong)',
+                                  }}
+                                >
+                                  {handoff.assignedVehiclePlate}
+                                </span>
+                              )}
+                            </div>
+                            {handoff.assignedRoadTeamName && (
+                              <div style={{ fontSize: 11, color: 'var(--dm-text-secondary)' }}>
+                                Đội tiếp ứng: <strong style={{ color: 'var(--dm-text-body)' }}>{handoff.assignedRoadTeamName}</strong>
+                              </div>
+                            )}
+                            {handoff.assignedDriverName && (
+                              <div style={{ fontSize: 11, color: 'var(--dm-text-muted)' }}>
+                                Phụ trách / Tài xế: <strong style={{ color: 'var(--dm-text-secondary)' }}>{handoff.assignedDriverName}</strong>
+                                {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+          </div>
+        )}
+      </DetailSheet>
 
       {/* Modal tiếp nhận hotline lưu vào MongoDB */}
       {showHotlineModal && (
-        <div style={{
+        <div data-modal-layer="confirm" style={{
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(0,0,0,0.6)',
@@ -2508,7 +2530,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 100,
+          zIndex: 10000,
           padding: '20px'
         }}>
           <div className="sos-modal-card" style={{
@@ -2627,6 +2649,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       {/* Modal Popup xác nhận hành động nguy hiểm (Đồng bộ 100% phong cách Mobile App) */}
       {confirmDialog?.isOpen && (
         <div
+          data-modal-layer="confirm"
           style={{
             position: 'fixed',
             inset: 0,

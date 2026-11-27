@@ -36,6 +36,8 @@ import {
 import type { User } from '@/types/auth';
 import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
 import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import {
   exportBloodDonationsExcel,
   exportSingleBloodDonationEventExcel,
@@ -1062,7 +1064,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   };
 
   return (
-    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="sos-views-container" style={{ gap: 14 }}>
       {/* Toast */}
       {toastMsg && (
         <div
@@ -1090,7 +1092,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       )}
 
-      {/* Thanh công cụ 1 hàng duy nhất & Nút đồng bộ màu #2563eb */}
+      {/* Thanh công cụ 1 hàng duy nhất đồng bộ màu Chronicle Primary */}
       <div
         style={{
           background: 'var(--dm-surface)',
@@ -1117,8 +1119,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: 13,
-              background: activeTab === 'REGISTRATIONS' ? '#2563eb' : 'var(--dm-surface-muted)',
-              color: activeTab === 'REGISTRATIONS' ? '#ffffff' : 'var(--dm-text-secondary)',
+              background: activeTab === 'REGISTRATIONS' ? 'var(--primary)' : 'var(--dm-surface-muted)',
+              color: activeTab === 'REGISTRATIONS' ? 'var(--primary-foreground)' : 'var(--dm-text-secondary)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -1135,8 +1137,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: 13,
-              background: activeTab === 'EVENTS' ? '#2563eb' : 'var(--dm-surface-muted)',
-              color: activeTab === 'EVENTS' ? '#ffffff' : 'var(--dm-text-secondary)',
+              background: activeTab === 'EVENTS' ? 'var(--primary)' : 'var(--dm-surface-muted)',
+              color: activeTab === 'EVENTS' ? 'var(--primary-foreground)' : 'var(--dm-text-secondary)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -1160,13 +1162,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               alignItems: 'center',
               gap: 6,
               background: 'var(--dm-surface-subtle)',
-              border: showSuggestions ? '1.5px solid #2563eb' : '1px solid var(--dm-border-strong)',
+              border: showSuggestions ? '1.5px solid var(--primary)' : '1px solid var(--dm-border-strong)',
               borderRadius: 8,
               padding: '6px 10px',
               transition: 'border 0.15s ease',
             }}
           >
-            <Search size={14} color={showSuggestions ? '#2563eb' : '#94a3b8'} style={{ flexShrink: 0 }} />
+            <Search size={14} style={{ color: showSuggestions ? 'var(--primary)' : 'var(--muted-foreground)', flexShrink: 0 }} />
             <input
               type="text"
               value={searchQuery}
@@ -1285,8 +1287,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           padding: '3px 8px',
                           borderRadius: 6,
                           border: '1px solid var(--dm-border-strong)',
-                          background: searchQuery === st.val ? '#2563eb' : 'var(--dm-surface-subtle)',
-                          color: searchQuery === st.val ? '#ffffff' : 'var(--dm-text-secondary)',
+                          background: searchQuery === st.val ? 'var(--primary)' : 'var(--dm-surface-subtle)',
+                          color: searchQuery === st.val ? 'var(--primary-foreground)' : 'var(--dm-text-secondary)',
                           fontSize: 11.5,
                           fontWeight: 500,
                           cursor: 'pointer',
@@ -1318,8 +1320,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                           padding: '3px 8px',
                           borderRadius: 6,
                           border: '1px solid var(--dm-border)',
-                          background: searchQuery === w.name ? '#2563eb' : 'var(--dm-surface-muted)',
-                          color: searchQuery === w.name ? '#ffffff' : 'var(--dm-text-secondary)',
+                          background: searchQuery === w.name ? 'var(--primary)' : 'var(--dm-surface-muted)',
+                          color: searchQuery === w.name ? 'var(--primary-foreground)' : 'var(--dm-text-secondary)',
                           fontSize: 11.5,
                           cursor: 'pointer',
                         }}
@@ -1392,16 +1394,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
           <button
             type="button"
+            className="sos-btn sos-btn--primary sos-btn--sm"
             onClick={() => setIsCreateOpen(true)}
             style={{
               padding: '7px 14px',
-              borderRadius: 8,
-              border: '1px solid #2563eb',
-              background: '#2563eb',
-              color: '#ffffff',
-              fontWeight: 600,
               fontSize: 13,
-              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
@@ -1418,14 +1415,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       {loading ? (
         <div
           style={{
-            background: 'var(--dm-surface)',
-            borderRadius: 10,
-            padding: 40,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'calc(var(--radius) * 1.3)',
+            boxShadow: 'var(--surface-shadow)',
+            padding: '28px 16px',
             textAlign: 'center',
-            color: 'var(--dm-text-muted)',
           }}
         >
-          Đang tải...
+          <SyncLogoLoader size="md" message="Đang tải dữ liệu hiến máu..." />
         </div>
       ) : activeTab === 'REGISTRATIONS' ? (
         <div className="sos-clean-table-container">
@@ -1520,40 +1518,39 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                               {getInitials(reg.fullName)}
                             </div>
                           )}
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              color: 'var(--dm-blue-text)',
-                            }}
-                          >
+                          <span className="ch-tbl-primary">
                             {reg.fullName}
                           </span>
                         </div>
                       </td>
 
-                      <td style={{ color: 'var(--dm-text-secondary)', fontWeight: 500 }}>{reg.phone}</td>
+                      <td>
+                        <span className="ch-tbl-phone">{reg.phone}</span>
+                      </td>
 
                       <td style={{ textAlign: 'center' }}>
                         <span
                           style={{
                             background: 'var(--dm-red-bg)',
                             color: 'var(--dm-red-text)',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             padding: '2px 9px',
                             borderRadius: 6,
-                            fontSize: 12,
+                            fontSize: 11.5,
                           }}
                         >
                           {reg.bloodType === 'UNKNOWN' ? 'Chưa rõ' : reg.bloodType}
                         </span>
                       </td>
 
-                      <td style={{ color: 'var(--dm-text-secondary)' }}>
-                        {reg.provinceName || reg.areaName || '—'}
+                      <td>
+                        <span className="ch-tbl-body">{reg.provinceName || reg.areaName || '—'}</span>
                       </td>
 
-                      <td style={{ fontSize: 12.5, color: 'var(--dm-text-muted)' }}>
-                        {formatDateTime(reg.respondedAt || reg.createdAt)}
+                      <td>
+                        <span className="ch-tbl-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {formatDateTime(reg.respondedAt || reg.createdAt)}
+                        </span>
                       </td>
 
                       <td style={{ textAlign: 'center' }}>
@@ -1604,7 +1601,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             <tbody>
               {filteredEvents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
+                  <td colSpan={6} style={{ padding: 36, textAlign: 'center', color: 'var(--muted-foreground)' }}>
                     Chưa có đợt hiến máu nào.
                   </td>
                 </tr>
@@ -1624,26 +1621,30 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         ariaLabel={`Chọn đợt ${ev.title}`}
                       />
                     </td>
-                    <td style={{ fontWeight: 700, color: 'var(--dm-blue-text)' }}>
-                      {ev.title}
+                    <td>
+                      <span className="ch-tbl-primary">{ev.title}</span>
                     </td>
-                    <td style={{ color: 'var(--dm-text-secondary)' }}>
-                      {ev.locationName} ({ev.areaName || 'Toàn hệ thống'})
+                    <td>
+                      <span className="ch-tbl-body">{ev.locationName} ({ev.areaName || 'Toàn hệ thống'})</span>
                     </td>
-                    <td style={{ color: 'var(--dm-text-secondary)', fontSize: 12.5 }}>
-                      {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
+                    <td>
+                      <span className="ch-tbl-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
+                      </span>
                     </td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--dm-green-text)' }}>
-                      {ev.stats?.confirmedCount || 0} / {ev.targetDonors}
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="ch-tbl-mono" style={{ color: 'var(--dm-green-text)' }}>
+                        {ev.stats?.confirmedCount || 0} / {ev.targetDonors}
+                      </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span
                         style={{
                           background: ev.status === 'ACTIVE' ? 'var(--dm-green-bg)' : 'var(--dm-surface-muted)',
-                          color: ev.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--dm-text-muted)',
+                          color: ev.status === 'ACTIVE' ? 'var(--dm-green-text)' : 'var(--muted-foreground)',
                           padding: '3px 9px',
                           borderRadius: 999,
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: 600,
                         }}
                       >
@@ -1658,81 +1659,95 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       )}
 
-      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT NGƯỜI ĐĂNG KÝ (ĐÈ LÊN FORM NẾU ĐANG XEM ĐỢT HIẾN) ================= */}
-      {selectedRegistration && (
-        <>
-          <div
-            onClick={() => setSelectedRegistration(null)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.45)',
-              zIndex: selectedEventDetail ? 10010 : 9998,
-              backdropFilter: selectedEventDetail ? 'blur(2px)' : undefined,
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 440,
-              maxWidth: '94vw',
-              background: 'var(--dm-surface)',
-              zIndex: selectedEventDetail ? 10020 : 9999,
-              boxShadow: '-8px 0 35px rgba(15, 23, 42, 0.25)',
-              display: 'flex',
-              flexDirection: 'column',
-              animation: 'slideInRight 0.2s ease-out',
-            }}
-          >
-            {/* Header Drawer */}
-            <div
-              style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid var(--dm-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: selectedEventDetail ? 'var(--dm-surface-subtle)' : 'var(--dm-surface)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <UserIcon size={18} color="#2563eb" />
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                    {selectedEventDetail ? 'Hồ sơ người tham gia đợt hiến' : 'Chi tiết đăng ký hiến máu'}
-                  </h3>
-                  {selectedEventDetail && (
-                    <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
-                      Thuộc đợt: <strong style={{ color: 'var(--dm-blue-text)' }}>{selectedEventDetail.title}</strong>
-                    </div>
-                  )}
-                </div>
-              </div>
+      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT NGƯỜI ĐĂNG KÝ (CHRONICLE DETAIL SHEET, STACKABLE) ================= */}
+      <DetailSheet
+        open={Boolean(selectedRegistration)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRegistration(null);
+        }}
+        size="md"
+        zIndex={selectedEventDetail ? 1420 : 1400}
+        icon={<UserIcon className="size-4" />}
+        title={
+          selectedEventDetail ? 'Hồ sơ người tham gia đợt hiến' : 'Chi tiết đăng ký hiến máu'
+        }
+        description={
+          selectedEventDetail ? (
+            <>
+              Thuộc đợt:{' '}
+              <strong style={{ color: 'var(--dm-blue-text)' }}>{selectedEventDetail.title}</strong>
+            </>
+          ) : selectedRegistration ? (
+            selectedRegistration.fullName
+          ) : undefined
+        }
+        footer={
+          selectedRegistration && (
+            <>
               <button
                 type="button"
                 onClick={() => setSelectedRegistration(null)}
-                title={selectedEventDetail ? 'Đóng hồ sơ (giữ nguyên đợt hiến)' : 'Đóng'}
                 style={{
-                  background: 'var(--dm-surface-muted)',
-                  border: 'none',
+                  padding: '8px 14px',
                   borderRadius: 8,
-                  width: 32,
-                  height: 32,
+                  border: '1px solid var(--dm-border-strong)',
+                  background: 'var(--dm-surface)',
+                  color: 'var(--dm-text-secondary)',
+                  fontWeight: 600,
+                  fontSize: 13,
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 }}
               >
-                <X size={16} />
+                {selectedEventDetail ? '← Đóng (Giữ đợt hiến)' : 'Đóng'}
               </button>
-            </div>
 
-            {/* Body Drawer */}
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {selectedRegistration.status !== 'COMPLETED' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'COMPLETED')}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: '#16a34a',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: 12.5,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Xác nhận đã hiến máu</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'CONFIRMED')}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--dm-border-strong)',
+                      background: 'var(--dm-surface)',
+                      color: 'var(--dm-text-muted)',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đổi về: Xác nhận tham gia
+                  </button>
+                )}
+              </div>
+            </>
+          )
+        }
+      >
+        {selectedRegistration && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Khối User + Ảnh đại diện */}
               <div
                 style={{
@@ -1986,25 +2001,29 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </div>
                 </div>
               )}
-            </div>
+          </div>
+        )}
+      </DetailSheet>
 
-            {/* Footer Drawer có nút thao tác & Đóng giữ nguyên form đợt hiến */}
-            <div
-              style={{
-                padding: '14px 20px',
-                borderTop: '1px solid var(--dm-border)',
-                background: 'var(--dm-surface-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 10,
-              }}
-            >
+      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT ĐỢT HIẾN MÁU (CHRONICLE DETAIL SHEET) ================= */}
+      <DetailSheet
+        open={Boolean(selectedEventDetail)}
+        onOpenChange={(open) => {
+          if (!open && !selectedRegistration) setSelectedEventDetail(null);
+        }}
+        size="2xl"
+        zIndex={1400}
+        icon={<Droplet className="size-4" />}
+        title={selectedEventDetail?.title || ''}
+        description={selectedEventDetail ? selectedEventDetail.areaName || 'Toàn hệ thống' : undefined}
+        footer={
+          selectedEventDetail && (
+            <div className="flex w-full justify-end">
               <button
                 type="button"
-                onClick={() => setSelectedRegistration(null)}
+                onClick={() => setSelectedEventDetail(null)}
                 style={{
-                  padding: '8px 14px',
+                  padding: '8px 16px',
                   borderRadius: 8,
                   border: '1px solid var(--dm-border-strong)',
                   background: 'var(--dm-surface)',
@@ -2014,119 +2033,14 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   cursor: 'pointer',
                 }}
               >
-                {selectedEventDetail ? '← Đóng (Giữ đợt hiến)' : 'Đóng'}
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {selectedRegistration.status !== 'COMPLETED' ? (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'COMPLETED')}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      border: 'none',
-                      background: '#16a34a',
-                      color: '#ffffff',
-                      fontWeight: 600,
-                      fontSize: 12.5,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Xác nhận đã hiến máu</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'CONFIRMED')}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: '1px solid var(--dm-border-strong)',
-                      background: 'var(--dm-surface)',
-                      color: 'var(--dm-text-muted)',
-                      fontWeight: 600,
-                      fontSize: 12,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Đổi về: Xác nhận tham gia
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT ĐỢT HIẾN MÁU ================= */}
-      {selectedEventDetail && (
-        <>
-          <div
-            onClick={() => setSelectedEventDetail(null)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.35)',
-              zIndex: 9998,
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 820,
-              maxWidth: '96vw',
-              background: 'var(--dm-surface)',
-              zIndex: 9999,
-              boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.15)',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div
-              style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid var(--dm-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                  {selectedEventDetail.title}
-                </h3>
-                <div style={{ fontSize: 12, color: 'var(--dm-text-muted)', marginTop: 2 }}>
-                  {selectedEventDetail.areaName || 'Toàn hệ thống'}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedEventDetail(null)}
-                style={{
-                  background: 'var(--dm-surface-muted)',
-                  border: 'none',
-                  borderRadius: 8,
-                  width: 30,
-                  height: 30,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={16} />
+                Đóng
               </button>
             </div>
-
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          )
+        }
+      >
+        {selectedEventDetail && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div
                 style={{
                   background: 'var(--dm-surface-subtle)',
@@ -2251,9 +2165,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </div>
 
               {loadingDetail ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--dm-text-muted)', fontSize: 13 }}>
-                  Đang tải...
-                </div>
+                <SyncLogoLoader size="sm" message="Đang tải danh sách người tham gia..." />
               ) : eventResponses.length === 0 ? (
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--dm-text-muted)', fontSize: 13 }}>
                   Chưa có người dân xác nhận trên App.
@@ -2276,27 +2188,20 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     <option value="450" />
                   </datalist>
                   <table
+                    className="sos-clean-table"
                     style={{
                       width: '100%',
                       borderCollapse: 'collapse',
-                      fontSize: 12.5,
                       minWidth: 680,
                     }}
                   >
                     <thead>
-                      <tr
-                        style={{
-                          background: 'var(--dm-surface-subtle)',
-                          borderBottom: '1px solid var(--dm-border)',
-                          color: 'var(--dm-text-secondary)',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <th style={{ padding: '9px 10px', fontWeight: 700 }}>Người tham gia</th>
-                        <th style={{ padding: '9px 8px', fontWeight: 700, width: 120 }}>Nhóm máu</th>
-                        <th style={{ padding: '9px 8px', fontWeight: 700, width: 125 }}>Lượng máu (ml)</th>
-                        <th style={{ padding: '9px 8px', fontWeight: 700, width: 130 }}>Trạng thái</th>
-                        <th style={{ padding: '9px 10px', fontWeight: 700, textAlign: 'right', width: 145 }}>
+                      <tr>
+                        <th>Người tham gia</th>
+                        <th style={{ width: 120 }}>Nhóm máu</th>
+                        <th style={{ width: 125 }}>Lượng máu (ml)</th>
+                        <th style={{ width: 130 }}>Trạng thái</th>
+                        <th style={{ textAlign: 'right', width: 145 }}>
                           Thao tác
                         </th>
                       </tr>
@@ -2308,15 +2213,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                         const isRowBusy = completingRegId === r._id;
 
                         return (
-                          <tr
-                            key={r._id}
-                            style={{
-                              borderBottom: '1px solid var(--dm-border)',
-                              background: 'var(--dm-surface)',
-                            }}
-                          >
+                          <tr key={r._id}>
                             {/* Người tham gia */}
-                            <td style={{ padding: '10px' }}>
+                            <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 {r.userId?.avatarUrl ? (
                                   <img
@@ -2327,7 +2226,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                       height: 30,
                                       borderRadius: '50%',
                                       objectFit: 'cover',
-                                      border: '1px solid var(--dm-blue-border)',
+                                      border: '1px solid var(--border)',
                                       flexShrink: 0,
                                     }}
                                   />
@@ -2339,7 +2238,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                       borderRadius: '50%',
                                       background: isCompleted ? 'var(--dm-green-bg)' : 'var(--dm-blue-bg)',
                                       color: isCompleted ? 'var(--dm-green-text)' : 'var(--dm-blue-text)',
-                                      fontWeight: 700,
+                                      fontWeight: 600,
                                       fontSize: 11.5,
                                       display: 'flex',
                                       alignItems: 'center',
@@ -2353,18 +2252,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                                 <div style={{ minWidth: 0 }}>
                                   <div
                                     onClick={() => setSelectedRegistration(r)}
+                                    className="ch-tbl-primary"
                                     style={{
-                                      fontWeight: 700,
-                                      color: 'var(--dm-blue-text)',
                                       cursor: 'pointer',
-                                      textDecoration: 'underline',
-                                      textUnderlineOffset: 2,
                                     }}
                                     title="Nhấn để xem hồ sơ chi tiết"
                                   >
                                     {r.fullName}
                                   </div>
-                                  <div style={{ fontSize: 11.5, color: 'var(--dm-text-muted)', marginTop: 1 }}>
+                                  <div className="ch-tbl-meta" style={{ marginTop: 1 }}>
                                     {r.phone}
                                     {r.weightKg ? ` • ${r.weightKg}kg` : ''}
                                     {r.preferredTimeSlot ? ` • ${r.preferredTimeSlot}` : ''}
@@ -2374,13 +2270,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                             </td>
 
                             {/* Nhóm máu (điền trực tiếp trong form) */}
-                            <td style={{ padding: '10px 8px' }}>
+                            <td>
                               {isCompleted ? (
                                 <span
                                   style={{
                                     background: 'var(--dm-red-bg)',
                                     color: 'var(--dm-red-text)',
-                                    fontWeight: 700,
+                                    fontWeight: 600,
                                     padding: '3px 8px',
                                     borderRadius: 999,
                                     fontSize: 11.5,
@@ -2429,13 +2325,12 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                             </td>
 
                             {/* Số lượng máu đã hiến (ml) */}
-                            <td style={{ padding: '10px 8px' }}>
+                            <td>
                               {isCompleted ? (
                                 <span
+                                  className="ch-tbl-mono"
                                   style={{
-                                    fontWeight: 700,
                                     color: 'var(--dm-green-text)',
-                                    fontSize: 12.5,
                                   }}
                                 >
                                   {r.donatedVolumeMl ? `${r.donatedVolumeMl} ml` : '—'}
@@ -2580,10 +2475,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </table>
                 </div>
               )}
-            </div>
           </div>
-        </>
-      )}
+        )}
+      </DetailSheet>
 
       {/* ================= MODAL TẠO ĐỢT HIẾN MÁU (2 CỘT: FORM + MAP SEARCH & PICKER) ================= */}
       {isCreateOpen && (
@@ -2986,14 +2880,10 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </button>
                   <button
                     type="submit"
+                    className="sos-btn sos-btn--primary sos-btn--sm"
                     disabled={creating}
                     style={{
                       padding: '8px 16px',
-                      borderRadius: 8,
-                      border: '1px solid #2563eb',
-                      background: '#2563eb',
-                      color: '#ffffff',
-                      fontWeight: 600,
                       fontSize: 13,
                       cursor: creating ? 'not-allowed' : 'pointer',
                       opacity: creating ? 0.7 : 1,
@@ -3031,6 +2921,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       {/* ================= MODAL BẮT BUỘC CHỌN NHÓM MÁU KHI XÁC NHẬN ĐÃ HIẾN MÁU ================= */}
       {bloodPromptReg && (
         <div
+          data-modal-layer="confirm"
           style={{
             position: 'fixed',
             inset: 0,

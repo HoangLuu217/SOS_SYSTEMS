@@ -53,6 +53,8 @@ import {
   type PendingUploadImage,
 } from '@/utils/imageUpload';
 import { LocationSearchMapPicker } from '@/components/common/LocationSearchMapPicker';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
@@ -133,7 +135,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 }) => {
   const { showToast, setConfirmModal, setConfirmPromptValue, renderGlobalModals } = useGlobalModals();
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
 
@@ -920,9 +922,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setIsCreateHazardOpen(false);
     };
 
-    // Mở Form thẩm định & chuẩn hóa thông tin điểm nguy hiểm (Tự động ẩn form chi tiết)
+    // Mở Form thẩm định & chuẩn hóa thông tin điểm nguy hiểm ngay trong DetailSheet
     const handleOpenReviewModal = (hazard: HazardReportItem) => {
-      setDetailHazard(null);
+      setDetailHazard(hazard);
       setReviewingHazard(hazard);
       setEditTitle(hazard.title || '');
       setEditHazardType(hazard.hazardType || 'FLOOD');
@@ -1518,9 +1520,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           style={{
             padding: '8px 16px',
             fontSize: '13px',
-            backgroundColor: '#0284c7',
-            color: '#ffffff',
-            borderColor: '#0284c7',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
@@ -1847,7 +1846,13 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {totalHazardItems === 0 ? (
+                {loading && hazardReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                      <SyncLogoLoader size="md" message="Đang tải danh sách điểm nguy hiểm..." />
+                    </td>
+                  </tr>
+                ) : totalHazardItems === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                       <AlertTriangle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
@@ -1929,32 +1934,19 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               <HazardTypeIcon type={r.hazardType} size={18} color="#334155" />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: 'var(--dm-blue-text)',
-                                  fontSize: '14px',
-                                  lineHeight: '1.4',
-                                }}
-                              >
+                              <div className="ch-tbl-primary">
                                 {r.title}
                               </div>
                               <span
+                                className="ch-tbl-meta"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '5px',
-                                  padding: '2px 7px',
-                                  borderRadius: '5px',
-                                  fontSize: '11.5px',
-                                  fontWeight: 600,
-                                  backgroundColor: 'var(--dm-surface-subtle)',
-                                  color: 'var(--dm-text-secondary)',
-                                  border: '1px solid var(--dm-border)',
-                                  marginTop: '3px',
+                                  gap: '4px',
+                                  marginTop: '2px',
                                 }}
                               >
-                                <HazardTypeIcon type={r.hazardType} size={12} color="#64748b" />
+                                <HazardTypeIcon type={r.hazardType} size={12} color="currentColor" />
                                 {typeCfg.label}
                               </span>
                             </div>
@@ -1964,22 +1956,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         {/* 2. Địa phương quản lý */}
                         <td>
                           <span
+                            className="ch-tbl-body"
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '6px',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: isLocal ? 700 : 500,
-                              background: isLocal ? 'var(--dm-green-bg)' : 'var(--dm-surface-subtle)',
-                              color: isLocal ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
-                              border: `1px solid ${isLocal ? 'var(--dm-green-border)' : 'var(--dm-border-strong)'}`,
+                              fontWeight: isLocal ? 500 : 400,
                               whiteSpace: 'nowrap',
                             }}
                             title={`Địa bàn quản lý: ${districtName}`}
                           >
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isLocal ? '#16a34a' : '#94a3b8' }} />
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isLocal ? '#16a34a' : '#94a3b8', flexShrink: 0 }} />
                             {districtName}
                           </span>
                         </td>
@@ -1992,7 +1979,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               padding: '3px 8px',
                               borderRadius: '5px',
                               fontSize: '11.5px',
-                              fontWeight: 700,
+                              fontWeight: 600,
                               backgroundColor: sevBadge.bg,
                               color: sevBadge.color,
                               border: `1px solid ${sevBadge.border}`,
@@ -2005,17 +1992,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
                         {/* 4. Địa chỉ hiện trường */}
                         <td>
-                          <div style={{ fontSize: '13px', color: 'var(--dm-text-body)', fontWeight: 500, lineHeight: '1.45' }}>
+                          <div className="ch-tbl-body">
                             {r.address}
                           </div>
                         </td>
 
                         {/* 5. Thời gian & Người báo */}
                         <td>
-                          <div style={{ fontSize: '12.5px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
+                          <div className="ch-tbl-body" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             {formatHazardTime(r.createdAt)}
                           </div>
-                          <div style={{ fontSize: '11.5px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
+                          <div className="ch-tbl-meta" style={{ marginTop: '2px' }}>
                             {reporterName}
                           </div>
                         </td>
@@ -2181,100 +2168,602 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
         </div>
 
-        {/* DRAWER CHI TIẾT ĐIỂM NGUY HIỂM (MỞ TỪ BÊN PHẢI MÀN HÌNH) */}
-        {detailHazard && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.5)',
-              backdropFilter: 'blur(3px)',
-              display: 'flex',
-              alignItems: 'stretch',
-              justifyContent: 'flex-end',
-              zIndex: 9999,
-              padding: 0,
-            }}
-            onClick={() => setDetailHazard(null)}
-          >
-            <div
-              style={{
-                background: 'var(--dm-surface)',
-                borderRadius: 0,
-                width: '680px',
-                maxWidth: '94vw',
-                height: '100vh',
-                maxHeight: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
-                borderLeft: '1px solid var(--dm-border-strong)',
-                overflow: 'hidden',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header Modal */}
-              <div
-                style={{
-                  padding: '14px 20px',
-                  borderBottom: '1px solid var(--dm-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'var(--dm-surface-subtle)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--dm-surface-muted)',
-                      border: '1px solid var(--dm-border)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <HazardTypeIcon type={detailHazard.hazardType} size={18} color="#334155" />
+        {/* DRAWER CHI TIẾT & CHỈNH SỬA ĐIỂM NGUY HIỂM (CHRONICLE DETAIL SHEET) */}
+        {(() => {
+          const isEditingHazard = Boolean(
+            reviewingHazard && detailHazard && reviewingHazard._id === detailHazard._id
+          );
+          const origCoords = reviewingHazard?.location?.coordinates;
+          const origLng = Array.isArray(origCoords) && origCoords.length === 2 ? origCoords[0] : 108.217;
+          const origLat = Array.isArray(origCoords) && origCoords.length === 2 ? origCoords[1] : 16.0605;
+          const origReviewNote =
+            reviewingHazard?.reviewNote ||
+            (reviewingHazard?.status === 'APPROVED'
+              ? 'Đã thẩm định thông tin và phê duyệt đưa lên bản đồ tác chiến'
+              : 'Đã xác minh và chuẩn hóa thông tin cảnh báo');
+          const isEditHazardDirty = Boolean(
+            isEditingHazard &&
+              reviewingHazard &&
+              (editTitle !== (reviewingHazard.title || '') ||
+                editHazardType !== (reviewingHazard.hazardType || 'FLOOD') ||
+                editCustomHazardType !== (reviewingHazard.customHazardType || '') ||
+                editSeverity !== (reviewingHazard.severity || 'HIGH') ||
+                editAddress !== (reviewingHazard.address || '') ||
+                Math.abs(Number(editLat) - Number(origLat)) > 1e-5 ||
+                Math.abs(Number(editLng) - Number(origLng)) > 1e-5 ||
+                editDescription !== (reviewingHazard.description || '') ||
+                editReviewNote !== origReviewNote ||
+                editPendingImages.length > 0 ||
+                JSON.stringify(editExistingImages) !==
+                  JSON.stringify(Array.isArray(reviewingHazard.images) ? reviewingHazard.images : []))
+          );
+
+          return (
+        <DetailSheet
+          open={Boolean(detailHazard)}
+          onOpenChange={(open) => {
+            if (!open && !selectedHazardPhoto && !submittingReview) {
+              closeEditReviewModal();
+              setDetailHazard(null);
+            }
+          }}
+          size={isEditingHazard ? '2xl' : 'xl'}
+          icon={
+            detailHazard ? (
+              <HazardTypeIcon type={detailHazard.hazardType} size={18} color="currentColor" />
+            ) : undefined
+          }
+          title={
+            isEditingHazard
+              ? reviewingHazard?.status === 'APPROVED'
+                ? `Chỉnh sửa: ${detailHazard?.title || ''}`
+                : `Thẩm định & chuẩn hóa: ${detailHazard?.title || ''}`
+              : detailHazard?.title || ''
+          }
+          description={
+            detailHazard
+              ? isEditingHazard
+                ? 'Kiểm tra và chuẩn hóa các trường thông tin chuẩn xác trước khi công bố lên bản đồ tác chiến.'
+                : `Mã: ${detailHazard._id} • Báo lúc: ${formatHazardTime(detailHazard.createdAt)}`
+              : undefined
+          }
+          saveBar={
+            isEditingHazard && reviewingHazard
+              ? {
+                  dirty: isEditHazardDirty,
+                  saving: submittingReview,
+                  onSave: () => handleSubmitReview('APPROVED'),
+                  onDiscard: () => handleOpenReviewModal(reviewingHazard),
+                  saveLabel:
+                    reviewingHazard.status === 'APPROVED'
+                      ? 'Lưu điểm nguy hiểm'
+                      : 'Lưu & Phê duyệt',
+                }
+              : undefined
+          }
+          footer={
+            detailHazard &&
+            (() => {
+              if (isEditingHazard && reviewingHazard) {
+                return (
+                  <>
+                    <button
+                      type="button"
+                      className="sos-btn-flat danger"
+                      disabled={submittingReview}
+                      onClick={() => handleInitiateRejectHazard()}
+                    >
+                      <XCircle size={14} />
+                      <span>Từ chối điểm báo</span>
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {reviewingHazard.status !== 'APPROVED' && !isEditHazardDirty && (
+                        <button
+                          type="button"
+                          className="sos-btn-flat primary"
+                          disabled={submittingReview}
+                          onClick={() => handleSubmitReview('APPROVED')}
+                          style={{ padding: '7px 16px' }}
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>Phê duyệt ngay</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="sos-btn-flat"
+                        disabled={submittingReview}
+                        onClick={closeEditReviewModal}
+                      >
+                        Quay lại xem chi tiết
+                      </button>
+                      <button
+                        type="button"
+                        className="sos-btn-flat"
+                        disabled={submittingReview}
+                        onClick={() => {
+                          closeEditReviewModal();
+                          setDetailHazard(null);
+                        }}
+                      >
+                        Đóng
+                      </button>
+                    </div>
+                  </>
+                );
+              }
+
+              const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+              const isDetailInJurisdiction = isAdmin || isHazardInOfficerJurisdiction(detailHazard);
+              return (
+                <>
+                  {isDetailInJurisdiction ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHazard(detailHazard._id, detailHazard.title)}
+                      disabled={loading}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        background: 'var(--dm-red-bg)',
+                        color: 'var(--dm-red-text)',
+                        border: '1px solid var(--dm-red-border)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      <span>Xóa điểm nguy hiểm</span>
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        background: 'var(--dm-amber-bg)',
+                        color: 'var(--dm-amber-text)',
+                        border: '1px solid var(--dm-amber-border)',
+                        fontSize: '12.5px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: 'var(--dm-amber-text)' }}></i>
+                      <span>
+                        Điểm nguy hiểm này ngoài khu vực quản lý ({accountAreaDisplayName}) — Bạn chỉ có quyền xem thông tin.
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {isDetailInJurisdiction && detailHazard.status === 'PENDING' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleInitiateRejectHazard(detailHazard._id)}
+                          disabled={loading}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            background: 'var(--dm-orange-bg)',
+                            color: 'var(--dm-orange-text)',
+                            border: '1px solid var(--dm-orange-border)',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <XCircle size={15} />
+                          <span>Từ chối</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenReviewModal(detailHazard);
+                          }}
+                          disabled={loading}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 18px',
+                            borderRadius: '8px',
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: 'none',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                          }}
+                        >
+                          <i className="bi bi-pencil-square"></i>
+                          <span>Chuẩn hóa &amp; Phê duyệt</span>
+                        </button>
+                      </>
+                    )}
+
+                    {isDetailInJurisdiction && detailHazard.status === 'APPROVED' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleOpenReviewModal(detailHazard);
+                        }}
+                        disabled={loading}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: 'var(--dm-blue-bg)',
+                          color: 'var(--dm-blue-text)',
+                          border: '1px solid var(--dm-blue-border)',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Edit size={14} />
+                        <span>Chỉnh sửa thông tin</span>
+                      </button>
+                    )}
+
+                    {isDetailInJurisdiction && detailHazard.status === 'REJECTED' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleOpenReviewModal(detailHazard);
+                        }}
+                        disabled={loading}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: '#16a34a',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>Duyệt lại &amp; Chuẩn hóa</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setDetailHazard(null)}
+                      style={{
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        background: 'var(--dm-surface)',
+                        color: 'var(--dm-text-secondary)',
+                        border: '1px solid var(--dm-border-strong)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Đóng
+                    </button>
                   </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                      {detailHazard.title}
-                    </h3>
-                    <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: '1px' }}>
-                      Mã: {detailHazard._id} • Báo lúc: {formatHazardTime(detailHazard.createdAt)}
+                </>
+              );
+            })()
+          }
+        >
+          {detailHazard && (
+            isEditingHazard && reviewingHazard ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div
+                  style={{
+                    background: 'var(--dm-surface-subtle)',
+                    border: '1px solid var(--dm-border)',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    fontSize: '12.5px',
+                  }}
+                >
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Thông tin người dân gửi ban đầu:
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
+                    <div>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Người gửi: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>
+                        {typeof reviewingHazard.reportedBy === 'object'
+                          ? reviewingHazard.reportedBy?.fullName || 'Người dân'
+                          : 'Người dân'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Thời gian: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--dm-text-muted)' }}>Tiêu đề gốc: </span>
+                      <strong style={{ color: 'var(--dm-text-strong)' }}>"{reviewingHazard.title}"</strong>
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setDetailHazard(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--dm-text-muted)',
-                    cursor: 'pointer',
-                    padding: '4px',
-                  }}
-                  title="Đóng"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+                {editErrors.general && (
+                  <div
+                    style={{
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: 'var(--dm-red-text)',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
+                    <span>{editErrors.general}</span>
+                  </div>
+                )}
 
-              {/* Body: 2 Columns */}
-              <div
-                style={{
-                  padding: '20px',
-                  overflowY: 'auto',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                  gap: '20px',
-                }}
-              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
+                    gap: '18px',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tiêu đề điểm nguy hiểm chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => {
+                          setEditTitle(e.target.value);
+                          if (editErrors.title) {
+                            setEditErrors((prev) => ({ ...prev, title: undefined, general: undefined }));
+                          }
+                        }}
+                        placeholder="Ví dụ: Ngập lụt sâu 0.8m ngã tư Nguyễn Văn Linh"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editErrors.title ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.title ? '#fff5f5' : 'var(--dm-surface)',
+                          fontSize: '13px',
+                          color: 'var(--dm-text-strong)',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editErrors.title && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editErrors.title}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Loại nguy hiểm thiên tai <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <select
+                        value={editHazardType}
+                        onChange={(e) => {
+                          const nextType = e.target.value;
+                          setEditHazardType(nextType);
+                          if (nextType !== 'OTHER' && editErrors.customHazardType) {
+                            setEditErrors((prev) => ({ ...prev, customHazardType: undefined }));
+                          }
+                        }}
+                        style={HAZARD_SELECT_STYLE}
+                      >
+                        {HAZARD_TYPE_OPTIONS.map((item) => (
+                          <option key={`edit-hazard-type-${item.key}`} value={item.key}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      {editHazardType === 'OTHER' && (
+                        <div style={{ marginTop: '8px' }}>
+                          <input
+                            type="text"
+                            value={editCustomHazardType}
+                            onChange={(e) => {
+                              setEditCustomHazardType(e.target.value);
+                              if (editErrors.customHazardType) {
+                                setEditErrors((prev) => ({ ...prev, customHazardType: undefined, general: undefined }));
+                              }
+                            }}
+                            placeholder="Nhập tên cụ thể loại hiểm họa khác..."
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: editErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                              background: editErrors.customHazardType ? '#fff5f5' : 'var(--dm-surface)',
+                              fontSize: '13px',
+                              color: 'var(--dm-text-strong)',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                          {editErrors.customHazardType && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                              <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                              <span>{editErrors.customHazardType}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {renderSeveritySelector(editSeverity, setEditSeverity)}
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ hiện trường chuẩn xác <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editAddress}
+                        onChange={(e) => {
+                          setEditAddress(e.target.value);
+                          if (editErrors.address) {
+                            setEditErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                          }
+                        }}
+                        placeholder="Số nhà, tên đường, phường/xã..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.address ? '#fff5f5' : 'var(--dm-surface)',
+                          fontSize: '13px',
+                          color: 'var(--dm-text-strong)',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editErrors.address && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editErrors.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={editDescription}
+                        onChange={(e) => {
+                          setEditDescription(e.target.value);
+                          if (editErrors.description) {
+                            setEditErrors((prev) => ({ ...prev, description: undefined, general: undefined }));
+                          }
+                        }}
+                        placeholder="Mô tả mức độ nguy hiểm, hướng dẫn người dân tránh di chuyển qua đoạn này..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editErrors.description ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editErrors.description ? '#fff5f5' : 'var(--dm-surface)',
+                          fontSize: '13px',
+                          color: 'var(--dm-text-strong)',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
+                          outline: 'none',
+                        }}
+                      />
+                      {editErrors.description && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editErrors.description}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <MultiImageUploader
+                      inputId="edit-hazard-images"
+                      label="Ảnh hiện trường"
+                      existingUrls={editExistingImages}
+                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
+                      pendingImages={editPendingImages}
+                      onAddFiles={(files) =>
+                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
+                      }
+                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
+                      onPreviewImage={(_url, images, index) =>
+                        setSelectedHazardPhoto({ images, activeIndex: index, title: editTitle || 'Ảnh hiện trường' })
+                      }
+                      disabled={submittingReview}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <LocationSearchMapPicker
+                      lat={editLat}
+                      lng={editLng}
+                      markerHtml={getHazardMarkerHtml(editHazardType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#dc2626"
+                      mapHeight={250}
+                      error={editErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setEditLat(Number(newLat.toFixed(5)));
+                        setEditLng(Number(newLng.toFixed(5)));
+                        if (editErrors.coordinates) {
+                          setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderHazardAddress(editAddress)) {
+                          setEditAddress(detectedAddress);
+                          setEditErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
+                      }}
+                    />
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Ghi chú thẩm định &amp; Phương án xử lý của chính quyền
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={editReviewNote}
+                        onChange={(e) => setEditReviewNote(e.target.value)}
+                        placeholder="Ví dụ: Đã cử lực lượng giăng dây cảnh báo và đặt biển báo cấm qua..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--dm-border-strong)',
+                          fontSize: '12.5px',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '20px',
+              }}
+            >
                 {/* Cột 1: Thông tin mô tả & Người báo */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ background: 'var(--dm-surface-subtle)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
@@ -2493,626 +2982,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Footer Modal với nút Xóa, Duyệt, Từ chối */}
-              {(() => {
-                const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
-                const isDetailInJurisdiction = isAdmin || isHazardInOfficerJurisdiction(detailHazard);
-                return (
-                  <div
-                    style={{
-                      padding: '16px 24px',
-                      borderTop: '1px solid var(--dm-border)',
-                      background: 'var(--dm-surface-subtle)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: '12px',
-                    }}
-                  >
-                    {isDetailInJurisdiction ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteHazard(detailHazard._id, detailHazard.title)}
-                        disabled={loading}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          background: 'var(--dm-red-bg)',
-                          color: 'var(--dm-red-text)',
-                          border: '1px solid var(--dm-red-border)',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 size={15} />
-                        <span>Xóa điểm nguy hiểm</span>
-                      </button>
-                    ) : (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 14px',
-                          borderRadius: '8px',
-                          background: 'var(--dm-amber-bg)',
-                          color: 'var(--dm-amber-text)',
-                          border: '1px solid var(--dm-amber-border)',
-                          fontSize: '12.5px',
-                          fontWeight: 600,
-                        }}
-                      >
-                        <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: 'var(--dm-amber-text)' }}></i>
-                        <span>
-                          Điểm nguy hiểm này ngoài khu vực quản lý ({accountAreaDisplayName}) — Bạn chỉ có quyền xem thông tin.
-                        </span>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      {isDetailInJurisdiction && detailHazard.status === 'PENDING' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleInitiateRejectHazard(detailHazard._id)}
-                            disabled={loading}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '8px 16px',
-                              borderRadius: '8px',
-                              background: 'var(--dm-orange-bg)',
-                              color: 'var(--dm-orange-text)',
-                              border: '1px solid var(--dm-orange-border)',
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <XCircle size={15} />
-                            <span>Từ chối</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleOpenReviewModal(detailHazard);
-                            }}
-                            disabled={loading}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '8px 18px',
-                              borderRadius: '8px',
-                              background: '#16a34a',
-                              color: '#ffffff',
-                              border: 'none',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
-                            }}
-                          >
-                            <i className="bi bi-pencil-square"></i>
-                            <span>Chuẩn hóa &amp; Phê duyệt</span>
-                          </button>
-                        </>
-                      )}
-
-                      {isDetailInJurisdiction && detailHazard.status === 'APPROVED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleOpenReviewModal(detailHazard);
-                          }}
-                          disabled={loading}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            background: 'var(--dm-blue-bg)',
-                            color: 'var(--dm-blue-text)',
-                            border: '1px solid var(--dm-blue-border)',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Edit size={14} />
-                          <span>Chỉnh sửa thông tin</span>
-                        </button>
-                      )}
-
-                      {isDetailInJurisdiction && detailHazard.status === 'REJECTED' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleOpenReviewModal(detailHazard);
-                          }}
-                          disabled={loading}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            background: '#16a34a',
-                            color: '#ffffff',
-                            border: 'none',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <CheckCircle2 size={15} />
-                          <span>Duyệt lại &amp; Chuẩn hóa</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => setDetailHazard(null)}
-                        style={{
-                          padding: '8px 18px',
-                          borderRadius: '8px',
-                          background: 'var(--dm-surface)',
-                          color: 'var(--dm-text-secondary)',
-                          border: '1px solid var(--dm-border-strong)',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Đóng
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
-          </div>
-        )}
-
-        {/* MODAL THẨM ĐỊNH & CHUẨN HÓA ĐIỂM NGUY HIỂM (GRID ICON THEO ĐÚNG ẢNH 2) */}
-        {reviewingHazard && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.7)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1100,
-              padding: '16px',
-            }}
-            onClick={() => !submittingReview && closeEditReviewModal()}
-          >
-            <div
-              style={{
-                backgroundColor: 'var(--dm-surface)',
-                borderRadius: '12px',
-                width: '100%',
-                maxWidth: '920px',
-                maxHeight: '92vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid var(--dm-border-strong)',
-                overflow: 'hidden',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header Modal */}
-              <div
-                style={{
-                  padding: '14px 20px',
-                  borderBottom: '1px solid var(--dm-border)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: 'var(--dm-surface-subtle)',
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                    {reviewingHazard.status === 'APPROVED'
-                      ? 'Chỉnh Sửa & Chuẩn Hóa Điểm Nguy Hiểm'
-                      : 'Thẩm Định & Chuẩn Hóa Thông Tin Điểm Nguy Hiểm'}
-                  </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
-                    Kiểm tra và chuẩn hóa các trường thông tin chuẩn xác trước khi công bố lên bản đồ tác chiến.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeEditReviewModal}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--dm-text-muted)',
-                    padding: '4px',
-                  }}
-                  title="Đóng"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Body Form */}
-              <div
-                style={{
-                  padding: '18px 20px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                {/* Đối chiếu thông tin người dân gửi ban đầu */}
-                <div
-                  style={{
-                    background: 'var(--dm-surface-subtle)',
-                    border: '1px solid var(--dm-border)',
-                    borderRadius: '8px',
-                    padding: '12px 14px',
-                    fontSize: '12.5px',
-                  }}
-                >
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--dm-text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>
-                    Thông tin người dân gửi ban đầu:
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                    <div>
-                      <span style={{ color: 'var(--dm-text-muted)' }}>Người gửi: </span>
-                      <strong style={{ color: 'var(--dm-text-strong)' }}>
-                        {typeof reviewingHazard.reportedBy === 'object'
-                          ? (reviewingHazard.reportedBy?.fullName || 'Người dân')
-                          : 'Người dân'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--dm-text-muted)' }}>Thời gian: </span>
-                      <strong style={{ color: 'var(--dm-text-strong)' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--dm-text-muted)' }}>Tiêu đề gốc: </span>
-                      <strong style={{ color: 'var(--dm-text-strong)' }}>"{reviewingHazard.title}"</strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Thông báo lỗi tổng quát nếu có trường chưa điền */}
-                {editErrors.general && (
-                  <div
-                    style={{
-                      background: 'var(--dm-red-bg)',
-                      border: '1px solid var(--dm-red-border)',
-                      borderRadius: '8px',
-                      padding: '10px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      color: 'var(--dm-red-text)',
-                      fontSize: '12.5px',
-                      fontWeight: 500,
-                    }}
-                  >
-                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
-                    <span>{editErrors.general}</span>
-                  </div>
-                )}
-
-                {/* Form 2 Cột */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-                    gap: '18px',
-                  }}
-                >
-                  {/* CỘT TRÁI: TIÊU ĐỀ, BẢNG CHỌN LOẠI NGUY HIỂM (ẢNH 2), MỨC ĐỘ, ĐỊA CHỈ */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* 1. Tiêu đề chuẩn hóa */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Tiêu đề điểm nguy hiểm chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => {
-                          setEditTitle(e.target.value);
-                          if (editErrors.title) {
-                            setEditErrors((prev) => ({ ...prev, title: undefined, general: undefined }));
-                          }
-                        }}
-                        placeholder="Ví dụ: Ngập lụt sâu 0.8m ngã tư Nguyễn Văn Linh"
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: editErrors.title ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                          background: editErrors.title ? '#fff5f5' : 'var(--dm-surface)',
-                          fontSize: '13px',
-                          color: 'var(--dm-text-strong)',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                        }}
-                      />
-                      {editErrors.title && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editErrors.title}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2. LOẠI NGUY HIỂM THIÊN TAI */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
-                        Loại nguy hiểm thiên tai <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <select
-                        value={editHazardType}
-                        onChange={(e) => {
-                          const nextType = e.target.value;
-                          setEditHazardType(nextType);
-                          if (nextType !== 'OTHER' && editErrors.customHazardType) {
-                            setEditErrors((prev) => ({ ...prev, customHazardType: undefined }));
-                          }
-                        }}
-                        style={HAZARD_SELECT_STYLE}
-                      >
-                        {HAZARD_TYPE_OPTIONS.map((item) => (
-                          <option key={`edit-hazard-type-${item.key}`} value={item.key}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      {editHazardType === 'OTHER' && (
-                        <div style={{ marginTop: '8px' }}>
-                          <input
-                            type="text"
-                            value={editCustomHazardType}
-                            onChange={(e) => {
-                              setEditCustomHazardType(e.target.value);
-                              if (editErrors.customHazardType) {
-                                setEditErrors((prev) => ({ ...prev, customHazardType: undefined, general: undefined }));
-                              }
-                            }}
-                            placeholder="Nhập tên cụ thể loại hiểm họa khác..."
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              border: editErrors.customHazardType ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                              background: editErrors.customHazardType ? '#fff5f5' : 'var(--dm-surface)',
-                              fontSize: '13px',
-                              color: 'var(--dm-text-strong)',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                          {editErrors.customHazardType && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                              <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                              <span>{editErrors.customHazardType}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 3. Mức độ nguy cấp */}
-                    {renderSeveritySelector(editSeverity, setEditSeverity)}
-
-                    {/* 4. Địa chỉ hiện trường */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Địa chỉ hiện trường chuẩn xác <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={editAddress}
-                        onChange={(e) => {
-                          setEditAddress(e.target.value);
-                          if (editErrors.address) {
-                            setEditErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
-                          }
-                        }}
-                        placeholder="Số nhà, tên đường, phường/xã..."
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: editErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                          background: editErrors.address ? '#fff5f5' : 'var(--dm-surface)',
-                          fontSize: '13px',
-                          color: 'var(--dm-text-strong)',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                        }}
-                      />
-                      {editErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editErrors.address}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 5. Mô tả */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Mô tả hiện trường &amp; Khuyến cáo an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={editDescription}
-                        onChange={(e) => {
-                          setEditDescription(e.target.value);
-                          if (editErrors.description) {
-                            setEditErrors((prev) => ({ ...prev, description: undefined, general: undefined }));
-                          }
-                        }}
-                        placeholder="Mô tả mức độ nguy hiểm, hướng dẫn người dân tránh di chuyển qua đoạn này..."
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: editErrors.description ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                          background: editErrors.description ? '#fff5f5' : 'var(--dm-surface)',
-                          fontSize: '13px',
-                          color: 'var(--dm-text-strong)',
-                          boxSizing: 'border-box',
-                          resize: 'vertical',
-                          outline: 'none',
-                        }}
-                      />
-                      {editErrors.description && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editErrors.description}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <MultiImageUploader
-                      inputId="edit-hazard-images"
-                      label="Ảnh hiện trường"
-                      existingUrls={editExistingImages}
-                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
-                      pendingImages={editPendingImages}
-                      onAddFiles={(files) =>
-                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
-                      }
-                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
-                      onPreviewImage={(_url, images, index) =>
-                        setSelectedHazardPhoto({ images, activeIndex: index, title: editTitle || 'Ảnh hiện trường' })
-                      }
-                      disabled={submittingReview}
-                    />
-                  </div>
-
-                  {/* CỘT PHẢI: TỌA ĐỘ GPS, BẢN ĐỒ TÌM KIẾM & GHI CHÚ */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <LocationSearchMapPicker
-                      lat={editLat}
-                      lng={editLng}
-                      markerHtml={getHazardMarkerHtml(editHazardType)}
-                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
-                      accentColor="#dc2626"
-                      mapHeight={250}
-                      error={editErrors.coordinates}
-                      onLocationSelected={(newLat, newLng, detectedAddress) => {
-                        setEditLat(Number(newLat.toFixed(5)));
-                        setEditLng(Number(newLng.toFixed(5)));
-                        if (editErrors.coordinates) {
-                          setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                        }
-                        if (detectedAddress && isPlaceholderHazardAddress(editAddress)) {
-                          setEditAddress(detectedAddress);
-                          setEditErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
-                        }
-                      }}
-                    />
-
-                    {/* Ghi chú chính quyền */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Ghi chú thẩm định &amp; Phương án xử lý của chính quyền
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={editReviewNote}
-                        onChange={(e) => setEditReviewNote(e.target.value)}
-                        placeholder="Ví dụ: Đã cử lực lượng giăng dây cảnh báo và đặt biển báo cấm qua..."
-                        style={{
-                          width: '100%',
-                          padding: '7px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--dm-border-strong)',
-                          fontSize: '12.5px',
-                          color: 'var(--dm-text-strong)',
-                          background: 'var(--dm-surface)',
-                          boxSizing: 'border-box',
-                          resize: 'vertical',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Modal Actions */}
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderTop: '1px solid var(--dm-border)',
-                  background: 'var(--dm-surface-subtle)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <button
-                  type="button"
-                  className="sos-btn-flat danger"
-                  disabled={submittingReview}
-                  onClick={() => handleInitiateRejectHazard()}
-                >
-                  <XCircle size={14} />
-                  <span>Từ chối điểm báo</span>
-                </button>
-
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    className="sos-btn-flat"
-                    disabled={submittingReview}
-                    onClick={closeEditReviewModal}
-                  >
-                    Hủy bỏ
-                  </button>
-
-                  <button
-                    type="button"
-                    className="sos-btn-flat primary"
-                    disabled={submittingReview}
-                    onClick={() => handleSubmitReview('APPROVED')}
-                    style={{ padding: '7px 18px' }}
-                  >
-                    {submittingReview ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={14} />
-                    )}
-                    <span>Xác nhận chuẩn hóa &amp; Phê duyệt</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            )
+          )}
+        </DetailSheet>
+          );
+        })()}
 
         {/* MODAL TẠO ĐIỂM NGUY HIỂM MỚI (DÀNH CHO ADMIN & CÁN BỘ ĐỊA PHƯƠNG) */}
         {isCreateHazardOpen && (
           <div
+            data-modal-layer="confirm"
             style={{
               position: 'fixed',
               inset: 0,
@@ -3120,7 +3000,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 1100,
+              zIndex: 10000,
               padding: '16px',
             }}
             onClick={closeCreateHazardModal}
@@ -3598,9 +3478,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     style={{
                       padding: '8px 18px',
                       fontSize: '13px',
-                      backgroundColor: '#0284c7',
-                      color: '#ffffff',
-                      borderColor: '#0284c7',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',

@@ -9,10 +9,13 @@ import {
   X,
   RotateCcw,
   FileQuestion,
+  Eye,
 } from 'lucide-react';
 import { fetchAdminUsers, updateUserStatus, deleteAdminUser } from '@/api';
 import { toast } from '@/components/common/toast';
 import { DaNangAreaSelect } from '@/components/common/DaNangAreaSelect';
+import { UserDetailSheet, UserFullPageDetail } from '@/components/common/UserDetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import {
   ExcelExportButton,
@@ -48,7 +51,9 @@ const removeVietnameseTones = (str: string): string => {
 
 export const CitizensManagementView: React.FC = () => {
   const [citizens, setCitizens] = useState<CitizenUser[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedCitizenId, setSelectedCitizenId] = useState<string | null>(null);
+  const [fullPageCitizenId, setFullPageCitizenId] = useState<string | null>(null);
 
   // Bộ lọc & Tìm kiếm
   const [searchTerm, setSearchTerm] = useState('');
@@ -213,6 +218,47 @@ export const CitizensManagementView: React.FC = () => {
     await loadData();
   };
 
+  const handleDeleteSingleCitizen = async (userId: string) => {
+    try {
+      setLoading(true);
+      await deleteAdminUser(userId);
+      toast.success('Đã xóa tài khoản người dân.', 'Xóa tài khoản');
+      if (selectedCitizenId === userId) setSelectedCitizenId(null);
+      if (fullPageCitizenId === userId) setFullPageCitizenId(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Lỗi server', 'Không thể xóa tài khoản');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedCitizen = useMemo(
+    () => (selectedCitizenId ? citizens.find((u) => u._id === selectedCitizenId) ?? null : null),
+    [citizens, selectedCitizenId]
+  );
+
+  const fullPageCitizen = useMemo(
+    () => (fullPageCitizenId ? citizens.find((u) => u._id === fullPageCitizenId) ?? null : null),
+    [citizens, fullPageCitizenId]
+  );
+
+  if (fullPageCitizen) {
+    return (
+      <div className="sos-views-container">
+        <UserFullPageDetail
+          variant="citizen"
+          record={fullPageCitizen}
+          busy={loading}
+          backLabel="Tất cả người dân"
+          onBack={() => setFullPageCitizenId(null)}
+          onToggleStatus={(id, st) => void handleToggleUserStatus(id, st)}
+          onDelete={(id) => void handleDeleteSingleCitizen(id)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="sos-views-container">
       <div className="sos-view-card">
@@ -343,7 +389,13 @@ export const CitizensManagementView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredCitizens.length === 0 ? (
+              {loading && citizens.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang tải danh sách người dân..." />
+                  </td>
+                </tr>
+              ) : filteredCitizens.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="sos-empty-table-cell">
                     <div className="sos-empty-table-inner">
@@ -370,7 +422,12 @@ export const CitizensManagementView: React.FC = () => {
                 </tr>
               ) : (
                 filteredCitizens.map((u) => (
-                  <tr key={u._id}>
+                  <tr
+                    key={u._id}
+                    onClick={() => setSelectedCitizenId(u._id)}
+                    style={{ cursor: 'pointer' }}
+                    title="Nhấn để xem chi tiết tài khoản"
+                  >
                     <td className="sos-checkbox-col" onClick={(e) => e.stopPropagation()}>
                       <TableRowCheckbox
                         checked={citizenSelection.isSelected(u._id)}
@@ -389,16 +446,27 @@ export const CitizensManagementView: React.FC = () => {
                         {u.status}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`sos-btn-action ${u.status === 'ACTIVE' ? 'danger' : 'success'}`}
-                        onClick={() => handleToggleUserStatus(u._id, u.status)}
-                        disabled={loading}
-                      >
-                        {u.status === 'ACTIVE' ? <LockIcon size={12} /> : <Unlock size={12} />}
-                        <span>{u.status === 'ACTIVE' ? 'Khóa' : 'Kích hoạt'}</span>
-                      </button>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="sos-btn-action"
+                          onClick={() => setSelectedCitizenId(u._id)}
+                          title="Xem chi tiết hồ sơ"
+                        >
+                          <Eye size={12} />
+                          <span>Xem</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`sos-btn-action ${u.status === 'ACTIVE' ? 'danger' : 'success'}`}
+                          onClick={() => handleToggleUserStatus(u._id, u.status)}
+                          disabled={loading}
+                        >
+                          {u.status === 'ACTIVE' ? <LockIcon size={12} /> : <Unlock size={12} />}
+                          <span>{u.status === 'ACTIVE' ? 'Khóa' : 'Kích hoạt'}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -407,6 +475,21 @@ export const CitizensManagementView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <UserDetailSheet
+        variant="citizen"
+        record={selectedCitizen}
+        busy={loading}
+        onOpenChange={(open) => {
+          if (!open) setSelectedCitizenId(null);
+        }}
+        onOpenFullPage={(rec) => {
+          setSelectedCitizenId(null);
+          setFullPageCitizenId(rec._id);
+        }}
+        onToggleStatus={(id, st) => void handleToggleUserStatus(id, st)}
+        onDelete={(id) => void handleDeleteSingleCitizen(id)}
+      />
     </div>
   );
 };

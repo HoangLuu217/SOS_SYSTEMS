@@ -7,8 +7,8 @@ import {
   X,
   UserCheck,
   UserX,
-  Loader2,
 } from 'lucide-react';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import type { AdministrativeAreaItem } from '@/types/dashboard';
 import {
   fetchAreaManagers,
@@ -341,13 +341,11 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             <tbody>
               {subUnitsLoading && subUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'var(--sos-text-secondary)' }}>
-                    <Loader2
-                      size={24}
-                      className="animate-spin"
-                      style={{ margin: '0 auto 8px auto', display: 'block', color: 'var(--sos-primary)' }}
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader
+                      size="md"
+                      message="Đang tải danh sách phường, xã trực thuộc Thành phố Đà Nẵng..."
                     />
-                    Đang tải danh sách phường, xã trực thuộc Thành phố Đà Nẵng...
                   </td>
                 </tr>
               ) : filteredSubUnits.length === 0 ? (
@@ -423,7 +421,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                                 Chưa phân công
                               </span>
                             </div>
-                            <div style={{ fontSize: '13px', color: 'var(--sos-text-muted)' }}>
+                            <div className="ch-tbl-meta">
                               Chưa gán tài khoản địa phương phụ trách
                             </div>
                           </div>

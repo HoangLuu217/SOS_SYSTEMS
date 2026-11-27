@@ -177,16 +177,16 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
               Danh sách cán bộ chiến sĩ trong đội ({totalMembers})
             </div>
 
-            <div style={{ border: '1px solid var(--dm-border)', borderRadius: 8, overflowX: 'auto', background: 'var(--dm-surface)' }}>
-              <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflowX: 'auto', background: 'var(--card)' }}>
+              <table className="sos-clean-table" style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ background: 'var(--dm-surface-subtle)', borderBottom: '1px solid var(--dm-border)', color: 'var(--dm-text-muted)', fontSize: 11.5, fontWeight: 700 }}>
-                    <th style={{ padding: '9px 12px', width: 45, textAlign: 'center', whiteSpace: 'nowrap' }}>STT</th>
-                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Họ và tên</th>
-                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Nhiệm vụ / Vai trò</th>
-                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Điện thoại liên hệ</th>
-                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Vị trí GPS / Tọa độ</th>
-                    <th style={{ padding: '9px 12px', width: 115, textAlign: 'center', whiteSpace: 'nowrap' }}>Trạng thái</th>
+                  <tr>
+                    <th style={{ width: 45, textAlign: 'center', whiteSpace: 'nowrap' }}>STT</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Họ và tên</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Nhiệm vụ / vai trò</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Điện thoại liên hệ</th>
+                    <th style={{ whiteSpace: 'nowrap' }}>Vị trí GPS / tọa độ</th>
+                    <th style={{ width: 115, textAlign: 'center', whiteSpace: 'nowrap' }}>Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -201,51 +201,46 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                         <tr
                           key={rescuer.id || idx}
                           style={{
-                            borderBottom: idx !== uniqueRescuers.length - 1 ? '1px solid var(--dm-border)' : 'none',
-                            background: isLeader ? 'rgba(2, 132, 199, 0.03)' : '#ffffff',
+                            background: isLeader ? 'color-mix(in oklch, var(--primary) 4%, transparent)' : undefined,
                           }}
                         >
-                          <td style={{ padding: '10px 12px', color: 'var(--dm-text-muted)', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <td className="ch-tbl-meta" style={{ textAlign: 'center', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                             #{idx + 1}
                           </td>
-                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <strong style={{ color: 'var(--dm-text-strong)', fontSize: 13, whiteSpace: 'nowrap' }}>{rescuer.name}</strong>
+                              <span className="ch-tbl-primary" style={{ whiteSpace: 'nowrap' }}>{rescuer.name}</span>
                               {isLeader && (
                                 <span
                                   style={{
-                                    fontSize: 9.5,
-                                    fontWeight: 800,
+                                    fontSize: 11,
+                                    fontWeight: 600,
                                     color: 'var(--dm-blue-text)',
-                                    background: 'rgba(2, 132, 199, 0.1)',
-                                    padding: '1px 5px',
+                                    background: 'var(--dm-blue-bg)',
+                                    border: '1px solid var(--dm-blue-border)',
+                                    padding: '1px 6px',
                                     borderRadius: 4,
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  CHỈ HUY
+                                  Chỉ huy
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '10px 12px', color: 'var(--dm-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                          <td className="ch-tbl-body" style={{ whiteSpace: 'nowrap' }}>
                             {rescuer.role}
                           </td>
-                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             {rescuer.phone ? (
                               <a
                                 href={`tel:${rescuer.phone}`}
+                                className="ch-tbl-phone"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 5,
-                                  color: 'var(--dm-blue-text)',
-                                  fontWeight: 700,
                                   textDecoration: 'none',
-                                  background: 'rgba(2, 132, 199, 0.08)',
-                                  padding: '3px 8px',
-                                  borderRadius: 4,
-                                  fontSize: 12,
                                   whiteSpace: 'nowrap',
                                 }}
                               >
@@ -253,51 +248,38 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                                 <span>{rescuer.phone}</span>
                               </a>
                             ) : (
-                              <span style={{ color: 'var(--dm-text-muted)', fontSize: 12 }}>Chưa cập nhật</span>
+                              <span className="ch-tbl-meta">Chưa cập nhật</span>
                             )}
                           </td>
-                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <td style={{ whiteSpace: 'nowrap' }}>
                             {rescuer.coordinates ? (
                               <div
+                                className="ch-tbl-mono"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4,
-                                  background: 'var(--dm-green-bg)',
-                                  border: '1px solid var(--dm-green-border)',
-                                  padding: '2.5px 7px',
-                                  borderRadius: 5,
-                                  fontSize: 11,
-                                  color: 'var(--dm-green-text)',
-                                  fontWeight: 700,
-                                  fontFamily: 'monospace',
                                 }}
                                 title={`Tọa độ GPS: ${rescuer.coordinates.lat.toFixed(5)}, ${rescuer.coordinates.lng.toFixed(5)}`}
                               >
-                                <MapPin size={11} color="#16a34a" />
+                                <MapPin size={12} style={{ color: 'var(--dm-green-text)' }} />
                                 <span>{rescuer.coordinates.lat.toFixed(4)}, {rescuer.coordinates.lng.toFixed(4)}</span>
                               </div>
                             ) : (
                               <div
+                                className="ch-tbl-meta"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4,
-                                  background: 'var(--dm-surface-subtle)',
-                                  border: '1px solid var(--dm-border)',
-                                  padding: '2.5px 7px',
-                                  borderRadius: 5,
-                                  fontSize: 11,
-                                  color: 'var(--dm-text-muted)',
-                                  fontWeight: 600,
                                 }}
                               >
-                                <MapPin size={11} color="#94a3b8" />
+                                <MapPin size={12} style={{ color: 'var(--muted-foreground)' }} />
                                 <span>Chưa cập nhật GPS</span>
                               </div>
                             )}
                           </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span
                               style={{
                                 display: 'inline-flex',
@@ -305,9 +287,9 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                                 justifyContent: 'center',
                                 gap: 4,
                                 padding: '3px 8px',
-                                borderRadius: 4,
-                                fontSize: 11,
-                                fontWeight: 700,
+                                borderRadius: 6,
+                                fontSize: 11.5,
+                                fontWeight: 600,
                                 whiteSpace: 'nowrap',
                                 color: rescuer.status === 'Online' ? 'var(--dm-green-text)' : 'var(--dm-text-secondary)',
                                 background: rescuer.status === 'Online' ? 'var(--dm-green-bg)' : 'var(--dm-surface-muted)',
@@ -322,7 +304,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} style={{ padding: 16, textAlign: 'center', color: 'var(--dm-text-muted)' }}>
+                      <td colSpan={6} className="ch-tbl-meta" style={{ padding: 16, textAlign: 'center' }}>
                         Chưa có danh sách thành viên chi tiết
                       </td>
                     </tr>

@@ -8,7 +8,6 @@ import {
   Clock,
   CheckCircle2,
   X,
-  Loader2,
   Compass,
   LifeBuoy,
   XCircle,
@@ -27,6 +26,7 @@ import {
 import { getSocket } from '@/services/socketService';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import {
   ExcelExportButton,
   TableBulkActionBar,
@@ -51,7 +51,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
   user: _user,
 }) => {
   const [sosList, setSosList] = useState<SosRequestItem[]>(propSosList || []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !(propSosList && propSosList.length > 0));
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICAL' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED'>('ALL');
@@ -564,20 +564,19 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                     onChange={missionSelection.toggleSelectVisible}
                   />
                 </th>
-                <th style={{ width: '15%' }}>Mã Sự Cố</th>
-                <th style={{ width: '25%' }}>Hiện Trường &amp; Địa Chỉ</th>
-                <th style={{ width: '18%' }}>Người Dân &amp; Liên Hệ</th>
-                <th style={{ width: '12%' }}>Mức Độ</th>
-                <th style={{ width: '16%' }}>Tiến Trình Tác Chiến</th>
-                <th style={{ width: '14%', textAlign: 'center' }}>Thao Tác</th>
+                <th style={{ width: '15%' }}>Mã sự cố</th>
+                <th style={{ width: '25%' }}>Hiện trường &amp; địa chỉ</th>
+                <th style={{ width: '18%' }}>Người dân &amp; liên hệ</th>
+                <th style={{ width: '12%' }}>Mức độ</th>
+                <th style={{ width: '16%' }}>Tiến trình tác chiến</th>
+                <th style={{ width: '14%', textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loading && filteredMissions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
-                    <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: 'var(--dm-blue-text)' }} />
-                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--dm-text-muted)' }}>Đang nạp dữ liệu điều phối tác chiến...</p>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang nạp dữ liệu điều phối tác chiến..." />
                   </td>
                 </tr>
               ) : filteredMissions.length === 0 ? (
@@ -634,7 +633,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                             </span>
                           </div>
                           {sos.description && (
-                            <span style={{ fontSize: 12.5, color: 'var(--dm-text-secondary)', marginLeft: 21, fontWeight: 500 }} className="line-clamp-1">
+                            <span style={{ marginLeft: 21 }} className="ch-tbl-meta line-clamp-1">
                               {sos.description}
                             </span>
                           )}

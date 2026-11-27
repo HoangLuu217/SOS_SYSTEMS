@@ -28,6 +28,8 @@ import {
   runBulkOperation,
 } from '@/components/common/TableBulkKit';
 import { exportTableToExcel } from '@/utils/tableExcelExport';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import './AlertsView.css';
 
 export interface AlertsViewProps {
@@ -44,7 +46,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 }) => {
   const { showToast, setConfirmModal, renderGlobalModals } = useGlobalModals();
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
 
@@ -941,9 +943,6 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             style={{
               padding: '8px 16px',
               fontSize: '13px',
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              borderColor: '#2563eb',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -1256,7 +1255,13 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               </tr>
             </thead>
             <tbody>
-              {paginatedBroadcasts.length === 0 ? (
+              {loading && broadcastHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                    <SyncLogoLoader size="md" message="Đang tải lịch sử thông báo..." />
+                  </td>
+                </tr>
+              ) : paginatedBroadcasts.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                     <i className="bi bi-bell" style={{ fontSize: '28px', color: 'var(--dm-text-muted)', display: 'inline-block', marginBottom: '8px' }}></i>
@@ -1354,10 +1359,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
+                              className="ch-tbl-primary"
                               style={{
-                                fontWeight: 700,
-                                color: 'var(--dm-blue-text)',
-                                fontSize: '13.5px',
                                 lineHeight: '1.4',
                                 cursor: 'pointer',
                               }}
@@ -1367,9 +1370,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               {item.title}
                             </div>
                             <div
+                              className="ch-tbl-meta"
                               style={{
-                                fontSize: '12px',
-                                color: 'var(--dm-text-muted)',
                                 marginTop: '3px',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -1402,10 +1404,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
                       {/* 2. Phân loại */}
                       <td>
-                        <span
-                          className="sos-badge"
-                          style={{ fontSize: '11.5px', padding: '3px 8px', background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border)' }}
-                        >
+                        <span className="ch-tbl-body">
                           {typeLabels[String(item.type || '').toUpperCase()] || 'Hệ thống'}
                         </span>
                       </td>
@@ -1420,7 +1419,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               alignItems: 'center',
                               padding: '2px 8px',
                               borderRadius: '6px',
-                              fontSize: '11px',
+                              fontSize: '11.5px',
                               fontWeight: 600,
                               background: 'var(--dm-red-bg)',
                               color: 'var(--dm-red-text)',
@@ -1438,7 +1437,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               alignItems: 'center',
                               padding: '2px 8px',
                               borderRadius: '6px',
-                              fontSize: '11px',
+                              fontSize: '11.5px',
                               fontWeight: 600,
                               background: 'var(--dm-orange-bg)',
                               color: 'var(--dm-orange-text)',
@@ -1456,7 +1455,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               alignItems: 'center',
                               padding: '2px 8px',
                               borderRadius: '6px',
-                              fontSize: '11px',
+                              fontSize: '11.5px',
                               fontWeight: 600,
                               background: 'var(--dm-surface-subtle)',
                               color: 'var(--dm-text-secondary)',
@@ -1474,8 +1473,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               alignItems: 'center',
                               padding: '2px 8px',
                               borderRadius: '6px',
-                              fontSize: '11px',
-                              fontWeight: 500,
+                              fontSize: '11.5px',
+                              fontWeight: 600,
                               background: 'var(--dm-surface-subtle)',
                               color: 'var(--dm-text-muted)',
                               border: '1px solid var(--dm-border)',
@@ -1489,30 +1488,24 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                       {/* 4. Khu vực tiếp nhận */}
                       <td>
                         <span
+                          className="ch-tbl-body"
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '5px',
-                            padding: '3px 8px',
-                            borderRadius: '5px',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            background: 'var(--dm-surface-subtle)',
-                            color: 'var(--dm-text-strong)',
-                            border: '1px solid var(--dm-border-strong)',
                           }}
                         >
-                          <i className="bi bi-geo-alt" style={{ fontSize: '11px', color: 'var(--dm-text-muted)' }}></i>
+                          <i className="bi bi-geo-alt" style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}></i>
                           <span>{item.areaName || 'Toàn thành phố'}</span>
                         </span>
                       </td>
 
                       {/* 5. Thời gian gửi & Người phát */}
                       <td>
-                        <div style={{ fontSize: '12px', color: 'var(--dm-text-strong)', fontWeight: 600 }}>
+                        <div className="ch-tbl-meta" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {formatDateTime(item.createdAt)}
                         </div>
-                        <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
+                        <div className="ch-tbl-meta" style={{ marginTop: '2px' }}>
                           Bởi: {item.createdBy?.fullName || 'Hệ thống SOS'}
                         </div>
                       </td>
@@ -1681,6 +1674,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       {/* ============================================================ */}
       {isCreateOpen && (
         <div
+          data-modal-layer="confirm"
           style={{
             position: 'fixed',
             inset: 0,
@@ -1688,7 +1682,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            zIndex: 10000,
             padding: '16px',
           }}
           onClick={() => !submittingCreate && setIsCreateOpen(false)}
@@ -2429,210 +2423,63 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/* 5. MODAL XEM CHI TIẾT THÔNG BÁO                             */}
+      {/* 5. DRAWER XEM CHI TIẾT THÔNG BÁO (CHRONICLE DETAIL SHEET)    */}
       {/* ============================================================ */}
-      {detailBroadcast && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'flex-end',
-            zIndex: 9999,
-            padding: 0,
-          }}
-          onClick={() => setDetailBroadcast(null)}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--dm-surface)',
-              borderRadius: 0,
-              width: '540px',
-              maxWidth: '94vw',
-              height: '100vh',
-              maxHeight: '100vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.18)',
-              borderLeft: '1px solid var(--dm-border-strong)',
-              overflow: 'hidden',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Detail Header */}
-            <div
-              style={{
-                padding: '14px 20px',
-                borderBottom: '1px solid var(--dm-border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'var(--dm-surface-subtle)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--dm-surface-hover)',
-                    color: 'var(--dm-text-secondary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <i className="bi bi-info-circle" style={{ fontSize: '15px' }}></i>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                    Chi tiết thông báo
-                  </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: 'var(--dm-text-muted)' }}>
-                    Thời gian phát: {formatDateTime(detailBroadcast.createdAt)}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setDetailBroadcast(null)}
+      <DetailSheet
+        open={Boolean(detailBroadcast)}
+        onOpenChange={(open) => {
+          if (!open) setDetailBroadcast(null);
+        }}
+        size="lg"
+        icon={<i className="bi bi-info-circle" style={{ fontSize: '16px' }} />}
+        title="Chi tiết thông báo"
+        description={
+          detailBroadcast ? `Thời gian phát: ${formatDateTime(detailBroadcast.createdAt)}` : undefined
+        }
+        badges={
+          detailBroadcast && (
+            <>
+              <span
+                className="sos-badge"
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--dm-text-muted)',
-                  padding: '4px',
-                }}
-                title="Đóng"
-              >
-                <i className="bi bi-x-lg" style={{ fontSize: '15px' }}></i>
-              </button>
-            </div>
-
-            {/* Modal Detail Content */}
-            <div
-              style={{
-                padding: '20px',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-              }}
-            >
-              {detailBroadcast.imageUrl && (
-                <div style={{ width: '100%', height: '200px', borderRadius: '8px', overflow: 'hidden', background: 'var(--dm-surface-hover)' }}>
-                  <img
-                    src={detailBroadcast.imageUrl}
-                    alt={detailBroadcast.title}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                </div>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span
-                  className="sos-badge"
-                  style={{ fontSize: '12px', padding: '3px 8px', background: 'var(--dm-surface-subtle)', color: 'var(--dm-text-secondary)', border: '1px solid var(--dm-border-strong)' }}
-                >
-                  {({
-                    INSTANT: 'Khẩn cấp',
-                    TIN_TUC_THOI: 'Khẩn cấp',
-                    ALERT: 'Cảnh báo',
-                    SYSTEM: 'Hệ thống',
-                    SAFETY_CHECK: 'Kiểm tra an toàn',
-                    BLOOD_DONATION: 'Hiến máu',
-                    WEATHER: 'Thời tiết',
-                    SAFE_LOCATION: 'Điểm an toàn',
-                    HAZARD: 'Điểm nguy hiểm',
-                  } as Record<string, string>)[String(detailBroadcast.type || '').toUpperCase()] || 'Hệ thống'}
-                </span>
-
-                <span
-                  className="sos-badge"
-                  style={{
-                    fontSize: '12px',
-                    padding: '3px 8px',
-                    background: 'var(--dm-surface-subtle)',
-                    color: 'var(--dm-text-secondary)',
-                    border: '1px solid var(--dm-border-strong)',
-                  }}
-                >
-                  Mức độ: {String(detailBroadcast.priority || 'NORMAL').toUpperCase()}
-                </span>
-              </div>
-
-              <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--dm-text-strong)', margin: '4px 0 8px 0', lineHeight: 1.4 }}>
-                  {detailBroadcast.title}
-                </h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12.5px', color: 'var(--dm-text-muted)' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <i className="bi bi-geo-alt" style={{ fontSize: '12px', color: 'var(--dm-text-muted)' }}></i>
-                    <strong>Địa bàn:</strong> {detailBroadcast.areaName || 'Toàn thành phố'}
-                  </span>
-                  <span>
-                    <strong>Người phát:</strong> {detailBroadcast.createdBy?.fullName || 'Hệ thống SOS'}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                style={{
+                  fontSize: '11.5px',
+                  padding: '2px 8px',
                   background: 'var(--dm-surface-subtle)',
-                  border: '1px solid var(--dm-border)',
-                  borderRadius: '8px',
-                  padding: '14px 16px',
-                  fontSize: '13px',
-                  color: 'var(--dm-text-body)',
-                  lineHeight: '1.6',
-                  whiteSpace: 'pre-wrap',
+                  color: 'var(--dm-text-secondary)',
+                  border: '1px solid var(--dm-border-strong)',
                 }}
               >
-                {detailBroadcast.content}
-              </div>
-
-              {detailBroadcast.articleUrl && (
-                <div style={{ marginTop: '2px' }}>
-                  <a
-                    href={detailBroadcast.articleUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      color: 'var(--dm-blue-text)',
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                      fontSize: '12.5px',
-                      padding: '6px 12px',
-                      background: 'var(--dm-blue-bg)',
-                      borderRadius: '6px',
-                      border: '1px solid var(--dm-blue-border)',
-                    }}
-                  >
-                    <i className="bi bi-box-arrow-up-right" style={{ fontSize: '12px' }}></i>
-                    <span>Đọc bài gốc ({detailBroadcast.sourceName || 'Xem liên kết'})</span>
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Detail Footer */}
-            <div
-              style={{
-                padding: '12px 20px',
-                borderTop: '1px solid var(--dm-border)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'var(--dm-surface-subtle)',
-              }}
-            >
+                {({
+                  INSTANT: 'Khẩn cấp',
+                  TIN_TUC_THOI: 'Khẩn cấp',
+                  ALERT: 'Cảnh báo',
+                  SYSTEM: 'Hệ thống',
+                  SAFETY_CHECK: 'Kiểm tra an toàn',
+                  BLOOD_DONATION: 'Hiến máu',
+                  WEATHER: 'Thời tiết',
+                  SAFE_LOCATION: 'Điểm an toàn',
+                  HAZARD: 'Điểm nguy hiểm',
+                } as Record<string, string>)[String(detailBroadcast.type || '').toUpperCase()] ||
+                  'Hệ thống'}
+              </span>
+              <span
+                className="sos-badge"
+                style={{
+                  fontSize: '11.5px',
+                  padding: '2px 8px',
+                  background: 'var(--dm-surface-subtle)',
+                  color: 'var(--dm-text-secondary)',
+                  border: '1px solid var(--dm-border-strong)',
+                }}
+              >
+                Mức độ: {String(detailBroadcast.priority || 'NORMAL').toUpperCase()}
+              </span>
+            </>
+          )
+        }
+        footer={
+          detailBroadcast && (
+            <>
               <button
                 type="button"
                 onClick={() => handleDeleteBroadcast(detailBroadcast.id)}
@@ -2660,10 +2507,105 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
               >
                 Đóng
               </button>
+            </>
+          )
+        }
+      >
+        {detailBroadcast && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {detailBroadcast.imageUrl && (
+              <div
+                style={{
+                  width: '100%',
+                  height: '200px',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  background: 'var(--dm-surface-hover)',
+                }}
+              >
+                <img
+                  src={detailBroadcast.imageUrl}
+                  alt={detailBroadcast.title}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+            )}
+
+            <div>
+              <h2
+                style={{
+                  fontSize: '17px',
+                  fontWeight: 700,
+                  color: 'var(--dm-text-strong)',
+                  margin: '2px 0 8px 0',
+                  lineHeight: 1.4,
+                }}
+              >
+                {detailBroadcast.title}
+              </h2>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '14px',
+                  fontSize: '12.5px',
+                  color: 'var(--dm-text-muted)',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <i className="bi bi-geo-alt" style={{ fontSize: '12px', color: 'var(--dm-text-muted)' }}></i>
+                  <strong>Địa bàn:</strong> {detailBroadcast.areaName || 'Toàn thành phố'}
+                </span>
+                <span>
+                  <strong>Người phát:</strong> {detailBroadcast.createdBy?.fullName || 'Hệ thống SOS'}
+                </span>
+              </div>
             </div>
+
+            <div
+              style={{
+                background: 'var(--dm-surface-subtle)',
+                border: '1px solid var(--dm-border)',
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '13px',
+                color: 'var(--dm-text-body)',
+                lineHeight: '1.6',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {detailBroadcast.content}
+            </div>
+
+            {detailBroadcast.articleUrl && (
+              <div style={{ marginTop: '2px' }}>
+                <a
+                  href={detailBroadcast.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: 'var(--dm-blue-text)',
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                    fontSize: '12.5px',
+                    padding: '6px 12px',
+                    background: 'var(--dm-blue-bg)',
+                    borderRadius: '6px',
+                    border: '1px solid var(--dm-blue-border)',
+                  }}
+                >
+                  <i className="bi bi-box-arrow-up-right" style={{ fontSize: '12px' }}></i>
+                  <span>Đọc bài gốc ({detailBroadcast.sourceName || 'Xem liên kết'})</span>
+                </a>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </DetailSheet>
 
       {renderGlobalModals()}
     </div>

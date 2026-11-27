@@ -5,7 +5,6 @@ import { AuthorPortal, AdminPortal } from '@/features/map-operation';
 import { NAV_TITLES } from '@/constants/navConfig';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useCustomizer } from '@/kit/customizer/CustomizerProvider';
-import { PageHeader } from '@/kit/ui-patterns';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types/auth';
 
@@ -101,11 +100,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     <main
       className="sos-main-content ch-inset-main"
       style={{
-        overflow: isLockedViewportPage ? 'hidden' : 'auto',
+        position: 'relative',
+        overflowY: isLockedViewportPage ? 'hidden' : 'auto',
+        overflowX: 'hidden',
+        overscrollBehavior: 'contain',
         flex: 1,
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
+        ...(activeNavKey === 'map'
+          ? { isolation: 'isolate', zIndex: 1 }
+          : {}),
       }}
     >
       {activeNavKey === 'map' ? (
@@ -117,27 +122,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       ) : (
         <div
           className={cn(
-            'flex min-h-0 w-full flex-1 flex-col',
+            'flex w-full flex-1 flex-col',
+            isInnerScrollLocked ? 'min-h-0' : '',
             isContained && 'mx-auto max-w-7xl'
           )}
         >
-          {/* Chronicle PageHeader (kit/ui-patterns) */}
-          <header className="sos-main-header ch-page-heading">
-            <PageHeader
-              title={cleanPageTitle}
-              description={currentMeta.desc}
-              className="w-full"
-            />
-          </header>
-
           <div
             className="sos-page-body ch-page-body"
             style={{
+              position: 'relative',
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0,
-              overflow: isInnerScrollLocked ? 'hidden' : 'auto',
+              minHeight: isInnerScrollLocked ? 0 : undefined,
+              overflow: isInnerScrollLocked ? 'hidden' : 'visible',
             }}
           >
             <div
@@ -146,7 +144,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                minHeight: 0,
+                minHeight: isInnerScrollLocked ? 0 : undefined,
               }}
             >
               <ErrorBoundary

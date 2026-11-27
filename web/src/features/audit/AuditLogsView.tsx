@@ -12,6 +12,7 @@ import {
   useTableSelection,
 } from '@/components/common/TableBulkKit';
 import { exportAuditLogsToExcel } from './exportAuditLogsExcel';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import './AuditLogsView.css';
 
 // Từ điển chuyển đổi các mã hành động thành nhãn tiếng Việt dễ hiểu
@@ -322,7 +323,7 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [auditRoleFilter, setAuditRoleFilter] = useState<'ALL' | 'CITIZEN' | 'RESCUER' | 'AUTHORITY' | 'ADMIN'>('ALL');
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const loadLogs = async () => {
@@ -566,7 +567,9 @@ export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
         />
 
         {/* DANH SÁCH DÒNG THỜI GIAN KẾT NỐI */}
-        {filteredLogs.length === 0 ? (
+        {loading && auditLogs.length === 0 ? (
+          <SyncLogoLoader size="md" message="Đang tải nhật ký hoạt động..." />
+        ) : filteredLogs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dm-text-muted)' }}>
             <History size={40} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
             <div style={{ fontSize: '15px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>

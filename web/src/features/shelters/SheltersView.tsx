@@ -55,6 +55,8 @@ import {
   type PendingUploadImage,
 } from '@/utils/imageUpload';
 import { LocationSearchMapPicker } from '@/components/common/LocationSearchMapPicker';
+import { DetailSheet } from '@/components/common/DetailSheet';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { FALLBACK_SHELTERS } from '@/constants';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
@@ -83,7 +85,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 }) => {
   const { showToast, setConfirmModal, renderGlobalModals } = useGlobalModals();
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
 
@@ -869,9 +871,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setIsCreateShelterOpen(true);
     };
 
-    // Mở Form Chỉnh Sửa Điểm Trú Ẩn
+    // Mở Form Chỉnh Sửa Điểm Trú Ẩn ngay trong DetailSheet
     const handleOpenEditShelterModal = (sh: SafeLocationItem) => {
-      setDetailShelter(null);
+      setDetailShelter(sh);
       setEditingShelter(sh);
       setEditShelterName(sh.name || '');
       setEditShelterType(sh.type || 'EVACUATION_CENTER');
@@ -1434,9 +1436,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           style={{
             padding: '8px 16px',
             fontSize: '13px',
-            backgroundColor: '#0284c7',
-            color: '#ffffff',
-            borderColor: '#0284c7',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
@@ -1786,7 +1785,13 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {totalShelterItems === 0 ? (
+                {loading && shelters.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '16px 20px' }}>
+                      <SyncLogoLoader size="md" message="Đang tải danh sách điểm trú ẩn..." />
+                    </td>
+                  </tr>
+                ) : totalShelterItems === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--dm-text-muted)', fontSize: '13px' }}>
                       <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
@@ -1875,30 +1880,23 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div
+                                className="ch-tbl-primary"
                                 onClick={() => setDetailShelter(sh)}
                                 title="Nhấn để xem chi tiết điểm trú ẩn"
-                                style={{
-                                  fontWeight: 700,
-                                  color: 'var(--dm-blue-text)',
-                                  fontSize: '12.5px',
-                                  lineHeight: '1.3',
-                                  cursor: 'pointer',
-                                }}
+                                style={{ cursor: 'pointer' }}
                               >
                                 {sh.name}
                               </div>
                               <span
+                                className="ch-tbl-meta"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 500,
-                                  color: 'var(--dm-text-muted)',
                                   marginTop: '2px',
                                 }}
                               >
-                                <ShelterTypeIcon type={sh.type} size={11} color="#64748b" />
+                                <ShelterTypeIcon type={sh.type} size={12} color="currentColor" />
                                 {typeLabel}
                               </span>
                             </div>
@@ -1908,11 +1906,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         {/* 2. Địa phương quản lý */}
                         <td>
                           <span
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: isLocal ? 600 : 500,
-                              color: isLocal ? 'var(--dm-blue-text)' : 'var(--dm-text-secondary)',
-                            }}
+                            className="ch-tbl-body"
+                            style={{ fontWeight: isLocal ? 500 : 400 }}
                             title={`Địa bàn quản lý: ${districtName}`}
                           >
                             {districtName}
@@ -1922,19 +1917,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         {/* 3. Sức chứa & Tỷ lệ lưu trú */}
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                              <span style={{ color: 'var(--dm-text-strong)', fontWeight: 600 }}>
-                                <strong>{occupancy.toLocaleString()}</strong> / {capacity.toLocaleString()} người
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12.5px', fontVariantNumeric: 'tabular-nums' }}>
+                              <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>
+                                {occupancy.toLocaleString()} / {capacity.toLocaleString()} người
                               </span>
                               <span
                                 style={{
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  color: isOverloaded ? 'var(--dm-red-text)' : percent >= 90 ? 'var(--dm-red-text)' : percent >= 60 ? 'var(--dm-amber-text)' : 'var(--dm-blue-text)',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  color: isOverloaded || percent >= 90 ? 'var(--dm-red-text)' : percent >= 60 ? 'var(--dm-amber-text)' : 'var(--muted-foreground)',
                                   whiteSpace: 'nowrap',
                                 }}
                               >
-                                {percent}%{isOverloaded ? ' • Quá tải' : ''}
+                                {percent}%{isOverloaded ? ' · Quá tải' : ''}
                               </span>
                             </div>
                             <div
@@ -1962,12 +1957,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         {/* 4. Địa chỉ cụ thể */}
                         <td>
                           <div
+                            className="ch-tbl-body"
                             title={sh.address}
                             style={{
-                              fontSize: '12px',
-                              color: 'var(--dm-text-body)',
-                              fontWeight: 500,
-                              lineHeight: '1.35',
                               display: '-webkit-box',
                               WebkitLineClamp: 2,
                               WebkitBoxOrient: 'vertical',
@@ -1980,10 +1972,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                         {/* 5. Thời gian cập nhật & Người phụ trách */}
                         <td>
-                          <div style={{ fontSize: '11.5px', color: 'var(--dm-text-strong)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          <div className="ch-tbl-body" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                             {formatShelterTime(sh.createdAt)}
                           </div>
-                          <div style={{ fontSize: '11px', color: 'var(--dm-text-muted)', marginTop: '2px' }}>
+                          <div className="ch-tbl-meta" style={{ marginTop: '2px' }}>
                             {typeof sh.createdBy === 'object' ? (sh.createdBy?.fullName || 'Ban chỉ huy PCTT') : 'Ban chỉ huy PCTT'}
                           </div>
                         </td>
@@ -1992,7 +1984,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         <td style={{ textAlign: 'center' }}>
                           <span
                             style={{
-                              fontSize: '12px',
+                              fontSize: '11.5px',
                               fontWeight: 600,
                               color: statusBadge.color,
                             }}
@@ -2144,101 +2136,518 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         </div>
 
         {/* ============================================================ */}
-        {/* DRAWER CHI TIẾT ĐIỂM TRÚ ẨN (MỞ TỪ BÊN PHẢI MÀN HÌNH) */}
+        {/* DRAWER CHI TIẾT & CHỈNH SỬA ĐIỂM TRÚ ẨN (CHRONICLE DETAIL SHEET) */}
         {/* ============================================================ */}
-        {detailShelter && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.5)',
-              backdropFilter: 'blur(3px)',
-              display: 'flex',
-              alignItems: 'stretch',
-              justifyContent: 'flex-end',
-              zIndex: 9999,
-              padding: 0,
-            }}
-            onClick={() => setDetailShelter(null)}
-          >
-            <div
-              style={{
-                background: 'var(--dm-surface)',
-                borderRadius: 0,
-                width: '680px',
-                maxWidth: '94vw',
-                height: '100vh',
-                maxHeight: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
-                borderLeft: '1px solid var(--dm-border-strong)',
-                overflow: 'hidden',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header Modal */}
-              <div
-                style={{
-                  padding: '14px 20px',
-                  borderBottom: '1px solid var(--dm-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'var(--dm-surface-subtle)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {(() => {
+          const isEditingShelter = Boolean(
+            editingShelter && detailShelter && editingShelter._id === detailShelter._id
+          );
+          const origShelterAreaId = (() => {
+            if (!editingShelter) return '';
+            const raw =
+              typeof editingShelter.areaId === 'object' && editingShelter.areaId !== null
+                ? editingShelter.areaId._id || (editingShelter.areaId as any).id
+                : editingShelter.areaId || '';
+            const canon = raw ? canonicalAreaIdMap.get(String(raw)) || String(raw) : '';
+            return (
+              canon ||
+              (resolvedAccountArea?._id as string) ||
+              accountAreaId ||
+              (areas[0]?._id as string) ||
+              ''
+            );
+          })();
+          const origCoords = editingShelter?.location?.coordinates;
+          const origLng = Array.isArray(origCoords) && origCoords.length === 2 ? origCoords[0] : 108.217;
+          const origLat = Array.isArray(origCoords) && origCoords.length === 2 ? origCoords[1] : 16.057;
+          const isEditShelterDirty = Boolean(
+            isEditingShelter &&
+              editingShelter &&
+              (editShelterName !== (editingShelter.name || '') ||
+                editShelterType !== (editingShelter.type || 'EVACUATION_CENTER') ||
+                editShelterAreaId !== origShelterAreaId ||
+                editShelterAddress !== (editingShelter.address || '') ||
+                Number(editShelterCapacity) !== Number(editingShelter.capacity ?? 200) ||
+                Number(editShelterOccupancy) !== Number(editingShelter.currentOccupancy ?? 0) ||
+                editShelterStatus !== (editingShelter.status || 'ACTIVE') ||
+                Math.abs(Number(editShelterLat) - Number(origLat)) > 1e-5 ||
+                Math.abs(Number(editShelterLng) - Number(origLng)) > 1e-5 ||
+                editShelterNotes.trim().length > 0 ||
+                editPendingImages.length > 0 ||
+                JSON.stringify(editExistingImages) !==
+                  JSON.stringify(Array.isArray(editingShelter.images) ? editingShelter.images : []))
+          );
+
+          return (
+        <DetailSheet
+          open={Boolean(detailShelter)}
+          onOpenChange={(open) => {
+            if (!open && !selectedShelterPhoto && !submittingEditShelter) {
+              closeEditShelterModal();
+              setDetailShelter(null);
+            }
+          }}
+          size={isEditingShelter ? '2xl' : 'xl'}
+          icon={
+            detailShelter ? (
+              <ShelterTypeIcon type={detailShelter.type} size={18} color="currentColor" />
+            ) : undefined
+          }
+          title={
+            isEditingShelter
+              ? `Chỉnh sửa: ${detailShelter?.name || ''}`
+              : detailShelter?.name || ''
+          }
+          description={
+            detailShelter
+              ? isEditingShelter
+                ? 'Cập nhật chuẩn hóa thông tin cơ sở, sức chứa và vị trí địa lý trên bản đồ tác chiến.'
+                : `Mã: ${detailShelter._id} • Cập nhật: ${formatShelterTime(detailShelter.createdAt)}`
+              : undefined
+          }
+          saveBar={
+            isEditingShelter && editingShelter
+              ? {
+                  dirty: isEditShelterDirty,
+                  saving: submittingEditShelter,
+                  onSave: handleSubmitEditShelter,
+                  onDiscard: () => handleOpenEditShelterModal(editingShelter),
+                  saveLabel: 'Lưu điểm trú ẩn',
+                }
+              : undefined
+          }
+          footer={
+            detailShelter && (
+              isEditingShelter ? (
+                <>
+                  <span style={{ fontSize: 12, color: 'var(--dm-text-muted)', fontWeight: 500 }}>
+                    Thay đổi thông tin bên trên để hiện thanh lưu thay đổi
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="sos-btn-flat"
+                      disabled={submittingEditShelter}
+                      onClick={closeEditShelterModal}
+                    >
+                      Quay lại xem chi tiết
+                    </button>
+                    <button
+                      type="button"
+                      className="sos-btn-flat"
+                      disabled={submittingEditShelter}
+                      onClick={() => {
+                        closeEditShelterModal();
+                        setDetailShelter(null);
+                      }}
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </>
+              ) : (
+              <>
+                {isShelterInOfficerJurisdiction(detailShelter) ? (
+                  detailShelter.status === 'INACTIVE' ? (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="sos-btn-flat danger"
+                        onClick={() => handleDeleteShelter(detailShelter._id, detailShelter.name)}
+                        disabled={loading}
+                      >
+                        <Trash2 size={14} />
+                        <span>Xóa vĩnh viễn</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="sos-btn-flat success"
+                        onClick={() => handleActivateShelter(detailShelter)}
+                        disabled={loading}
+                      >
+                        <RotateCcw size={14} />
+                        <span>Mở lại cơ sở</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sos-btn-flat warning"
+                      onClick={() => handleToggleHideShelter(detailShelter)}
+                      disabled={loading}
+                    >
+                      <EyeOff size={14} />
+                      <span>Ẩn cơ sở này (Tạm ngưng)</span>
+                    </button>
+                  )
+                ) : (
+                  <div />
+                )}
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {isShelterInOfficerJurisdiction(detailShelter) && (
+                    <button
+                      type="button"
+                      className="sos-btn-flat"
+                      onClick={() => handleOpenEditShelterModal(detailShelter)}
+                      disabled={loading}
+                    >
+                      <Edit size={14} />
+                      <span>Chỉnh sửa thông tin</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="sos-btn-flat"
+                    onClick={() => setDetailShelter(null)}
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </>
+              )
+            )
+          }
+        >
+          {detailShelter && (
+            isEditingShelter ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {editShelterErrors.general && (
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--dm-green-bg)',
-                      border: '1px solid var(--dm-green-border)',
+                      background: 'var(--dm-red-bg)',
+                      border: '1px solid var(--dm-red-border)',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
+                      gap: '8px',
+                      color: 'var(--dm-red-text)',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
                     }}
                   >
-                    <ShelterTypeIcon type={detailShelter.type} size={18} color="#16a34a" />
+                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
+                    <span>{editShelterErrors.general}</span>
                   </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                      {detailShelter.name}
-                    </h3>
-                    <div style={{ fontSize: '12px', color: 'var(--dm-text-muted)', marginTop: '1px' }}>
-                      Mã: {detailShelter._id} • Cập nhật: {formatShelterTime(detailShelter.createdAt)}
+                )}
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
+                    gap: '18px',
+                  }}
+                >
+                  {/* CỘT TRÁI */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Tên điểm trú ẩn chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editShelterName}
+                        onChange={(e) => {
+                          setEditShelterName(e.target.value);
+                          if (editShelterErrors.name) {
+                            setEditShelterErrors((prev) => ({ ...prev, name: undefined, general: undefined }));
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editShelterErrors.name ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editShelterErrors.name ? '#fff5f5' : 'var(--dm-surface)',
+                          fontSize: '13px',
+                          color: 'var(--dm-text-strong)',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editShelterErrors.name && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editShelterErrors.name}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
+                        Phân loại cơ sở an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <select
+                        value={editShelterType}
+                        onChange={(e) => setEditShelterType(e.target.value as any)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--dm-border-strong)',
+                          fontSize: '12.5px',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        {SHELTER_TYPE_CARDS.map((item) => (
+                          <option key={`edit-type-${item.key}`} value={item.key}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                          Khu vực quản lý
+                        </label>
+                        {isAdmin ? (
+                          (() => {
+                            const hasExtraArea = Boolean(
+                              editShelterAreaId &&
+                                String(editShelterAreaId) !== String(daNangProvinceId) &&
+                                !daNangWardIds.has(String(editShelterAreaId))
+                            );
+                            const extraAreaName = hasExtraArea
+                              ? areas.find((a) => String(a._id) === String(editShelterAreaId))?.name ||
+                                'Khu vực hiện tại'
+                              : '';
+                            return (
+                              <SearchableSelect
+                                ariaLabel="Chọn Phường / Xã quản lý điểm trú ẩn"
+                                searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+                                value={editShelterAreaId || daNangProvinceId}
+                                onChange={(val) => {
+                                  setEditShelterAreaId(val);
+                                  const found = areas.find((a) => String(a._id) === val);
+                                  if (found && (!editShelterAddress || areas.some((a) => a.name === editShelterAddress))) {
+                                    setEditShelterAddress(found.name);
+                                  }
+                                }}
+                                triggerStyle={{
+                                  width: '100%',
+                                  padding: '8px 10px',
+                                  borderRadius: '6px',
+                                  border: '1px solid var(--dm-border-strong)',
+                                  fontSize: '12.5px',
+                                  color: 'var(--dm-text-strong)',
+                                  background: 'var(--dm-surface)',
+                                }}
+                                options={[
+                                  daNangProvinceId
+                                    ? {
+                                        value: daNangProvinceId,
+                                        label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
+                                        keywords: 'tat ca toan thanh pho da nang',
+                                      }
+                                    : {
+                                        value: '',
+                                        label: '-- Chọn Phường / Xã Đà Nẵng --',
+                                      },
+                                  ...(hasExtraArea
+                                    ? [
+                                        {
+                                          value: editShelterAreaId,
+                                          label: extraAreaName,
+                                          keywords: extraAreaName,
+                                        },
+                                      ]
+                                    : []),
+                                  ...daNangWards.map((a) => ({
+                                    value: a._id,
+                                    label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
+                                    badgeText: a.code || undefined,
+                                    keywords: `${a.name} ${a.code || ''}`,
+                                  })),
+                                ]}
+                              />
+                            );
+                          })()
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--dm-border-strong)',
+                              background: 'var(--dm-surface-subtle)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              boxSizing: 'border-box',
+                              minHeight: '36px',
+                            }}
+                          >
+                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
+                              {accountAreaDisplayName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                          Trạng thái hoạt động
+                        </label>
+                        <select
+                          value={editShelterStatus}
+                          onChange={(e) => setEditShelterStatus(e.target.value as any)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--dm-border-strong)',
+                            fontSize: '12.5px',
+                            color: 'var(--dm-text-strong)',
+                            background: 'var(--dm-surface)',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="ACTIVE">Sẵn sàng tiếp nhận (ACTIVE)</option>
+                          <option value="FULL">Đã đầy công suất (FULL)</option>
+                          <option value="MAINTENANCE">Bảo trì / Sửa chữa</option>
+                          <option value="INACTIVE">Tạm ngưng hoạt động</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {renderCapacityOccupancyFields({
+                      capacity: editShelterCapacity,
+                      onCapacityChange: (nextVal) => {
+                        setEditShelterCapacity(nextVal);
+                        if (editShelterErrors.capacity || editShelterErrors.occupancy || editShelterErrors.general) {
+                          setEditShelterErrors((prev) => ({
+                            ...prev,
+                            capacity: undefined,
+                            occupancy: undefined,
+                            general: undefined,
+                          }));
+                        }
+                      },
+                      occupancy: editShelterOccupancy,
+                      onOccupancyChange: (nextVal) => {
+                        setEditShelterOccupancy(nextVal);
+                        if (editShelterErrors.occupancy || editShelterErrors.general) {
+                          setEditShelterErrors((prev) => ({ ...prev, occupancy: undefined, general: undefined }));
+                        }
+                      },
+                      occupancyLabel: 'Đang lưu trú hiện tại',
+                      errors: editShelterErrors,
+                    })}
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Địa chỉ cụ thể <span style={{ color: 'var(--dm-red-text)' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editShelterAddress}
+                        onChange={(e) => {
+                          setEditShelterAddress(e.target.value);
+                          if (editShelterErrors.address) {
+                            setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editShelterErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
+                          background: editShelterErrors.address ? '#fff5f5' : 'var(--dm-surface)',
+                          fontSize: '13px',
+                          color: 'var(--dm-text-strong)',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editShelterErrors.address && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editShelterErrors.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <MultiImageUploader
+                      inputId="edit-shelter-images"
+                      label="Hình ảnh địa điểm"
+                      existingUrls={editExistingImages}
+                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
+                      pendingImages={editPendingImages}
+                      onAddFiles={(files) =>
+                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
+                      }
+                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
+                      onPreviewImage={(_url, images, index) =>
+                        setSelectedShelterPhoto({ images, activeIndex: index, title: editShelterName || 'Hình ảnh địa điểm' })
+                      }
+                      disabled={submittingEditShelter}
+                    />
+                  </div>
+
+                  {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <LocationSearchMapPicker
+                      lat={editShelterLat}
+                      lng={editShelterLng}
+                      markerHtml={getShelterMarkerHtml(editShelterType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#0284c7"
+                      mapHeight={250}
+                      error={editShelterErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setEditShelterLat(Number(newLat.toFixed(5)));
+                        setEditShelterLng(Number(newLng.toFixed(5)));
+                        if (editShelterErrors.coordinates) {
+                          setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderShelterAddress(editShelterAddress)) {
+                          setEditShelterAddress(detectedAddress);
+                          setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
+                      }}
+                    />
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
+                        Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={editShelterNotes}
+                        onChange={(e) => setEditShelterNotes(e.target.value)}
+                        placeholder="Ví dụ: Đã nâng cấp sức chứa và chuẩn bị 200 suất cứu trợ..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--dm-border-strong)',
+                          fontSize: '12.5px',
+                          color: 'var(--dm-text-strong)',
+                          background: 'var(--dm-surface)',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setDetailShelter(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--dm-text-muted)',
-                    cursor: 'pointer',
-                    padding: '4px',
-                  }}
-                  title="Đóng"
-                >
-                  <X size={18} />
-                </button>
               </div>
-
-              {/* Body: 2 Columns */}
-              <div
-                style={{
-                  padding: '20px',
-                  overflowY: 'auto',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-                  gap: '20px',
-                }}
-              >
+            ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '20px',
+              }}
+            >
                 {/* Cột 1: Thông tin năng lực & Quản lý */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ background: 'var(--dm-surface-subtle)', padding: '14px', borderRadius: '8px', border: '1px solid var(--dm-border)' }}>
@@ -2475,88 +2884,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Footer Modal */}
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderTop: '1px solid var(--dm-border)',
-                  background: 'var(--dm-surface-subtle)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                {isShelterInOfficerJurisdiction(detailShelter) ? (
-                  detailShelter.status === 'INACTIVE' ? (
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        type="button"
-                        className="sos-btn-flat danger"
-                        onClick={() => handleDeleteShelter(detailShelter._id, detailShelter.name)}
-                        disabled={loading}
-                      >
-                        <Trash2 size={14} />
-                        <span>Xóa vĩnh viễn</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="sos-btn-flat success"
-                        onClick={() => handleActivateShelter(detailShelter)}
-                        disabled={loading}
-                      >
-                        <RotateCcw size={14} />
-                        <span>Mở lại cơ sở</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="sos-btn-flat warning"
-                      onClick={() => handleToggleHideShelter(detailShelter)}
-                      disabled={loading}
-                    >
-                      <EyeOff size={14} />
-                      <span>Ẩn cơ sở này (Tạm ngưng)</span>
-                    </button>
-                  )
-                ) : (
-                  <div />
-                )}
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {isShelterInOfficerJurisdiction(detailShelter) && (
-                    <button
-                      type="button"
-                      className="sos-btn-flat"
-                      onClick={() => handleOpenEditShelterModal(detailShelter)}
-                      disabled={loading}
-                    >
-                      <Edit size={14} />
-                      <span>Chỉnh sửa thông tin</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="sos-btn-flat"
-                    onClick={() => setDetailShelter(null)}
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
             </div>
-          </div>
-        )}
+            )
+          )}
+        </DetailSheet>
+          );
+        })()}
 
         {/* ============================================================ */}
         {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (DÀNH CHO ADMIN & CÁN BỘ ĐỊA PHƯƠNG) */}
         {/* ============================================================ */}
         {isCreateShelterOpen && (
           <div
+            data-modal-layer="confirm"
             style={{
               position: 'fixed',
               inset: 0,
@@ -2564,7 +2904,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 1100,
+              zIndex: 10000,
               padding: '16px',
             }}
             onClick={closeCreateShelterModal}
@@ -2988,9 +3328,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                   onClick={handleSubmitCreateShelter}
                   style={{
                     padding: '7px 18px',
-                    backgroundColor: '#0284c7',
-                    color: '#ffffff',
-                    borderColor: '#0284c7',
                   }}
                 >
                   {submittingCreateShelter ? (
@@ -2999,463 +3336,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     <CheckCircle2 size={14} />
                   )}
                   <span>Xác nhận tạo điểm trú ẩn</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* MODAL CHỈNH SỬA ĐIỂM TRÚ ẨN (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
-        {/* ============================================================ */}
-        {editingShelter && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.7)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1100,
-              padding: '16px',
-            }}
-            onClick={() => !submittingEditShelter && closeEditShelterModal()}
-          >
-            <div
-              style={{
-                backgroundColor: 'var(--dm-surface)',
-                borderRadius: '12px',
-                width: '100%',
-                maxWidth: '960px',
-                maxHeight: '92vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '1px solid var(--dm-border-strong)',
-                overflow: 'hidden',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header Modal */}
-              <div
-                style={{
-                  padding: '14px 20px',
-                  borderBottom: '1px solid var(--dm-border)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: 'var(--dm-surface-subtle)',
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--dm-text-strong)' }}>
-                    Chỉnh Sửa &amp; Cập Nhật Thông Tin Điểm Trú Ẩn
-                  </h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dm-text-muted)' }}>
-                    Cập nhật chuẩn hóa thông tin cơ sở, sức chứa và vị trí địa lý trên bản đồ tác chiến.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => !submittingEditShelter && closeEditShelterModal()}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--dm-text-muted)',
-                    padding: '4px',
-                  }}
-                  title="Đóng"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Body Form 2 Cột */}
-              <div
-                style={{
-                  padding: '18px 20px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                {/* Thông báo lỗi nếu có */}
-                {editShelterErrors.general && (
-                  <div
-                    style={{
-                      background: 'var(--dm-red-bg)',
-                      border: '1px solid var(--dm-red-border)',
-                      borderRadius: '8px',
-                      padding: '10px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      color: 'var(--dm-red-text)',
-                      fontSize: '12.5px',
-                      fontWeight: 500,
-                    }}
-                  >
-                    <AlertTriangle size={16} style={{ color: 'var(--dm-red-text)', flexShrink: 0 }} />
-                    <span>{editShelterErrors.general}</span>
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-                    gap: '18px',
-                  }}
-                >
-                  {/* CỘT TRÁI */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* Tên cơ sở */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Tên điểm trú ẩn chuẩn hóa <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={editShelterName}
-                        onChange={(e) => {
-                          setEditShelterName(e.target.value);
-                          if (editShelterErrors.name) {
-                            setEditShelterErrors((prev) => ({ ...prev, name: undefined, general: undefined }));
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: editShelterErrors.name ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                          background: editShelterErrors.name ? '#fff5f5' : 'var(--dm-surface)',
-                          fontSize: '13px',
-                          color: 'var(--dm-text-strong)',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                        }}
-                      />
-                      {editShelterErrors.name && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editShelterErrors.name}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Phân loại cơ sở */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '6px' }}>
-                        Phân loại cơ sở an toàn <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <select
-                        value={editShelterType}
-                        onChange={(e) => setEditShelterType(e.target.value as any)}
-                        style={{
-                          width: '100%',
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--dm-border-strong)',
-                          fontSize: '12.5px',
-                          color: 'var(--dm-text-strong)',
-                          background: 'var(--dm-surface)',
-                          boxSizing: 'border-box',
-                        }}
-                      >
-                        {SHELTER_TYPE_CARDS.map((item) => (
-                          <option key={`edit-type-${item.key}`} value={item.key}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Khu vực & Trạng thái */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                          Khu vực quản lý
-                        </label>
-                        {isAdmin ? (
-                          (() => {
-                            const hasExtraArea = Boolean(
-                              editShelterAreaId &&
-                                String(editShelterAreaId) !== String(daNangProvinceId) &&
-                                !daNangWardIds.has(String(editShelterAreaId))
-                            );
-                            const extraAreaName = hasExtraArea
-                              ? areas.find((a) => String(a._id) === String(editShelterAreaId))?.name ||
-                                'Khu vực hiện tại'
-                              : '';
-                            return (
-                              <SearchableSelect
-                                ariaLabel="Chọn Phường / Xã quản lý điểm trú ẩn"
-                                searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
-                                value={editShelterAreaId || daNangProvinceId}
-                                onChange={(val) => {
-                                  setEditShelterAreaId(val);
-                                  const found = areas.find((a) => String(a._id) === val);
-                                  if (found && (!editShelterAddress || areas.some((a) => a.name === editShelterAddress))) {
-                                    setEditShelterAddress(found.name);
-                                  }
-                                }}
-                                triggerStyle={{
-                                  width: '100%',
-                                  padding: '8px 10px',
-                                  borderRadius: '6px',
-                                  border: '1px solid var(--dm-border-strong)',
-                                  fontSize: '12.5px',
-                                  color: 'var(--dm-text-strong)',
-                                  background: 'var(--dm-surface)',
-                                }}
-                                options={[
-                                  daNangProvinceId
-                                    ? {
-                                        value: daNangProvinceId,
-                                        label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
-                                        keywords: 'tat ca toan thanh pho da nang',
-                                      }
-                                    : {
-                                        value: '',
-                                        label: '-- Chọn Phường / Xã Đà Nẵng --',
-                                      },
-                                  ...(hasExtraArea
-                                    ? [
-                                        {
-                                          value: editShelterAreaId,
-                                          label: extraAreaName,
-                                          keywords: extraAreaName,
-                                        },
-                                      ]
-                                    : []),
-                                  ...daNangWards.map((a) => ({
-                                    value: a._id,
-                                    label: `${a.name}${a.code ? ` [${a.code}]` : ''}`,
-                                    badgeText: a.code || undefined,
-                                    keywords: `${a.name} ${a.code || ''}`,
-                                  })),
-                                ]}
-                              />
-                            );
-                          })()
-                        ) : (
-                          <div
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              border: '1px solid var(--dm-border-strong)',
-                              background: 'var(--dm-surface-subtle)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              boxSizing: 'border-box',
-                              minHeight: '36px',
-                            }}
-                          >
-                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)' }}>
-                              {accountAreaDisplayName}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                          Trạng thái hoạt động
-                        </label>
-                        <select
-                          value={editShelterStatus}
-                          onChange={(e) => setEditShelterStatus(e.target.value as any)}
-                          style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: '6px',
-                            border: '1px solid var(--dm-border-strong)',
-                            fontSize: '12.5px',
-                            color: 'var(--dm-text-strong)',
-                            background: 'var(--dm-surface)',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          <option value="ACTIVE">Sẵn sàng tiếp nhận (ACTIVE)</option>
-                          <option value="FULL">Đã đầy công suất (FULL)</option>
-                          <option value="MAINTENANCE">Bảo trì / Sửa chữa</option>
-                          <option value="INACTIVE">Tạm ngưng hoạt động</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Sức chứa tối đa & Đang lưu trú */}
-                    {renderCapacityOccupancyFields({
-                      capacity: editShelterCapacity,
-                      onCapacityChange: (nextVal) => {
-                        setEditShelterCapacity(nextVal);
-                        if (editShelterErrors.capacity || editShelterErrors.occupancy || editShelterErrors.general) {
-                          setEditShelterErrors((prev) => ({
-                            ...prev,
-                            capacity: undefined,
-                            occupancy: undefined,
-                            general: undefined,
-                          }));
-                        }
-                      },
-                      occupancy: editShelterOccupancy,
-                      onOccupancyChange: (nextVal) => {
-                        setEditShelterOccupancy(nextVal);
-                        if (editShelterErrors.occupancy || editShelterErrors.general) {
-                          setEditShelterErrors((prev) => ({ ...prev, occupancy: undefined, general: undefined }));
-                        }
-                      },
-                      occupancyLabel: 'Đang lưu trú hiện tại',
-                      errors: editShelterErrors,
-                    })}
-
-                    {/* Địa chỉ cụ thể */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Địa chỉ cụ thể <span style={{ color: 'var(--dm-red-text)' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={editShelterAddress}
-                        onChange={(e) => {
-                          setEditShelterAddress(e.target.value);
-                          if (editShelterErrors.address) {
-                            setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: editShelterErrors.address ? '1.5px solid #dc2626' : '1px solid var(--dm-border-strong)',
-                          background: editShelterErrors.address ? '#fff5f5' : 'var(--dm-surface)',
-                          fontSize: '13px',
-                          color: 'var(--dm-text-strong)',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                        }}
-                      />
-                      {editShelterErrors.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: 'var(--dm-red-text)', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editShelterErrors.address}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <MultiImageUploader
-                      inputId="edit-shelter-images"
-                      label="Hình ảnh địa điểm"
-                      existingUrls={editExistingImages}
-                      onRemoveExisting={(url) => setEditExistingImages((prev) => prev.filter((u) => u !== url))}
-                      pendingImages={editPendingImages}
-                      onAddFiles={(files) =>
-                        appendPendingImageFiles(files, setEditPendingImages, notifyInvalidImageFile)
-                      }
-                      onRemovePending={(id) => removePendingImageItem(id, setEditPendingImages)}
-                      onPreviewImage={(_url, images, index) =>
-                        setSelectedShelterPhoto({ images, activeIndex: index, title: editShelterName || 'Hình ảnh địa điểm' })
-                      }
-                      disabled={submittingEditShelter}
-                    />
-                  </div>
-
-                  {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <LocationSearchMapPicker
-                      lat={editShelterLat}
-                      lng={editShelterLng}
-                      markerHtml={getShelterMarkerHtml(editShelterType)}
-                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
-                      accentColor="#0284c7"
-                      mapHeight={250}
-                      error={editShelterErrors.coordinates}
-                      onLocationSelected={(newLat, newLng, detectedAddress) => {
-                        setEditShelterLat(Number(newLat.toFixed(5)));
-                        setEditShelterLng(Number(newLng.toFixed(5)));
-                        if (editShelterErrors.coordinates) {
-                          setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                        }
-                        if (detectedAddress && isPlaceholderShelterAddress(editShelterAddress)) {
-                          setEditShelterAddress(detectedAddress);
-                          setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
-                        }
-                      }}
-                    />
-
-                    {/* Ghi chú */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--dm-text-strong)', marginBottom: '5px' }}>
-                        Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={editShelterNotes}
-                        onChange={(e) => setEditShelterNotes(e.target.value)}
-                        placeholder="Ví dụ: Đã nâng cấp sức chứa và chuẩn bị 200 suất cứu trợ..."
-                        style={{
-                          width: '100%',
-                          padding: '7px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--dm-border-strong)',
-                          fontSize: '12.5px',
-                          color: 'var(--dm-text-strong)',
-                          background: 'var(--dm-surface)',
-                          boxSizing: 'border-box',
-                          resize: 'vertical',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Modal Actions */}
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderTop: '1px solid var(--dm-border)',
-                  background: 'var(--dm-surface-subtle)',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <button
-                  type="button"
-                  className="sos-btn-flat"
-                  disabled={submittingEditShelter}
-                  onClick={closeEditShelterModal}
-                >
-                  Hủy bỏ
-                </button>
-
-                <button
-                  type="button"
-                  className="sos-btn-flat primary"
-                  disabled={submittingEditShelter}
-                  onClick={handleSubmitEditShelter}
-                  style={{
-                    padding: '7px 18px',
-                    backgroundColor: '#0284c7',
-                    color: '#ffffff',
-                    borderColor: '#0284c7',
-                  }}
-                >
-                  {submittingEditShelter ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <CheckCircle2 size={14} />
-                  )}
-                  <span>Xác nhận cập nhật thông tin</span>
                 </button>
               </div>
             </div>

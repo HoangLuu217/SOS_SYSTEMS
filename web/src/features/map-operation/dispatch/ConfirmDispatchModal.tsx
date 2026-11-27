@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -74,8 +75,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
     return '~5-7 phút';
   })();
 
-  return (
+  const modalContent = (
     <div
+      data-modal-layer="confirm"
       className="sos-modal-overlay"
       onClick={(e) => {
         e.stopPropagation();
@@ -561,4 +563,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return modalContent;
+  return createPortal(modalContent, document.body);
 };

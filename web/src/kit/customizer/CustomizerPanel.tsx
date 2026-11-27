@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Ban,
   Check,
@@ -74,7 +75,7 @@ export function CustomizerPanel({
   showLayoutControls?: boolean;
 }) {
   const { settings, panelOpen, setPanelOpen, updateSettings, resetSettings } = useCustomizer();
-  const { theme, setTheme, lang, setLang } = useApp();
+  const { theme, setTheme } = useApp();
 
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -83,6 +84,32 @@ export function CustomizerPanel({
   const [copied, setCopied] = useState(false);
 
   const anchorRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; right: number }>({
+    top: 64,
+    right: 16,
+  });
+
+  const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+  useIsomorphicLayoutEffect(() => {
+    if (!panelOpen || typeof window === 'undefined') return;
+    const updatePosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPopoverPos({
+        top: Math.round(rect.bottom + 8),
+        right: Math.max(12, Math.round(window.innerWidth - rect.right)),
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [panelOpen]);
 
   useEffect(() => {
     if (!panelOpen) {
@@ -90,7 +117,10 @@ export function CustomizerPanel({
       return;
     }
     const onDocClick = (e: MouseEvent) => {
-      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inAnchor = anchorRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inAnchor && !inPopover) {
         setPanelOpen(false);
       }
     };
@@ -144,7 +174,6 @@ export function CustomizerPanel({
   const handleReset = () => {
     resetSettings();
     setTheme('light');
-    setLang('vi');
     toast.info('Đã khôi phục giao diện về chuẩn Chronicle mặc định.');
   };
 
@@ -162,12 +191,16 @@ export function CustomizerPanel({
           <Palette className="size-4" />
         </Button>
 
-        {panelOpen && (
-          <div
-            role="dialog"
-            aria-label="Tùy biến giao diện"
-            className="absolute right-0 top-[calc(100%+8px)] z-50 w-[min(20.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-(--surface-shadow-raised)"
-          >
+        {panelOpen &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label="Tùy biến giao diện"
+              style={{ top: popoverPos.top, right: popoverPos.right }}
+              className="fixed z-[2000] w-[min(20.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-(--surface-shadow-raised)"
+            >
             {/* Header matching kit/customizer/customizer-panel-body.tsx */}
             <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
               <div>
@@ -383,73 +416,64 @@ export function CustomizerPanel({
                     )}
                   </>
                 )}
-
-                {/* Language */}
-                <Section label="Ngôn ngữ">
-                  <Segmented
-                    aria-label="Ngôn ngữ"
-                    value={lang}
-                    onChange={(nextLang) => setLang(nextLang)}
-                    options={[
-                      { value: 'vi', label: 'Tiếng Việt' },
-                      { value: 'en', label: 'English' },
-                    ]}
-                  />
-                </Section>
               </div>
             </div>
-          </div>
-        )}
+          </div>,
+            document.body
+          )}
       </div>
 
       {/* Import Theme CSS Dialog (ported from kit/customizer/customizer-panel-body.tsx) */}
-      {importOpen && (
-        <div
-          className="fixed inset-0 z-[990] flex items-center justify-center bg-black/55 p-4 backdrop-blur-xs"
-          onClick={() => setImportOpen(false)}
-        >
+      {importOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Nhập CSS chủ đề"
-            className="w-full max-w-lg rounded-xl border border-border bg-card p-5 text-card-foreground shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-xs"
+            onClick={() => setImportOpen(false)}
           >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold">Nhập CSS chủ đề (tweakcn / shadcn)</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Dán đoạn CSS chứa khối <code>:root</code> và <code>.dark</code> để áp dụng tức thì.
-                </p>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Nhập CSS chủ đề"
+              className="w-full max-w-lg rounded-xl border border-border bg-card p-5 text-card-foreground shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold">Nhập CSS chủ đề (tweakcn / shadcn)</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Dán đoạn CSS chứa khối <code>:root</code> và <code>.dark</code> để áp dụng tức thì.
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon-sm" onClick={() => setImportOpen(false)}>
+                  <X className="size-4" />
+                </Button>
               </div>
-              <Button variant="ghost" size="icon-sm" onClick={() => setImportOpen(false)}>
-                <X className="size-4" />
-              </Button>
-            </div>
 
-            <textarea
-              rows={9}
-              value={importCss}
-              onChange={(e) => {
-                setImportCss(e.target.value);
-                if (importError) setImportError(null);
-              }}
-              placeholder={`:root {\n  --primary: oklch(0.55 0.2 260);\n  --radius: 0.625rem;\n}\n\n.dark {\n  --primary: oklch(0.7 0.16 260);\n}`}
-              className="w-full rounded-lg border border-input bg-background p-3 font-mono text-xs text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-            />
-            {importError && <p className="mt-1.5 text-xs text-destructive">{importError}</p>}
+              <textarea
+                rows={9}
+                value={importCss}
+                onChange={(e) => {
+                  setImportCss(e.target.value);
+                  if (importError) setImportError(null);
+                }}
+                placeholder={`:root {\n  --primary: oklch(0.55 0.2 260);\n  --radius: 0.625rem;\n}\n\n.dark {\n  --primary: oklch(0.7 0.16 260);\n}`}
+                className="w-full rounded-lg border border-input bg-background p-3 font-mono text-xs text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+              {importError && <p className="mt-1.5 text-xs text-destructive">{importError}</p>}
 
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setImportOpen(false)}>
-                Hủy
-              </Button>
-              <Button disabled={!importCss.trim()} onClick={handleApplyImport}>
-                Áp dụng chủ đề
-              </Button>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setImportOpen(false)}>
+                  Hủy
+                </Button>
+                <Button disabled={!importCss.trim()} onClick={handleApplyImport}>
+                  Áp dụng chủ đề
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }

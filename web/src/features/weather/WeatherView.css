@@ -367,54 +367,60 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.weather-badge-category.bao_ap_thap {
-  background: var(--dm-red-bg);
-  color: var(--dm-red-text);
-  border: 1px solid var(--dm-red-border);
-}
-
-.weather-badge-category.mua_lu {
-  background: var(--dm-blue-bg);
-  color: var(--dm-blue-text);
-  border: 1px solid var(--dm-blue-border);
-}
-
-.weather-badge-category.nang_nong {
-  background: var(--dm-orange-bg);
-  color: var(--dm-orange-text);
-  border: 1px solid var(--dm-orange-border);
-}
-
-.weather-badge-category.ret_dam {
-  background: var(--dm-purple-bg);
-  color: var(--dm-purple-text);
-  border: 1px solid var(--dm-purple-border);
-}
-
-.weather-badge-category.canh_bao {
-  background: var(--dm-amber-bg);
-  color: var(--dm-amber-text);
-  border: 1px solid var(--dm-amber-border);
-}
-
-.weather-badge-category.du_bao {
-  background: var(--dm-green-bg);
-  color: var(--dm-green-text);
-  border: 1px solid var(--dm-green-border);
-}
-
-.weather-badge-category.khac {
-  background: var(--dm-surface-muted);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.4;
   color: var(--dm-text-secondary);
-  border: 1px solid var(--dm-border);
+}
+
+.weather-badge-category svg {
+  flex-shrink: 0;
+}
+
+.weather-badge-category.bao_ap_thap,
+.weather-badge-category.mua_lu,
+.weather-badge-category.nang_nong,
+.weather-badge-category.ret_dam,
+.weather-badge-category.canh_bao,
+.weather-badge-category.du_bao,
+.weather-badge-category.khac {
+  background: transparent;
+  border: none;
+  color: var(--dm-text-secondary);
+}
+
+.weather-badge-category.bao_ap_thap svg {
+  color: var(--dm-red-text);
+}
+
+.weather-badge-category.mua_lu svg {
+  color: var(--dm-blue-text);
+}
+
+.weather-badge-category.nang_nong svg {
+  color: var(--dm-orange-text);
+}
+
+.weather-badge-category.ret_dam svg {
+  color: var(--dm-purple-text);
+}
+
+.weather-badge-category.canh_bao svg {
+  color: var(--dm-amber-text);
+}
+
+.weather-badge-category.du_bao svg {
+  color: var(--dm-green-text);
+}
+
+.weather-badge-category.khac svg {
+  color: var(--dm-text-muted);
 }
 
 .weather-score-badge {

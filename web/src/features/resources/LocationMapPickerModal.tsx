@@ -192,7 +192,7 @@ export const LocationMapPickerModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="executive-modal-backdrop" onClick={onClose} style={{ zIndex: 1100 }}>
+    <div className="executive-modal-backdrop" onClick={onClose} style={{ zIndex: 10050 }}>
       <div
         className="executive-modal-card"
         onClick={(e) => e.stopPropagation()}

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, Info, X, Loader2 } from 'lucide-react';
 
 export interface ToastMessage {
@@ -42,7 +43,19 @@ export function useGlobalModals() {
     }, 4000);
   };
 
-  const renderGlobalModals = () => (
+  useEffect(() => {
+    if (!confirmModal.isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !confirmLoading) {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [confirmModal.isOpen, confirmLoading]);
+
+  const renderGlobalModals = () => {
+    const content = (
     <>
       {/* TOAST NOTIFICATIONS */}
       {toasts.length > 0 && (
@@ -51,7 +64,7 @@ export function useGlobalModals() {
             position: 'fixed',
             top: '20px',
             right: '24px',
-            zIndex: 100000,
+            zIndex: 1000000,
             display: 'flex',
             flexDirection: 'column',
             gap: '10px',
@@ -120,6 +133,9 @@ export function useGlobalModals() {
       {/* CONFIRMATION MODAL */}
       {confirmModal.isOpen && (
         <div
+          data-modal-layer="confirm"
+          role="dialog"
+          aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
@@ -135,13 +151,14 @@ export function useGlobalModals() {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--dm-surface, #ffffff)',
+              color: 'var(--dm-text-strong, #0f172a)',
               borderRadius: '12px',
               maxWidth: '480px',
               width: '100%',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
               overflow: 'hidden',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--dm-border, #e2e8f0)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -149,7 +166,7 @@ export function useGlobalModals() {
             <div
               style={{
                 padding: '16px 20px',
-                borderBottom: '1px solid #f1f5f9',
+                borderBottom: '1px solid var(--dm-border, #f1f5f9)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -157,22 +174,22 @@ export function useGlobalModals() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {confirmModal.type === 'danger' ? (
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--dm-red-bg, #fee2e2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dm-red-text, #dc2626)' }}>
                     <AlertTriangle size={18} />
                   </div>
                 ) : (
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--dm-blue-bg, #e0f2fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dm-blue-text, #0284c7)' }}>
                     <CheckCircle2 size={18} />
                   </div>
                 )}
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dm-text-strong, #0f172a)' }}>
                   {confirmModal.title}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => !confirmLoading && setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                style={{ background: 'none', border: 'none', color: 'var(--dm-text-muted, #94a3b8)', cursor: 'pointer', padding: 4 }}
                 title="Đóng"
               >
                 <X size={18} />
@@ -181,16 +198,16 @@ export function useGlobalModals() {
 
             {/* Modal Body */}
             <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--dm-text-secondary, #334155)', lineHeight: 1.5 }}>
                 {confirmModal.message}
               </p>
 
               {confirmModal.details && confirmModal.details.length > 0 && (
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                <div style={{ background: 'var(--dm-surface-subtle, #f8fafc)', border: '1px solid var(--dm-border, #e2e8f0)', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   {confirmModal.details.map((d, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', gap: '10px' }}>
-                      <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{d.label}:</span>
-                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{d.value}</span>
+                      <span style={{ color: 'var(--dm-text-muted, #64748b)', whiteSpace: 'nowrap' }}>{d.label}:</span>
+                      <span style={{ color: 'var(--dm-text-strong, #0f172a)', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{d.value}</span>
                     </div>
                   ))}
                 </div>
@@ -198,7 +215,7 @@ export function useGlobalModals() {
 
               {confirmModal.promptInput && (
                 <div style={{ marginTop: '4px' }}>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--dm-text-strong, #0f172a)', marginBottom: '5px' }}>
                     {confirmModal.promptInput.label}
                   </label>
                   <textarea
@@ -210,7 +227,9 @@ export function useGlobalModals() {
                       width: '100%',
                       padding: '8px 10px',
                       borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
+                      border: '1px solid var(--dm-border-strong, #cbd5e1)',
+                      background: 'var(--dm-surface, #ffffff)',
+                      color: 'var(--dm-text-strong, #0f172a)',
                       fontSize: '12.5px',
                       boxSizing: 'border-box',
                       outline: 'none',
@@ -225,8 +244,8 @@ export function useGlobalModals() {
             <div
               style={{
                 padding: '12px 20px',
-                borderTop: '1px solid #f1f5f9',
-                background: '#f8fafc',
+                borderTop: '1px solid var(--dm-border, #f1f5f9)',
+                background: 'var(--dm-surface-subtle, #f8fafc)',
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: '8px',
@@ -259,9 +278,9 @@ export function useGlobalModals() {
                 style={{
                   padding: '7px 18px',
                   fontSize: '12.5px',
-                  background: confirmModal.type === 'danger' ? '#dc2626' : '#0284c7',
-                  color: '#ffffff',
-                  borderColor: confirmModal.type === 'danger' ? '#dc2626' : '#0284c7',
+                  background: confirmModal.type === 'danger' ? '#dc2626' : 'var(--primary)',
+                  color: confirmModal.type === 'danger' ? '#ffffff' : 'var(--primary-foreground)',
+                  borderColor: confirmModal.type === 'danger' ? '#dc2626' : 'var(--primary)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -281,7 +300,11 @@ export function useGlobalModals() {
         </div>
       )}
     </>
-  );
+    );
+
+    if (typeof document === 'undefined') return content;
+    return createPortal(content, document.body);
+  };
 
   return {
     toasts,

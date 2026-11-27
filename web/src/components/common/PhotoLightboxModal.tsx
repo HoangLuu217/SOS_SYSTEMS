@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 export interface PhotoLightboxState {
@@ -50,8 +51,9 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ state, o
     setActiveIndex((prev) => (prev + 1) % images.length);
   };
 
-  return (
+  const modalContent = (
     <div
+      data-modal-layer="confirm"
       style={{
         position: 'fixed',
         inset: 0,
@@ -61,7 +63,7 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ state, o
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10000,
+        zIndex: 20000,
         padding: 20,
       }}
       onClick={onClose}
@@ -244,5 +246,8 @@ export const PhotoLightboxModal: React.FC<PhotoLightboxModalProps> = ({ state, o
       )}
     </div>
   );
+
+  if (typeof document === 'undefined') return modalContent;
+  return createPortal(modalContent, document.body);
 };
 

@@ -24,7 +24,7 @@ export const RbacMatrixView: React.FC = () => {
             </thead>
             <tbody>
               <tr>
-                <td><strong>CITIZEN (Người dân)</strong></td>
+                <td><span className="ch-tbl-primary">CITIZEN (Người dân)</span></td>
                 <td>Mobile App</td>
                 <td>❌ Chỉ gửi SOS của mình</td>
                 <td>❌ Không</td>
@@ -33,7 +33,7 @@ export const RbacMatrixView: React.FC = () => {
                 <td>❌ Không</td>
               </tr>
               <tr>
-                <td><strong>RESCUER (Cứu hộ viên)</strong></td>
+                <td><span className="ch-tbl-primary">RESCUER (Cứu hộ viên)</span></td>
                 <td>Mobile App</td>
                 <td>✅ Nhận nhiệm vụ được giao</td>
                 <td>❌ Không</td>
@@ -42,20 +42,20 @@ export const RbacMatrixView: React.FC = () => {
                 <td>❌ Không</td>
               </tr>
               <tr>
-                <td><strong style={{ color: '#38bdf8' }}>LOCAL_AUTHORITY (Địa phương)</strong></td>
+                <td><span className="ch-tbl-primary">LOCAL_AUTHORITY (Địa phương)</span></td>
                 <td>Web Dashboard</td>
                 <td>✅ Toàn địa bàn</td>
                 <td>✅ Toàn quyền điều phối</td>
-                <td><strong style={{ color: 'var(--dm-green-text)' }}>✅ Toàn quyền Tạo &amp; Duyệt địa bàn</strong></td>
+                <td><span style={{ color: 'var(--dm-green-text)', fontWeight: 500 }}>✅ Toàn quyền tạo &amp; duyệt địa bàn</span></td>
                 <td>❌ Giới hạn đội cứu hộ</td>
                 <td>❌ Không</td>
               </tr>
               <tr>
-                <td><strong style={{ color: '#ef4444' }}>ADMIN (Quản trị viên)</strong></td>
+                <td><span className="ch-tbl-primary">ADMIN (Quản trị viên)</span></td>
                 <td>Web Dashboard</td>
                 <td>✅ Toàn hệ thống</td>
                 <td>✅ Giám sát toàn bộ</td>
-                <td><strong style={{ color: 'var(--dm-green-text)' }}>✅ Toàn quyền Tạo &amp; Duyệt toàn TP</strong></td>
+                <td><span style={{ color: 'var(--dm-green-text)', fontWeight: 500 }}>✅ Toàn quyền tạo &amp; duyệt toàn TP</span></td>
                 <td>✅ Toàn quyền quản trị</td>
                 <td>✅ Toàn quyền hệ thống</td>
               </tr>

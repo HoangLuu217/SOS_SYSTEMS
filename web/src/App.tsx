@@ -81,8 +81,8 @@ function MainRouter() {
     setAuthUser(user);
 
     if (!user) {
-      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-        window.history.replaceState(null, '', '/login');
+      if (window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
       }
     }
   }, []);
@@ -118,8 +118,8 @@ function MainRouter() {
     const handleAuthExpired = (e: Event) => {
       const detail = (e as CustomEvent<{ message?: string }>).detail;
       setAuthUser(null);
-      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-        window.history.replaceState(null, '', '/login');
+      if (window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
       }
       toast.warning(
         detail?.message || 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.',
@@ -153,8 +153,8 @@ function MainRouter() {
         window.history.replaceState({ navKey: parsed.navKey, subPath: parsed.subPath }, '', expectedUrl);
       }
     } else {
-      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-        window.history.replaceState(null, '', '/login');
+      if (window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
       }
     }
 
@@ -249,7 +249,7 @@ function MainRouter() {
     localStorage.removeItem('sos_refresh_token');
     localStorage.removeItem('sos_active_portal');
     setAuthUser(null);
-    window.history.replaceState(null, '', '/login');
+    window.history.replaceState(null, '', '/');
   };
 
   // Ưu tiên cao nhất: Khi người dùng bấm link đổi mật khẩu từ Email, chuyển thẳng tới trang đổi mật khẩu
@@ -259,7 +259,7 @@ function MainRouter() {
         isResetPasswordMode={true}
         onCloseResetMode={() => {
           setIsResetFlow(false);
-          window.history.replaceState(null, '', '/login');
+          window.history.replaceState(null, '', '/');
         }}
         onLoginSuccess={handleLoginSuccess}
       />

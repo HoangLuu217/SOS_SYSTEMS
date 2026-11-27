@@ -1,6 +1,30 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { RefreshCw, ArrowUpRight, Map } from 'lucide-react';
-import { ExcelExportButton } from '@/components/common/TableBulkKit';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  Bell,
+  Building2,
+  Clock,
+  CloudSun,
+  Download,
+  Droplet,
+  FileCheck,
+  FileText,
+  HeartPulse,
+  Home,
+  Layers,
+  Map,
+  MapPin,
+  MessageSquare,
+  Radio,
+  RefreshCw,
+  Shield,
+  ShieldCheck,
+  Truck,
+  UserCheck,
+  Users,
+} from 'lucide-react';
 import { onRescueTeamsUpdated } from '@/services/socketService';
 import {
   fetchSosRequests,
@@ -24,9 +48,19 @@ import type { User } from '@/types/auth';
 import type { SosRequestItem } from '@/types';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
-import { SosActivityChart, ProportionBar } from './ReportsCharts';
+import { Button } from '@/components/ui/button';
+import { PageHeader, Segmented, StatusBadge } from '@/kit/ui-patterns';
+import { PeriodHeader, Widget, WidgetHeader, WidgetValue } from '@/kit/widgets/Widget';
+import {
+  Heatmap,
+  HourBars,
+  PillBars,
+  StepLines,
+  type HourDatum,
+} from '@/kit/charts/ChronicleCharts';
+import { cn } from '@/lib/utils';
+import { SyncLogoLoader } from '@/components/common/SyncLogoLoader';
 import { exportDashboardWorkbook } from './exportReportsExcel';
-import './ReportsView.css';
 
 export interface ReportsViewProps {
   initialSosList?: SosRequestItem[];
@@ -35,32 +69,87 @@ export interface ReportsViewProps {
 }
 
 type TimeRangeKey = 'ALL' | 'TODAY' | '7D' | '30D';
+type HeroViewMode = 'trend' | 'types';
+type SidebarGroupKey = 'ALL' | 'OPS' | 'FORCES' | 'COMMUNITY' | 'MONITOR' | 'ADMIN';
 
-// Bảng màu trầm, đồng bộ cho các thanh tỷ lệ
-const TONE = {
-  blue: '#2563eb',
-  sky: '#60a5fa',
-  teal: '#0d9488',
-  amber: '#d97706',
-  rose: '#e11d48',
-  slate: '#94a3b8',
-} as const;
+const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] as const;
+const HOUR_BLOCK_LABELS = [
+  '0h',
+  '2h',
+  '4h',
+  '6h',
+  '8h',
+  '10h',
+  '12h',
+  '14h',
+  '16h',
+  '18h',
+  '20h',
+  '22h',
+] as const;
+
+const CHART_BAR_TONES = [
+  'bg-chart-lead',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+] as const;
+
+function fmtNum(n: number): string {
+  return n.toLocaleString('vi-VN');
+}
+
+function calcChange(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return (current - previous) / previous;
+}
+
+function getVietnameseGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Chào buổi sáng';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
+}
+
+function getVietnameseDateLabel(): string {
+  try {
+    const raw = new Date().toLocaleDateString('vi-VN', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  } catch {
+    return new Date().toLocaleDateString('vi-VN');
+  }
+}
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
   initialSosList,
   user,
+  onOpenMap,
 }) => {
   const userRoles = user?.roles || [];
   const isAdmin = userRoles.includes('ADMIN');
   const userAreaId = user?.authority?.areaId;
   const userAreaName = user?.authority?.areaName || 'Địa phương phụ trách';
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !(initialSosList && initialSosList.length > 0));
+  const [hasLoaded, setHasLoaded] = useState(() => Boolean(initialSosList && initialSosList.length > 0));
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('ALL');
+  const [heroView, setHeroView] = useState<HeroViewMode>('trend');
+  const [activeSidebarGroup, setActiveSidebarGroup] = useState<SidebarGroupKey>('ALL');
 
   const [sosList, setSosList] = useState<SosRequestItem[]>(initialSosList || []);
   const [rescueTeamsCount, setRescueTeamsCount] = useState({ total: 0, available: 0, busy: 0 });
-  const [rescuersStats, setRescuersStats] = useState({ total: 0, verified: 0, pending: 0, rejected: 0 });
+  const [rescuersStats, setRescuersStats] = useState({
+    total: 0,
+    verified: 0,
+    pending: 0,
+    rejected: 0,
+  });
   const [resourcesStats, setResourcesStats] = useState({
     vehiclesTotal: 0,
     vehiclesAvailable: 0,
@@ -173,7 +262,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const loadAllDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      const areaParam: Record<string, string> = !isAdmin && userAreaId ? { areaId: userAreaId } : {};
+      const areaParam: Record<string, string> =
+        !isAdmin && userAreaId ? { areaId: userAreaId } : {};
 
       const [
         sosRes,
@@ -324,7 +414,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         eventsActive: evActive,
         eventsClosed: evList.length - evActive,
         registrationsTotal: regList.length,
-        confirmedCount: regList.filter((r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED').length,
+        confirmedCount: regList.filter(
+          (r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED'
+        ).length,
         preRegCount: regList.filter((r) => r.status === 'PENDING').length,
       });
 
@@ -429,6 +521,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       console.error('[ReportsView] Error loading dashboard:', err);
       toast.error('Không thể tải đầy đủ số liệu thống kê');
     } finally {
+      setHasLoaded(true);
       setLoading(false);
     }
   }, [isAdmin, userAreaId]);
@@ -446,18 +539,27 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     };
   }, [loadAllDashboardData]);
 
-  useEffect(() => {
-    if (!rawListsRef.current.loaded && !loading) {
-      void loadAllDashboardData();
-    }
-  });
-
+  /* ------------------------------------------------------------------------
+     Derived SOS Analytics (Filtered window, Previous comparison, 24h & Heatmap)
+     ------------------------------------------------------------------------ */
   const filteredSos = useMemo(() => {
     if (timeRange === 'ALL') return sosList;
     const now = Date.now();
     const days = timeRange === 'TODAY' ? 1 : timeRange === '7D' ? 7 : 30;
     const cutoff = now - days * 24 * 60 * 60 * 1000;
     return sosList.filter((s) => new Date(s.createdAt).getTime() >= cutoff);
+  }, [sosList, timeRange]);
+
+  const previousWindowCount = useMemo(() => {
+    if (timeRange === 'ALL') return 0;
+    const now = Date.now();
+    const days = timeRange === 'TODAY' ? 1 : timeRange === '7D' ? 7 : 30;
+    const end = now - days * 24 * 60 * 60 * 1000;
+    const start = end - days * 24 * 60 * 60 * 1000;
+    return sosList.filter((s) => {
+      const ts = new Date(s.createdAt).getTime();
+      return ts >= start && ts < end;
+    }).length;
   }, [sosList, timeRange]);
 
   const sosStats = useMemo(() => {
@@ -470,17 +572,34 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     const cancelled = filteredSos.filter((s) => ['CANCELLED', 'REJECTED'].includes(s.status)).length;
     const totalPeople = filteredSos.reduce((sum, curr) => sum + (Number(curr.people) || 0), 0);
 
-    const typeCounts: Record<string, number> = {};
+    const typeMap: Record<
+      string,
+      { count: number; active: number; completed: number; people: number }
+    > = {};
     filteredSos.forEach((s) => {
       const t = s.emergencyType || 'OTHER';
-      typeCounts[t] = (typeCounts[t] || 0) + 1;
+      if (!typeMap[t]) typeMap[t] = { count: 0, active: 0, completed: 0, people: 0 };
+      typeMap[t].count += 1;
+      typeMap[t].people += Number(s.people) || 0;
+      if (s.status === 'COMPLETED') typeMap[t].completed += 1;
+      else if (
+        ['PENDING', 'VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(
+          s.status
+        )
+      ) {
+        typeMap[t].active += 1;
+      }
     });
-    const byType = Object.entries(typeCounts)
-      .map(([key, count]) => ({
+
+    const byType = Object.entries(typeMap)
+      .map(([key, bucket]) => ({
         key,
         label: EMERGENCY_TYPE_LABELS[key] || key,
-        count,
-        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+        count: bucket.count,
+        active: bucket.active,
+        completed: bucket.completed,
+        people: bucket.people,
+        pct: total > 0 ? Math.round((bucket.count / total) * 100) : 0,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
@@ -490,32 +609,35 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   const sosSeries = useMemo(() => {
     const now = new Date();
-    const points: { label: string; total: number; completed: number }[] = [];
+    const points: { label: string; title: string; total: number; completed: number }[] = [];
 
     if (timeRange === 'TODAY') {
       const start = new Date(now);
       start.setMinutes(0, 0, 0);
-      start.setHours(start.getHours() - 23);
-      for (let i = 0; i < 24; i++) {
+      start.setHours(start.getHours() - 11);
+      for (let i = 0; i < 12; i++) {
         const d = new Date(start.getTime() + i * 3600000);
-        points.push({ label: `${String(d.getHours()).padStart(2, '0')}h`, total: 0, completed: 0 });
+        const h = `${String(d.getHours()).padStart(2, '0')}h`;
+        points.push({ label: h, title: `${h} hôm nay`, total: 0, completed: 0 });
       }
       sosList.forEach((s) => {
         const idx = Math.floor((new Date(s.createdAt).getTime() - start.getTime()) / 3600000);
-        if (idx >= 0 && idx < 24) {
+        if (idx >= 0 && idx < 12) {
           points[idx].total += 1;
           if (s.status === 'COMPLETED') points[idx].completed += 1;
         }
       });
     } else {
-      const days = timeRange === '7D' ? 7 : timeRange === '30D' ? 30 : 14;
+      const days = timeRange === '7D' ? 7 : timeRange === '30D' ? 14 : 12;
       const start = new Date(now);
       start.setHours(0, 0, 0, 0);
       start.setDate(start.getDate() - (days - 1));
       for (let i = 0; i < days; i++) {
         const d = new Date(start.getTime() + i * 86400000);
+        const shortLbl = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
         points.push({
-          label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+          label: shortLbl,
+          title: `Ngày ${shortLbl}/${d.getFullYear()}`,
           total: 0,
           completed: 0,
         });
@@ -531,7 +653,83 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     return points;
   }, [sosList, timeRange]);
 
+  const { hourlyComparison, last24hTotal, prev24hTotal } = useMemo(() => {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    const endMs = now.getTime() + 3600000;
+    const startCurrent = endMs - 24 * 3600000;
+    const startPrevious = startCurrent - 24 * 3600000;
+
+    const currentBuckets = new Array<number>(24).fill(0);
+    const prevBuckets = new Array<number>(24).fill(0);
+
+    sosList.forEach((s) => {
+      const ts = new Date(s.createdAt).getTime();
+      if (ts >= startCurrent && ts < endMs) {
+        const idx = Math.min(23, Math.floor((ts - startCurrent) / 3600000));
+        currentBuckets[idx] += 1;
+      } else if (ts >= startPrevious && ts < startCurrent) {
+        const idx = Math.min(23, Math.floor((ts - startPrevious) / 3600000));
+        prevBuckets[idx] += 1;
+      }
+    });
+
+    const data: HourDatum[] = currentBuckets.map((val, idx) => {
+      const ago = 23 - idx;
+      return {
+        label: ago === 0 ? 'Giờ gần nhất' : `${ago} giờ trước`,
+        current: val,
+        previous: prevBuckets[idx],
+      };
+    });
+
+    return {
+      hourlyComparison: data,
+      last24hTotal: currentBuckets.reduce((a, b) => a + b, 0),
+      prev24hTotal: prevBuckets.reduce((a, b) => a + b, 0),
+    };
+  }, [sosList]);
+
+  const { heatmapMatrix, heatmapPeakLabel, heatmapWeekdayPct } = useMemo(() => {
+    const matrix: number[][] = Array.from({ length: 7 }, () => new Array<number>(12).fill(0));
+    filteredSos.forEach((s) => {
+      const d = new Date(s.createdAt);
+      if (Number.isNaN(d.getTime())) return;
+      const dayIdx = (d.getDay() + 6) % 7; // Monday = 0 ... Sunday = 6
+      const slotIdx = Math.min(11, Math.floor(d.getHours() / 2));
+      matrix[dayIdx][slotIdx] += 1;
+    });
+
+    let bestVal = 0;
+    let bestDay = 0;
+    let bestSlot = 0;
+    let total = 0;
+    let weekday = 0;
+    matrix.forEach((row, y) => {
+      row.forEach((val, x) => {
+        total += val;
+        if (y < 5) weekday += val;
+        if (val > bestVal) {
+          bestVal = val;
+          bestDay = y;
+          bestSlot = x;
+        }
+      });
+    });
+
+    return {
+      heatmapMatrix: matrix,
+      heatmapPeakLabel:
+        bestVal > 0 ? `${WEEKDAY_LABELS[bestDay]} · ${HOUR_BLOCK_LABELS[bestSlot]}` : 'Chưa có dữ liệu',
+      heatmapWeekdayPct: total > 0 ? Math.round((weekday / total) * 100) : 0,
+    };
+  }, [filteredSos]);
+
   const jumpTo = (key: NavItemKey) => {
+    if (key === 'map' && onOpenMap) {
+      onOpenMap();
+      return;
+    }
     navigateTo(key, user || null);
   };
 
@@ -578,19 +776,33 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   };
 
   const shelterAvailableSlots = Math.max(0, shelterStats.totalCapacity - shelterStats.totalOccupancy);
+  const shelterOccupancyPct =
+    shelterStats.totalCapacity > 0
+      ? (shelterStats.totalOccupancy / shelterStats.totalCapacity) * 100
+      : 0;
+  const sosCompletionPct =
+    sosStats.total > 0 ? (sosStats.completed / sosStats.total) * 100 : 0;
+  const avgPeoplePerSos =
+    sosStats.total > 0 ? (sosStats.totalPeople / sosStats.total).toFixed(1) : '0';
 
-  const [activeSidebarGroup, setActiveSidebarGroup] = useState<
-    'ALL' | 'OPS' | 'FORCES' | 'COMMUNITY' | 'MONITOR' | 'ADMIN'
-  >('ALL');
+  const statusRows = [
+    { label: 'Hoàn thành', count: sosStats.completed, tone: 'bg-chart-lead' },
+    { label: 'Đang ứng cứu', count: sosStats.active, tone: 'bg-chart-3' },
+    { label: 'Chờ tiếp nhận', count: sosStats.pending, tone: 'bg-destructive' },
+  ];
+  const maxStatusRow = Math.max(1, ...statusRows.map((r) => r.count));
 
   const sidebarReportGroups: {
-    id: 'OPS' | 'FORCES' | 'COMMUNITY' | 'MONITOR' | 'ADMIN';
+    id: Exclude<SidebarGroupKey, 'ALL'>;
     title: string;
     items: {
       key: NavItemKey;
+      icon: React.ComponentType<{ className?: string }>;
       name: string;
       totalLabel: string;
       totalValue: number | string;
+      warnCount?: number;
+      warnLabel?: string;
       metrics: { label: string; val: number | string; warn?: boolean }[];
     }[];
   }[] = [
@@ -599,21 +811,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       title: 'Điều hành cứu hộ & Tác chiến',
       items: [
         {
-          key: 'map' as NavItemKey,
+          key: 'map',
+          icon: Map,
           name: 'Bản đồ cứu hộ',
           totalLabel: 'Điểm hoạt động',
           totalValue: sosStats.active + shelterStats.active + hazardStats.approved,
           metrics: [
             { label: 'SOS đang cứu', val: sosStats.active },
-            { label: 'Điểm trú ẩn mở', val: shelterStats.active },
+            { label: 'Trú ẩn mở', val: shelterStats.active },
             { label: 'Điểm nguy hiểm', val: hazardStats.approved },
           ],
         },
         {
-          key: 'sos_requests' as NavItemKey,
+          key: 'sos_requests',
+          icon: Activity,
           name: 'Điều phối SOS',
           totalLabel: 'Tổng yêu cầu',
           totalValue: sosStats.total,
+          warnCount: sosStats.pending,
+          warnLabel: `${sosStats.pending} chờ xử lý`,
           metrics: [
             { label: 'Chờ xử lý', val: sosStats.pending, warn: sosStats.pending > 0 },
             { label: 'Đang cứu', val: sosStats.active },
@@ -621,13 +837,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ],
         },
         {
-          key: 'chat' as NavItemKey,
+          key: 'chat',
+          icon: MessageSquare,
           name: 'Trao đổi tác chiến',
           totalLabel: 'Hội thoại',
           totalValue: chatStats.conversations,
-          metrics: [
-            { label: 'Tin chưa đọc', val: chatStats.unread, warn: chatStats.unread > 0 },
-          ],
+          warnCount: chatStats.unread,
+          warnLabel: `${chatStats.unread} chưa đọc`,
+          metrics: [{ label: 'Tin chưa đọc', val: chatStats.unread, warn: chatStats.unread > 0 }],
         },
       ],
     },
@@ -636,10 +853,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       title: 'Lực lượng & Nguồn lực',
       items: [
         {
-          key: 'rescuers_approval' as NavItemKey,
+          key: 'rescuers_approval',
+          icon: FileCheck,
           name: 'Duyệt hồ sơ cứu hộ',
           totalLabel: 'Tổng hồ sơ',
           totalValue: rescuersStats.total,
+          warnCount: rescuersStats.pending,
+          warnLabel: `${rescuersStats.pending} chờ duyệt`,
           metrics: [
             { label: 'Chờ duyệt', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
             { label: 'Đã xác minh', val: rescuersStats.verified },
@@ -647,7 +867,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ],
         },
         {
-          key: 'rescuers' as NavItemKey,
+          key: 'rescuers',
+          icon: Users,
           name: 'Đội cứu hộ địa phương',
           totalLabel: 'Tổng đội',
           totalValue: rescueTeamsCount.total,
@@ -657,12 +878,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ],
         },
         {
-          key: 'resources' as NavItemKey,
+          key: 'resources',
+          icon: Truck,
           name: 'Phương tiện & Vật tư',
           totalLabel: 'Tổng nguồn lực',
           totalValue: resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal,
           metrics: [
-            { label: 'Xe sẵn sàng', val: `${resourcesStats.vehiclesAvailable}/${resourcesStats.vehiclesTotal}` },
+            {
+              label: 'Xe sẵn sàng',
+              val: `${resourcesStats.vehiclesAvailable}/${resourcesStats.vehiclesTotal}`,
+            },
             { label: 'Vật tư / Thiết bị', val: resourcesStats.equipmentsTotal },
           ],
         },
@@ -676,6 +901,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ? [
               {
                 key: 'notifications' as NavItemKey,
+                icon: Bell,
                 name: 'Gửi thông báo',
                 totalLabel: 'Đã phát',
                 totalValue: broadcastStats.total,
@@ -688,34 +914,45 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             ]
           : []),
         {
-          key: 'safety_checks' as NavItemKey,
+          key: 'safety_checks',
+          icon: ShieldCheck,
           name: 'Kiểm tra an toàn',
           totalLabel: 'Tổng đợt',
           totalValue: safetyCheckStats.total,
+          warnCount: safetyCheckStats.needHelpCount,
+          warnLabel: `${safetyCheckStats.needHelpCount} cần cứu`,
           metrics: [
             { label: 'Đang mở', val: safetyCheckStats.active },
             { label: 'An toàn', val: safetyCheckStats.safeCount },
-            { label: 'Cần cứu hộ', val: safetyCheckStats.needHelpCount, warn: safetyCheckStats.needHelpCount > 0 },
+            {
+              label: 'Cần cứu hộ',
+              val: safetyCheckStats.needHelpCount,
+              warn: safetyCheckStats.needHelpCount > 0,
+            },
           ],
         },
         {
-          key: 'blood_donations' as NavItemKey,
+          key: 'blood_donations',
+          icon: Droplet,
           name: 'Hiến máu tình nguyện',
           totalLabel: 'Đợt hiến máu',
           totalValue: bloodDonationStats.eventsTotal,
           metrics: [
             { label: 'Đang mở', val: bloodDonationStats.eventsActive },
-            { label: 'Lượt đăng ký', val: bloodDonationStats.registrationsTotal },
-            { label: 'Đã xác nhận', val: bloodDonationStats.confirmedCount },
+            { label: 'Đăng ký', val: bloodDonationStats.registrationsTotal },
+            { label: 'Xác nhận', val: bloodDonationStats.confirmedCount },
           ],
         },
         ...(isAdmin
           ? [
               {
                 key: 'weather' as NavItemKey,
+                icon: CloudSun,
                 name: 'Bản tin thời tiết',
                 totalLabel: 'Tổng bản tin',
                 totalValue: weatherStats.total,
+                warnCount: weatherStats.pending,
+                warnLabel: `${weatherStats.pending} chờ duyệt`,
                 metrics: [
                   { label: 'Phát hành', val: weatherStats.approved },
                   { label: 'Chờ duyệt', val: weatherStats.pending, warn: weatherStats.pending > 0 },
@@ -725,21 +962,25 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             ]
           : []),
         {
-          key: 'shelters' as NavItemKey,
+          key: 'shelters',
+          icon: Home,
           name: 'Điểm trú ẩn',
           totalLabel: 'Tổng điểm',
           totalValue: shelterStats.total,
           metrics: [
             { label: 'Đang mở', val: shelterStats.active },
-            { label: 'Đang lưu trú', val: shelterStats.totalOccupancy },
+            { label: 'Lưu trú', val: shelterStats.totalOccupancy },
             { label: 'Chỗ trống', val: shelterAvailableSlots },
           ],
         },
         {
-          key: 'hazard_reports' as NavItemKey,
+          key: 'hazard_reports',
+          icon: AlertTriangle,
           name: 'Điểm nguy hiểm',
           totalLabel: 'Tổng báo cáo',
           totalValue: hazardStats.total,
+          warnCount: hazardStats.pending,
+          warnLabel: `${hazardStats.pending} chờ duyệt`,
           metrics: [
             { label: 'Đã duyệt', val: hazardStats.approved },
             { label: 'Chờ duyệt', val: hazardStats.pending, warn: hazardStats.pending > 0 },
@@ -753,17 +994,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       title: 'Báo cáo & Giám sát',
       items: [
         {
-          key: 'reports' as NavItemKey,
-          name: 'Báo cáo & Thống kê',
-          totalLabel: 'Phạm vi',
-          totalValue: isAdmin ? 'Toàn hệ thống' : userAreaName,
-          metrics: [
-            { label: 'Tổng SOS', val: sosStats.total },
-            { label: 'Tổng người cần cứu', val: sosStats.totalPeople },
-          ],
-        },
-        {
-          key: 'operation_logs' as NavItemKey,
+          key: 'operation_logs',
+          icon: FileText,
           name: 'Nhật ký hoạt động',
           totalLabel: 'Bản ghi',
           totalValue: logsStats.total,
@@ -779,6 +1011,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             items: [
               {
                 key: 'citizens' as NavItemKey,
+                icon: Users,
                 name: 'Người dân',
                 totalLabel: 'Tài khoản',
                 totalValue: citizensStats.total,
@@ -789,23 +1022,32 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               },
               {
                 key: 'rescuers_admin' as NavItemKey,
+                icon: UserCheck,
                 name: 'Xác minh cứu hộ',
                 totalLabel: 'Tổng hồ sơ',
                 totalValue: rescuersStats.total,
+                warnCount: rescuersStats.pending,
+                warnLabel: `${rescuersStats.pending} chờ xác minh`,
                 metrics: [
-                  { label: 'Chờ xác minh', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
+                  {
+                    label: 'Chờ xác minh',
+                    val: rescuersStats.pending,
+                    warn: rescuersStats.pending > 0,
+                  },
                   { label: 'Đã xác minh', val: rescuersStats.verified },
                 ],
               },
               {
                 key: 'authorities' as NavItemKey,
+                icon: Building2,
                 name: 'Cán bộ & Tổ chức',
                 totalLabel: 'Cán bộ',
                 totalValue: authoritiesStats.total,
-                metrics: [{ label: 'Phạm vi', val: 'Toàn hệ thống' }],
+                metrics: [{ label: 'Đang hoạt động', val: authoritiesStats.active }],
               },
               {
                 key: 'areas' as NavItemKey,
+                icon: MapPin,
                 name: 'Khu vực hành chính',
                 totalLabel: 'Đơn vị',
                 totalValue: areasStats.total,
@@ -820,360 +1062,648 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       : []),
   ];
 
-  const visibleSidebarGroups =
-    activeSidebarGroup === 'ALL'
-      ? sidebarReportGroups
-      : sidebarReportGroups.filter((g) => g.id === activeSidebarGroup);
+  const visibleLedgerRows = useMemo(() => {
+    const groups =
+      activeSidebarGroup === 'ALL'
+        ? sidebarReportGroups
+        : sidebarReportGroups.filter((g) => g.id === activeSidebarGroup);
+    return groups.flatMap((g) => g.items.map((item) => ({ ...item, groupTitle: g.title })));
+  }, [activeSidebarGroup, sidebarReportGroups]);
+
+  const totalAttentionCount =
+    sosStats.pending +
+    rescuersStats.pending +
+    hazardStats.pending +
+    safetyCheckStats.needHelpCount +
+    (isAdmin ? weatherStats.pending : 0);
+
+  const timeRangeTitle =
+    timeRange === 'TODAY'
+      ? 'Hôm nay'
+      : timeRange === '7D'
+        ? '7 ngày qua'
+        : timeRange === '30D'
+          ? '30 ngày qua'
+          : 'Toàn thời gian';
+
+  const displayName = user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ trực ban');
+  const isInitialLoading = loading && !hasLoaded;
 
   return (
-    <div className="rpt-page">
-      {/* 1. THANH ĐIỀU KHIỂN ĐẦU TRANG */}
-      <div className="rpt-bar">
-        <div className="rpt-bar-left">
-          <span className="rpt-scope">
-            Phạm vi: <strong>{isAdmin ? 'Toàn hệ thống' : userAreaName}</strong>
-          </span>
-          <span className="rpt-sep" />
-          <div className="rpt-seg">
-            {(
-              [
-                { id: 'ALL', label: 'Tất cả' },
-                { id: 'TODAY', label: 'Hôm nay' },
-                { id: '7D', label: '7 ngày' },
-                { id: '30D', label: '30 ngày' },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`rpt-seg-btn ${timeRange === t.id ? 'is-active' : ''}`}
-                onClick={() => setTimeRange(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rpt-bar-right">
-          <button type="button" className="rpt-action-btn" onClick={() => jumpTo('map')}>
-            <Map size={14} />
-            <span>Bản đồ</span>
-          </button>
-          <ExcelExportButton
-            onClick={handleExportSummaryCsv}
-            title="Xuất báo cáo thống kê đa sheet (.xlsx) kèm định dạng biểu mẫu"
-          />
-          <button
-            type="button"
-            className="rpt-action-btn"
-            onClick={loadAllDashboardData}
-            disabled={loading}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Làm mới</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. DẢI CHỈ SỐ TỔNG QUAN (1 KHUNG LIỀN MẠCH 6 CỘT) */}
-      <div className="rpt-strip">
-        <div className="rpt-strip-cell" onClick={() => jumpTo('sos_requests')}>
-          <div className="rpt-strip-top">
-            <span>Yêu cầu SOS</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">{sosStats.total}</div>
-          <div className="rpt-strip-sub">
-            Chờ xử lý <b>{sosStats.pending}</b> · Đang cứu <b>{sosStats.active}</b>
-          </div>
-        </div>
-
-        <div className="rpt-strip-cell" onClick={() => jumpTo('rescuers')}>
-          <div className="rpt-strip-top">
-            <span>Đội cứu hộ</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">{rescueTeamsCount.total}</div>
-          <div className="rpt-strip-sub">
-            Sẵn sàng <b>{rescueTeamsCount.available}</b> · Đang bận <b>{rescueTeamsCount.busy}</b>
-          </div>
-        </div>
-
-        <div className="rpt-strip-cell" onClick={() => jumpTo('resources')}>
-          <div className="rpt-strip-top">
-            <span>Phương tiện & Vật tư</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">
-            {resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal}
-          </div>
-          <div className="rpt-strip-sub">
-            Xe <b>{resourcesStats.vehiclesAvailable}/{resourcesStats.vehiclesTotal}</b> · Vật tư{' '}
-            <b>{resourcesStats.equipmentsTotal}</b>
-          </div>
-        </div>
-
-        <div className="rpt-strip-cell" onClick={() => jumpTo('safety_checks')}>
-          <div className="rpt-strip-top">
-            <span>Kiểm tra an toàn</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">{safetyCheckStats.total}</div>
-          <div className="rpt-strip-sub">
-            Đang mở <b>{safetyCheckStats.active}</b> · Cần cứu <b>{safetyCheckStats.needHelpCount}</b>
-          </div>
-        </div>
-
-        <div className="rpt-strip-cell" onClick={() => jumpTo('blood_donations')}>
-          <div className="rpt-strip-top">
-            <span>Hiến máu</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">{bloodDonationStats.eventsTotal}</div>
-          <div className="rpt-strip-sub">
-            Đang mở <b>{bloodDonationStats.eventsActive}</b> · Đăng ký{' '}
-            <b>{bloodDonationStats.registrationsTotal}</b>
-          </div>
-        </div>
-
-        <div className="rpt-strip-cell" onClick={() => jumpTo('shelters')}>
-          <div className="rpt-strip-top">
-            <span>Trú ẩn & Nguy hiểm</span>
-            <ArrowUpRight size={13} />
-          </div>
-          <div className="rpt-strip-val">{shelterStats.total + hazardStats.total}</div>
-          <div className="rpt-strip-sub">
-            Trú ẩn <b>{shelterStats.total}</b> · Nguy hiểm <b>{hazardStats.total}</b>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. KHỐI PHÂN TÍCH TRUNG TÂM (2 CỘT CÂN ĐỐI) */}
-      <div className="rpt-split">
-        {/* Cột trái: Biểu đồ hoạt động SOS & phân loại sự cố */}
-        <section className="rpt-box">
-          <header className="rpt-box-head">
-            <div>
-              <h3 className="rpt-box-title">Hoạt động SOS</h3>
-              <p className="rpt-box-desc">Biểu đồ tiếp nhận, hoàn thành và phân loại sự cố</p>
-            </div>
-            <button type="button" className="rpt-tab-link" onClick={() => jumpTo('sos_requests')}>
-              Mở tab SOS <ArrowUpRight size={13} />
-            </button>
-          </header>
-
-          <div className="rpt-inline-kpis">
-            <div>
-              <span>Chờ tiếp nhận</span>
-              <strong style={{ color: sosStats.pending > 0 ? TONE.amber : undefined }}>
-                {sosStats.pending}
-              </strong>
-            </div>
-            <div>
-              <span>Đang ứng cứu</span>
-              <strong style={{ color: sosStats.active > 0 ? TONE.blue : undefined }}>
-                {sosStats.active}
-              </strong>
-            </div>
-            <div>
-              <span>Đã hoàn thành</span>
-              <strong style={{ color: sosStats.completed > 0 ? TONE.teal : undefined }}>
-                {sosStats.completed}
-              </strong>
-            </div>
-            <div>
-              <span>Người cần cứu</span>
-              <strong>{sosStats.totalPeople}</strong>
-            </div>
-          </div>
-
-          <SosActivityChart data={sosSeries} />
-
-          <div className="rpt-subblock">
-            <div className="rpt-subblock-title">Phân loại theo nhóm sự cố</div>
-            {sosStats.byType.length === 0 ? (
-              <div className="rpt-empty">Chưa có bản ghi SOS trong khoảng thời gian đã chọn.</div>
+    <div className="flex flex-col gap-5 pb-4">
+      {/* 1. PAGE HEADER (Mirrors Chronicle OverviewPage top greeting & actions — rendered immediately before data loads) */}
+      <PageHeader
+        className="sm:flex-col sm:items-start lg:flex-row lg:items-end"
+        title={`${getVietnameseGreeting()}, ${displayName}`}
+        description={
+          <>
+            {getVietnameseDateLabel()} ·{' '}
+            {isInitialLoading ? (
+              <span>Đang đồng bộ số liệu</span>
             ) : (
-              <div className="rpt-type-list">
-                {sosStats.byType.map((item) => (
-                  <div key={item.key} className="rpt-type-row">
-                    <span className="rpt-type-name">{item.label}</span>
-                    <div className="rpt-type-bar">
-                      <div style={{ width: `${Math.max(3, item.pct)}%` }} />
-                    </div>
-                    <span className="rpt-type-num">
-                      <b>{item.count}</b> ({item.pct}%)
-                    </span>
-                  </div>
-                ))}
+              <>
+                <span className="font-mono text-foreground tabular-nums">{fmtNum(sosStats.total)}</span>{' '}
+                yêu cầu SOS
+              </>
+            )}{' '}
+            · Phạm vi:{' '}
+            <span className="font-medium text-foreground">
+              {isAdmin ? 'Toàn hệ thống' : userAreaName}
+            </span>
+          </>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented<TimeRangeKey>
+              aria-label="Khoảng thời gian báo cáo"
+              value={timeRange}
+              onChange={setTimeRange}
+              className="w-auto shrink-0"
+              options={[
+                { value: 'ALL', label: 'Tất cả' },
+                { value: 'TODAY', label: 'Hôm nay' },
+                { value: '7D', label: '7 ngày' },
+                { value: '30D', label: '30 ngày' },
+              ]}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportSummaryCsv}
+              disabled={isInitialLoading}
+            >
+              <Download className="size-3.5" />
+              Xuất báo cáo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadAllDashboardData}
+              disabled={loading}
+              aria-label="Làm mới số liệu"
+            >
+              <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+              Làm mới
+            </Button>
+            <Button size="sm" onClick={() => jumpTo('map')}>
+              <Map className="size-3.5" />
+              Mở bản đồ
+            </Button>
+          </div>
+        }
+      />
+
+      {isInitialLoading ? (
+        <div className="flex min-h-[54vh] items-center justify-center rounded-xl border border-border/70 bg-card shadow-(--surface-shadow)">
+          <SyncLogoLoader size="lg" message="Đang tổng hợp dữ liệu báo cáo..." />
+        </div>
+      ) : (
+        <>
+          {/* 2. TOP HERO BENTO ROW (2-col Hero Chart + 1-col Stacked Widgets) */}
+          <div className="grid gap-4 xl:grid-cols-3">
+        {/* Left 2 columns: Hero SOS Activity Widget (Mirrors MrrWidget) */}
+        <Widget className="xl:col-span-2">
+          <WidgetHeader
+            title="Hoạt động cứu hộ SOS"
+            icon={Activity}
+            action={
+              <Button variant="ghost" size="sm" onClick={() => jumpTo('sos_requests')}>
+                Mở tab SOS
+                <ArrowUpRight className="size-3.5" />
+              </Button>
+            }
+          />
+
+          <PeriodHeader
+            columns={[
+              {
+                label: `Yêu cầu SOS · ${timeRangeTitle}`,
+                value: fmtNum(sosStats.total),
+                delta: calcChange(sosStats.total, previousWindowCount),
+                invert: true,
+                caption: `Chờ tiếp nhận ${fmtNum(sosStats.pending)} · Đang cứu ${fmtNum(sosStats.active)}`,
+              },
+              {
+                label: 'Đã hoàn thành',
+                value: fmtNum(sosStats.completed),
+                delta: null,
+                caption: `Tỷ lệ giải quyết ${sosCompletionPct.toFixed(1)}%`,
+              },
+              {
+                label: 'Người cần cứu hộ',
+                value: fmtNum(sosStats.totalPeople),
+                delta: null,
+                caption: `Trung bình ${avgPeoplePerSos} người / ca`,
+              },
+            ]}
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 px-(--card-spacing)">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground tabular-nums">
+              <span>
+                Chờ xử lý <span className="text-foreground">{fmtNum(sosStats.pending)}</span>
+              </span>
+              <span>
+                Đang cứu <span className="text-foreground">{fmtNum(sosStats.active)}</span>
+              </span>
+              <span>
+                Đã hủy <span className="text-destructive">{fmtNum(sosStats.cancelled)}</span>
+              </span>
+            </div>
+
+            <Segmented<HeroViewMode>
+              aria-label="Chế độ xem biểu đồ SOS"
+              value={heroView}
+              onChange={setHeroView}
+              className="w-auto shrink-0"
+              options={[
+                { value: 'trend', label: 'Biểu đồ cột' },
+                { value: 'types', label: 'Theo sự cố' },
+              ]}
+            />
+          </div>
+
+          <div className="h-64 px-(--card-spacing)">
+            {heroView === 'trend' ? (
+              <PillBars
+                data={sosSeries.map((pt) => ({
+                  label: pt.label,
+                  title: pt.title,
+                  value: pt.total,
+                  secondaryValue: pt.completed,
+                  secondaryLabel: 'Hoàn thành',
+                }))}
+                highlight="last"
+                valueLabel="Phát sinh"
+                barWidth={22}
+                className="h-full"
+              />
+            ) : sosStats.byType.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-4 text-center text-sm text-muted-foreground">
+                Chưa có bản ghi SOS trong khoảng thời gian đã chọn.
+              </div>
+            ) : (
+              <div className="flex h-full flex-col justify-center">
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  {sosStats.byType.map((row, idx) => (
+                    <span
+                      key={row.key}
+                      className={cn('h-full', CHART_BAR_TONES[idx % CHART_BAR_TONES.length])}
+                      style={{ width: `${Math.max(2, row.pct)}%` }}
+                    />
+                  ))}
+                </div>
+                <table className="mt-4 w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-border text-xs text-muted-foreground">
+                      <th scope="col" className="py-2 text-start font-medium">
+                        Nhóm sự cố
+                      </th>
+                      <th scope="col" className="py-2 text-end font-medium">
+                        Số ca
+                      </th>
+                      <th scope="col" className="py-2 text-end font-medium">
+                        Đang xử lý
+                      </th>
+                      <th scope="col" className="py-2 text-end font-medium">
+                        Hoàn thành
+                      </th>
+                      <th scope="col" className="hidden py-2 text-end font-medium sm:table-cell">
+                        Tỷ trọng
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-mono tabular-nums">
+                    {sosStats.byType.map((row, idx) => (
+                      <tr key={row.key} className="border-b border-border/70">
+                        <th scope="row" className="py-2 text-start font-sans font-medium text-foreground">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'size-2 rounded-full',
+                                CHART_BAR_TONES[idx % CHART_BAR_TONES.length]
+                              )}
+                              aria-hidden
+                            />
+                            {row.label}
+                          </span>
+                        </th>
+                        <td className="py-2 text-end">{fmtNum(row.count)}</td>
+                        <td className="py-2 text-end text-muted-foreground">{fmtNum(row.active)}</td>
+                        <td className="py-2 text-end">{fmtNum(row.completed)}</td>
+                        <td className="hidden py-2 text-end text-muted-foreground sm:table-cell">
+                          {row.pct}%
+                        </td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <th scope="row" className="pt-2.5 text-start font-sans font-semibold text-foreground">
+                        Tổng cộng
+                      </th>
+                      <td className="pt-2.5 text-end font-semibold">{fmtNum(sosStats.total)}</td>
+                      <td className="pt-2.5 text-end text-muted-foreground">
+                        {fmtNum(sosStats.pending + sosStats.active)}
+                      </td>
+                      <td className="pt-2.5 text-end font-semibold">{fmtNum(sosStats.completed)}</td>
+                      <td className="hidden pt-2.5 text-end text-muted-foreground sm:table-cell">
+                        100%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
-        </section>
+        </Widget>
 
-        {/* Cột phải: Tỷ lệ vận hành An toàn, Trú ẩn, Nguy hiểm & Nguồn lực */}
-        <section className="rpt-box">
-          <header className="rpt-box-head">
-            <div>
-              <h3 className="rpt-box-title">An toàn, trú ẩn &amp; nguồn lực</h3>
-              <p className="rpt-box-desc">Tỷ lệ thực tế theo từng nghiệp vụ</p>
+        {/* Right column: Stacked 24h Signal Pulse + Processing Efficiency */}
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
+          {/* Mirrors SignupsWidget */}
+          <Widget>
+            <WidgetHeader title="Tín hiệu SOS, 24 giờ qua" icon={Radio} />
+            <WidgetValue
+              value={fmtNum(last24hTotal)}
+              delta={calcChange(last24hTotal, prev24hTotal)}
+              invert
+              caption={`so với ${fmtNum(prev24hTotal)} ngày hôm trước`}
+            />
+            <HourBars
+              data={hourlyComparison}
+              currentLabel="24 giờ qua"
+              previousLabel="Ngày hôm trước"
+              className="h-20 px-(--card-spacing)"
+            />
+            <div className="flex items-center justify-between gap-3 px-(--card-spacing) text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-1.5 rounded-full bg-chart-lead" aria-hidden />
+                Theo giờ
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 border-t border-dashed border-chart-line" aria-hidden />
+                Ngày trước
+              </span>
             </div>
-          </header>
+          </Widget>
 
-          <div className="rpt-prop-groups">
-            <div className="rpt-prop-card">
-              <div className="rpt-prop-head">
-                <span>
-                  Trạng thái xử lý SOS <b>({sosStats.total})</b>
-                </span>
-                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('sos_requests')}>
-                  Chi tiết <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <ProportionBar
-                segments={[
-                  { label: 'Chờ xử lý', value: sosStats.pending, color: TONE.amber },
-                  { label: 'Đang cứu', value: sosStats.active, color: TONE.blue },
-                  { label: 'Hoàn thành', value: sosStats.completed, color: TONE.teal },
-                  { label: 'Đã hủy', value: sosStats.cancelled, color: TONE.slate },
-                ]}
-              />
-            </div>
-
-            <div className="rpt-prop-card">
-              <div className="rpt-prop-head">
-                <span>
-                  Công suất điểm trú ẩn <b>({shelterStats.active}/{shelterStats.total} điểm mở)</b>
-                </span>
-                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('shelters')}>
-                  Mở tab <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <ProportionBar
-                segments={[
-                  { label: 'Đang lưu trú', value: shelterStats.totalOccupancy, color: TONE.blue },
-                  { label: 'Chỗ trống', value: shelterAvailableSlots, color: TONE.teal },
-                ]}
-              />
-            </div>
-
-            <div className="rpt-prop-card">
-              <div className="rpt-prop-head">
-                <span>
-                  Phản hồi kiểm tra an toàn <b>({safetyCheckStats.total} đợt)</b>
-                </span>
-                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('safety_checks')}>
-                  Mở tab <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <ProportionBar
-                segments={[
-                  { label: 'Báo an toàn', value: safetyCheckStats.safeCount, color: TONE.teal },
-                  { label: 'Cần cứu hộ', value: safetyCheckStats.needHelpCount, color: TONE.rose },
-                ]}
-              />
-            </div>
-
-            <div className="rpt-prop-card">
-              <div className="rpt-prop-head">
-                <span>
-                  Điểm nguy hiểm <b>({hazardStats.total} báo cáo · {hazardStats.highSeverity} mức cao)</b>
-                </span>
-                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('hazard_reports')}>
-                  Mở tab <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <ProportionBar
-                segments={[
-                  { label: 'Đã duyệt', value: hazardStats.approved, color: TONE.blue },
-                  { label: 'Chờ duyệt', value: hazardStats.pending, color: TONE.amber },
-                  { label: 'Từ chối', value: hazardStats.rejected, color: TONE.slate },
-                ]}
-              />
-            </div>
-
-            <div className="rpt-prop-card">
-              <div className="rpt-prop-head">
-                <span>
-                  Phương tiện & Kho vật tư <b>({resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal})</b>
-                </span>
-                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('resources')}>
-                  Mở tab <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <ProportionBar
-                segments={[
-                  { label: 'Xe sẵn sàng', value: resourcesStats.vehiclesAvailable, color: TONE.teal },
-                  { label: 'Xe đang điều động', value: resourcesStats.vehiclesInUse, color: TONE.blue },
-                  { label: 'Thiết bị bền', value: resourcesStats.durableCount, color: TONE.sky },
-                  { label: 'Nhu yếu phẩm', value: resourcesStats.consumableCount, color: TONE.amber },
-                ]}
-              />
-            </div>
-          </div>
-        </section>
+          {/* Mirrors RetentionWidget */}
+          <Widget>
+            <WidgetHeader title="Hiệu suất xử lý SOS" icon={ShieldCheck} />
+            <WidgetValue
+              value={`${sosCompletionPct.toFixed(1)}%`}
+              caption={`Hoàn thành ${fmtNum(sosStats.completed)}/${fmtNum(sosStats.total)} ca · ${fmtNum(safetyCheckStats.safeCount)} báo an toàn`}
+            />
+            <ul
+              className="flex flex-col gap-2.5 px-(--card-spacing) text-sm"
+              aria-label="Phân bổ trạng thái SOS"
+            >
+              {statusRows.map((row) => (
+                <li
+                  key={row.label}
+                  className="grid grid-cols-[7.2rem_1fr_auto] items-center gap-3"
+                >
+                  <span className="truncate text-muted-foreground">{row.label}</span>
+                  <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <span
+                      className={cn('block h-full rounded-full transition-all', row.tone)}
+                      style={{
+                        width: `${row.count > 0 ? Math.max(4, (row.count / maxStatusRow) * 100) : 0}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-foreground">
+                    {fmtNum(row.count)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Widget>
+        </div>
       </div>
 
-      {/* 4. PHÂN HỆ QUẢN LÝ THEO SIDEBAR (CHIA TAB GỌN ĐẸP, ÍT MÀU) */}
-      <section className="rpt-box">
-        <header className="rpt-box-head rpt-sidebar-head">
-          <div>
-            <h3 className="rpt-box-title">Tổng hợp theo phân hệ</h3>
-            <p className="rpt-box-desc">Chọn nhóm để xem số liệu và mở nhanh</p>
-          </div>
-          <div className="rpt-tabs">
-            {[
-              { id: 'ALL' as const, label: 'Tất cả' },
-              { id: 'OPS' as const, label: 'Điều hành' },
-              { id: 'FORCES' as const, label: 'Lực lượng' },
-              { id: 'COMMUNITY' as const, label: 'Cộng đồng' },
-              { id: 'MONITOR' as const, label: 'Báo cáo' },
-              ...(isAdmin ? [{ id: 'ADMIN' as const, label: 'Quản trị' }] : []),
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`rpt-tab-pill ${activeSidebarGroup === tab.id ? 'is-active' : ''}`}
-                onClick={() => setActiveSidebarGroup(tab.id)}
+      {/* 3. MIDDLE 4 SMALL METRIC CARDS (Mirrors Accounts / Trials / Users / Seats) */}
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
+        {/* Card 1: Rescue Teams + StepLines */}
+        <Widget>
+          <WidgetHeader
+            title="Đội cứu hộ"
+            icon={Users}
+            action={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => jumpTo('rescuers')}
+                aria-label="Mở Đội cứu hộ"
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </header>
+                <ArrowUpRight className="size-4" />
+              </Button>
+            }
+          />
+          <WidgetValue
+            value={fmtNum(rescueTeamsCount.total)}
+            caption={`Sẵn sàng ${fmtNum(rescueTeamsCount.available)} · Đang bận ${fmtNum(rescueTeamsCount.busy)}`}
+          />
+          <StepLines
+            data={sosSeries.map((p) => ({ label: p.label, value: p.completed }))}
+            seriesLabel="Ca hoàn thành"
+            className="h-28 px-(--card-spacing)"
+          />
+        </Widget>
 
-        <div className="rpt-groups-stack">
-          {visibleSidebarGroups.map((group) => (
-            <div key={group.id} className="rpt-group-block">
-              <div className="rpt-group-title">{group.title}</div>
-              <div className="rpt-ledger">
-                {group.items.map((row) => (
-                  <div key={row.key} className="rpt-ledger-item">
-                    <div className="rpt-ledger-main">
-                      <div className="rpt-ledger-name">{row.name}</div>
-                      <div className="rpt-ledger-metrics">
-                        <span>
-                          {row.totalLabel}: <b>{row.totalValue}</b>
-                        </span>
-                        {row.metrics.map((m) => (
-                          <span key={m.label}>
-                            · {m.label}:{' '}
-                            <b className={m.warn ? 'is-warn' : ''}>{m.val}</b>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <button type="button" className="rpt-tab-link" onClick={() => jumpTo(row.key)}>
-                      Mở <ArrowUpRight size={14} />
+        {/* Card 2: Vehicles & Equipment + PillBars */}
+        <Widget>
+          <WidgetHeader
+            title="Phương tiện & Vật tư"
+            icon={Truck}
+            action={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => jumpTo('resources')}
+                aria-label="Mở Phương tiện & Vật tư"
+              >
+                <ArrowUpRight className="size-4" />
+              </Button>
+            }
+          />
+          <WidgetValue
+            value={fmtNum(resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal)}
+            caption={`Xe ${resourcesStats.vehiclesAvailable}/${resourcesStats.vehiclesTotal} · Vật tư ${fmtNum(resourcesStats.equipmentsTotal)}`}
+          />
+          <PillBars
+            data={[
+              { label: 'Xe mở', title: 'Xe sẵn sàng', value: resourcesStats.vehiclesAvailable },
+              { label: 'Điều xe', title: 'Xe đang điều động', value: resourcesStats.vehiclesInUse },
+              { label: 'Thiết bị', title: 'Thiết bị bền', value: resourcesStats.durableCount },
+              { label: 'Vật tư', title: 'Nhu yếu phẩm', value: resourcesStats.consumableCount },
+            ]}
+            highlight="max"
+            valueLabel="Số lượng"
+            barWidth={16}
+            className="h-28 px-(--card-spacing)"
+          />
+        </Widget>
+
+        {/* Card 3: Safety Check & Blood Donations + PillBars */}
+        <Widget>
+          <WidgetHeader
+            title="An toàn & Hiến máu"
+            icon={HeartPulse}
+            action={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => jumpTo('safety_checks')}
+                aria-label="Mở Kiểm tra an toàn"
+              >
+                <ArrowUpRight className="size-4" />
+              </Button>
+            }
+          />
+          <WidgetValue
+            value={fmtNum(
+              safetyCheckStats.safeCount +
+                safetyCheckStats.needHelpCount +
+                bloodDonationStats.registrationsTotal
+            )}
+            caption={`${safetyCheckStats.active} đợt an toàn · ${bloodDonationStats.eventsActive} đợt hiến máu mở`}
+          />
+          <PillBars
+            data={[
+              { label: 'An toàn', title: 'Báo an toàn', value: safetyCheckStats.safeCount },
+              { label: 'Cần cứu', title: 'Báo cần cứu hộ', value: safetyCheckStats.needHelpCount },
+              {
+                label: 'ĐK máu',
+                title: 'Đăng ký hiến máu',
+                value: bloodDonationStats.registrationsTotal,
+              },
+              {
+                label: 'Xác nhận',
+                title: 'Đã xác nhận hiến máu',
+                value: bloodDonationStats.confirmedCount,
+              },
+            ]}
+            highlight="max"
+            valueLabel="Lượt phản hồi"
+            barWidth={16}
+            className="h-28 px-(--card-spacing)"
+          />
+        </Widget>
+
+        {/* Card 4: Shelters, Hazards & Rescuers Utilization (Mirrors SeatsWidget) */}
+        <Widget>
+          <WidgetHeader
+            title="Trú ẩn & Nguy hiểm"
+            icon={Shield}
+            action={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => jumpTo('shelters')}
+                aria-label="Mở Điểm trú ẩn"
+              >
+                <ArrowUpRight className="size-4" />
+              </Button>
+            }
+          />
+          <WidgetValue
+            value={`${shelterOccupancyPct.toFixed(1)}%`}
+            caption={`${fmtNum(shelterStats.totalOccupancy)} / ${fmtNum(shelterStats.totalCapacity)} chỗ lưu trú`}
+          />
+          <ul
+            className="flex flex-col gap-2.5 px-(--card-spacing) text-sm"
+            aria-label="Tỷ lệ sẵn sàng trú ẩn và điểm nguy hiểm"
+          >
+            {[
+              {
+                label: 'Trú ẩn mở',
+                used: shelterStats.active,
+                total: shelterStats.total,
+                tone: 'bg-chart-lead',
+              },
+              {
+                label: 'Nguy hiểm',
+                used: hazardStats.approved,
+                total: hazardStats.total,
+                tone: 'bg-chart-2',
+              },
+              {
+                label: 'Cứu hộ viên',
+                used: rescuersStats.verified,
+                total: rescuersStats.total,
+                tone: 'bg-chart-3',
+              },
+            ].map((row) => (
+              <li
+                key={row.label}
+                className="grid grid-cols-[5.5rem_1fr_auto] items-center gap-3"
+              >
+                <span className="truncate text-muted-foreground">{row.label}</span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <span
+                    className={cn('block h-full rounded-full', row.tone)}
+                    style={{
+                      width: `${row.total > 0 ? Math.min(100, (row.used / row.total) * 100) : 0}%`,
+                    }}
+                  />
+                </span>
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {fmtNum(row.used)}/{fmtNum(row.total)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="px-(--card-spacing) text-xs text-muted-foreground">
+            <span className="font-mono text-foreground tabular-nums">
+              {fmtNum(hazardStats.highSeverity)}
+            </span>{' '}
+            điểm nguy hiểm mức cao ·{' '}
+            <span className="font-mono text-foreground tabular-nums">
+              {fmtNum(hazardStats.pending)}
+            </span>{' '}
+            chờ duyệt.
+          </p>
+        </Widget>
+      </div>
+
+      {/* 4. BOTTOM BENTO ROW: Module Ledger (2 cols) + SOS Activity Heatmap (1 col) */}
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        {/* Left 2 cols: Mirrors AttentionWidget */}
+        <Widget className="gap-0 xl:col-span-2">
+          <WidgetHeader
+            className="flex-wrap gap-y-2"
+            title={
+              <span className="flex flex-wrap items-center gap-2">
+                <span>Tổng hợp theo phân hệ</span>
+                <StatusBadge tone={totalAttentionCount > 0 ? 'warning' : 'success'}>
+                  {totalAttentionCount > 0 ? `${fmtNum(totalAttentionCount)} cần xử lý` : 'Ổn định'}
+                </StatusBadge>
+              </span>
+            }
+            icon={Layers}
+            action={
+              <Segmented<SidebarGroupKey>
+                aria-label="Lọc nhóm phân hệ"
+                value={activeSidebarGroup}
+                onChange={setActiveSidebarGroup}
+                className="w-auto shrink-0"
+                options={[
+                  { value: 'ALL', label: 'Tất cả' },
+                  { value: 'OPS', label: 'Điều hành' },
+                  { value: 'FORCES', label: 'Lực lượng' },
+                  { value: 'COMMUNITY', label: 'Cộng đồng' },
+                  { value: 'MONITOR', label: 'Giám sát' },
+                  ...(isAdmin ? [{ value: 'ADMIN' as const, label: 'Quản trị' }] : []),
+                ]}
+              />
+            }
+          />
+          <p className="px-(--card-spacing) pt-1.5 pb-3 text-sm text-muted-foreground">
+            Theo dõi trực tiếp số liệu và đầu việc tồn đọng của từng phân hệ quản lý.
+          </p>
+
+          <ul className="flex flex-col border-t border-border">
+            {visibleLedgerRows.map((row) => {
+              const Icon = row.icon;
+              const hasWarn = (row.warnCount || 0) > 0;
+              return (
+                <li
+                  key={row.key}
+                  className="flex items-center gap-3 border-b border-border/80 px-(--card-spacing) py-3 transition-colors last:border-b-0 hover:bg-muted/35"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-primary">
+                    <Icon className="size-4" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <button
+                      type="button"
+                      onClick={() => jumpTo(row.key)}
+                      className="truncate text-start text-sm font-medium text-foreground hover:underline"
+                    >
+                      {row.name}
                     </button>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {row.metrics.map((m, idx) => (
+                        <React.Fragment key={m.label}>
+                          {idx > 0 && ' · '}
+                          {m.label}:{' '}
+                          <span
+                            className={cn(
+                              'font-mono tabular-nums',
+                              m.warn ? 'font-semibold text-destructive' : 'text-foreground/80'
+                            )}
+                          >
+                            {typeof m.val === 'number' ? fmtNum(m.val) : m.val}
+                          </span>
+                        </React.Fragment>
+                      ))}
+                    </span>
                   </div>
-                ))}
-              </div>
+
+                  <div className="hidden lg:block">
+                    {hasWarn ? (
+                      <StatusBadge tone="danger">{row.warnLabel}</StatusBadge>
+                    ) : (
+                      <StatusBadge tone="success">Ổn định</StatusBadge>
+                    )}
+                  </div>
+
+                  <div className="hidden w-24 text-end font-mono text-sm tabular-nums md:block">
+                    <div className="font-semibold text-foreground">
+                      {typeof row.totalValue === 'number' ? fmtNum(row.totalValue) : row.totalValue}
+                    </div>
+                    <div className="font-sans text-[11px] text-muted-foreground">
+                      {row.totalLabel}
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => jumpTo(row.key)}
+                    className="shrink-0"
+                  >
+                    Mở
+                    <ArrowUpRight className="size-3.5" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </Widget>
+
+        {/* Right 1 col: SOS Activity Heatmap (Mirrors UsageWidget) */}
+        <Widget>
+          <WidgetHeader title="Mật độ SOS theo khung giờ" icon={Clock} />
+          <WidgetValue
+            value={fmtNum(sosStats.total)}
+            caption={`phân bổ theo thứ & khung 2 giờ · ${timeRangeTitle.toLowerCase()}`}
+          />
+          <Heatmap
+            rows={WEEKDAY_LABELS}
+            columns={HOUR_BLOCK_LABELS}
+            values={heatmapMatrix}
+            format={(v) => `${fmtNum(v)} ca SOS`}
+            label="Mật độ tín hiệu SOS theo thứ trong tuần và khung 2 giờ"
+            className="max-w-2xl px-(--card-spacing)"
+          />
+          <dl className="grid grid-cols-2 gap-3 px-(--card-spacing) text-xs">
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-muted-foreground">Cao điểm nhất</dt>
+              <dd className="font-mono font-medium text-foreground tabular-nums">
+                {heatmapPeakLabel}
+              </dd>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-muted-foreground">Ngày trong tuần</dt>
+              <dd className="font-mono font-medium text-foreground tabular-nums">
+                {heatmapWeekdayPct}%
+              </dd>
+            </div>
+          </dl>
+        </Widget>
+      </div>
+        </>
+      )}
     </div>
   );
 };

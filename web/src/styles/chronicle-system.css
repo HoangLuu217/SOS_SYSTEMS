@@ -176,10 +176,25 @@
 }
 
 /* ==========================================================================
-   4. SIGNATURE CHRONICLE DATA TABLES (MATCHING users.webp)
-      Pure --card header • Calm Sentence-Case 12.5px muted headings
-      • Zero vertical grid lines • Generous row height • Hairline dividers
+   4. SIGNATURE CHRONICLE DATA TABLES (UNIFIED TYPOGRAPHY & COLOR STANDARD)
+      - Header (thead th): 12px, weight 500, Sentence-case, --muted-foreground
+      - Primary cell text: 13.5px, weight 600, --foreground
+      - Body cell text: 13px, weight 400, 86% --foreground (calm neutral)
+      - Secondary / meta / timestamp: 12px, weight 400, --muted-foreground
+      - Code / Plate / CCCD (mono): 12.5px, weight 600, tabular-nums, --foreground
+      - Phone / Link: 12.5px, weight 500, neutral (hover: --primary)
+      - Status / Badge / Pill: 11.5px, weight 600 (semantic colors preserved)
    ========================================================================== */
+:root {
+  --ch-tbl-head-size: 12px;
+  --ch-tbl-primary-size: 13.5px;
+  --ch-tbl-body-size: 13px;
+  --ch-tbl-meta-size: 12px;
+  --ch-tbl-mono-size: 12.5px;
+  --ch-tbl-badge-size: 11.5px;
+  --ch-tbl-body-color: color-mix(in oklch, var(--foreground) 86%, transparent);
+}
+
 .ch-app-shell .executive-table-scroll,
 .ch-app-shell .executive-table-wrapper,
 .ch-app-shell .administrative-areas-table-wrapper,
@@ -196,11 +211,11 @@
   border-radius: calc(var(--radius) * 1.1) !important;
 }
 
-.ch-app-shell table.executive-table,
-.ch-app-shell table.sos-clean-table,
-.ch-app-shell table.ra-table,
-.ch-app-shell table.weather-table,
-.ch-app-shell table.sos-table,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.executive-table,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-clean-table,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.ra-table,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.weather-table,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-table,
 .ch-app-shell .administrative-areas-table-wrapper table {
   width: 100%;
   border-collapse: collapse !important;
@@ -208,18 +223,18 @@
   background: var(--card) !important;
 }
 
-.ch-app-shell table.executive-table thead th,
-.ch-app-shell table.sos-clean-table thead th,
-.ch-app-shell table.ra-table thead th,
-.ch-app-shell table.weather-table thead th,
-.ch-app-shell table.sos-table thead th,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.executive-table thead th,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-clean-table thead th,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.ra-table thead th,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.weather-table thead th,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-table thead th,
 .ch-app-shell .administrative-areas-table-wrapper table thead th {
   background: var(--card) !important;
   color: var(--muted-foreground) !important;
-  font-size: 11.5px !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.03em !important;
+  font-size: var(--ch-tbl-head-size) !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
   padding: 12px 16px !important;
   border-top: none !important;
   border-left: none !important;
@@ -229,38 +244,152 @@
   white-space: nowrap;
 }
 
-.ch-app-shell table.executive-table tbody td,
-.ch-app-shell table.sos-clean-table tbody td,
-.ch-app-shell table.ra-table tbody td,
-.ch-app-shell table.weather-table tbody td,
-.ch-app-shell table.sos-table tbody td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.executive-table tbody td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-clean-table tbody td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.ra-table tbody td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.weather-table tbody td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-table tbody td,
 .ch-app-shell .administrative-areas-table-wrapper table tbody td {
   padding: 13px 16px !important;
-  font-size: 13.5px !important;
-  color: var(--foreground) !important;
+  font-size: var(--ch-tbl-body-size) !important;
+  font-weight: 400;
+  color: var(--ch-tbl-body-color) !important;
   border-top: none !important;
   border-left: none !important;
   border-right: none !important;
   border-bottom: 1px solid var(--border) !important;
   background: transparent !important;
   vertical-align: middle;
+  line-height: 1.45;
 }
 
-.ch-app-shell table.executive-table tbody tr:last-child td,
-.ch-app-shell table.sos-clean-table tbody tr:last-child td,
-.ch-app-shell table.ra-table tbody tr:last-child td,
-.ch-app-shell table.weather-table tbody tr:last-child td,
-.ch-app-shell table.sos-table tbody tr:last-child td {
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.executive-table tbody tr:last-child td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-clean-table tbody tr:last-child td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.ra-table tbody tr:last-child td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.weather-table tbody tr:last-child td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-table tbody tr:last-child td {
   border-bottom: none !important;
 }
 
-.ch-app-shell table.executive-table tbody tr:hover td,
-.ch-app-shell table.sos-clean-table tbody tr:hover td,
-.ch-app-shell table.ra-table tbody tr:hover td,
-.ch-app-shell table.weather-table tbody tr:hover td,
-.ch-app-shell table.sos-table tbody tr:hover td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.executive-table tbody tr:hover td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-clean-table tbody tr:hover td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.ra-table tbody tr:hover td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.weather-table tbody tr:hover td,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) table.sos-table tbody tr:hover td,
 .ch-app-shell .administrative-areas-table-wrapper table tbody tr:hover td {
   background: var(--sos-table-hover) !important;
+}
+
+/* Unified Table Typography Utility & Existing Feature Cell Normalization */
+.ch-tbl-primary,
+.ch-app-shell tbody .citizen-name,
+.ch-app-shell tbody .citizen-highlight-name,
+.ch-app-shell tbody .location-title-bold,
+.ch-app-shell tbody .ra-candidate-name,
+.ch-app-shell tbody .officer-name-main,
+.ch-app-shell tbody .weather-table-title,
+.ch-app-shell tbody .areas-unit-name,
+.ch-app-shell tbody .areas-manager-name,
+.ch-app-shell tbody .team-title-bold {
+  font-size: var(--ch-tbl-primary-size) !important;
+  font-weight: 600 !important;
+  color: var(--foreground) !important;
+  line-height: 1.4;
+}
+
+.ch-app-shell tbody tr:hover .ra-candidate-name,
+.ch-app-shell tbody .weather-table-title:hover {
+  color: var(--primary) !important;
+}
+
+.ch-tbl-body,
+.ch-app-shell tbody .officer-area-cell,
+.ch-app-shell tbody .officer-dept-main,
+.ch-app-shell tbody .ra-area-commune,
+.ch-app-shell tbody .weather-table-text-icon,
+.ch-app-shell tbody .weather-table-source,
+.ch-app-shell tbody .weather-badge-category,
+.ch-app-shell tbody .resource-type-badge,
+.ch-app-shell tbody .vehicle-type-title {
+  font-size: var(--ch-tbl-body-size) !important;
+  font-weight: 400 !important;
+  color: var(--ch-tbl-body-color) !important;
+  line-height: 1.45;
+}
+
+.ch-tbl-meta,
+.ch-app-shell tbody .time-text,
+.ch-app-shell tbody .weather-time-text,
+.ch-app-shell tbody .weather-table-summary,
+.ch-app-shell tbody .ra-candidate-contact,
+.ch-app-shell tbody .ra-area-district,
+.ch-app-shell tbody .officer-role-sub,
+.ch-app-shell tbody .officer-email-sub,
+.ch-app-shell tbody .areas-manager-meta,
+.ch-app-shell tbody .areas-manager-empty {
+  font-size: var(--ch-tbl-meta-size) !important;
+  font-weight: 400 !important;
+  color: var(--muted-foreground) !important;
+  line-height: 1.4;
+}
+
+.ch-tbl-mono,
+.ch-app-shell tbody .code-mono,
+.ch-app-shell tbody .code-mono-bold,
+.ch-app-shell tbody .ra-cccd-masked,
+.ch-app-shell tbody .vehicle-plate-box {
+  font-family: var(--font-mono) !important;
+  font-size: var(--ch-tbl-mono-size) !important;
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums !important;
+  color: var(--foreground) !important;
+}
+
+.ch-tbl-phone,
+.ch-tbl-link,
+.ch-app-shell tbody .citizen-phone-link,
+.ch-app-shell tbody .citizen-phone-pill,
+.ch-app-shell tbody .officer-phone-main,
+.ch-app-shell tbody .leader-phone-pill,
+.ch-app-shell tbody .areas-manager-phone,
+.ch-app-shell tbody .weather-source-link {
+  font-size: var(--ch-tbl-mono-size) !important;
+  font-weight: 500 !important;
+  font-variant-numeric: tabular-nums !important;
+  color: var(--ch-tbl-body-color) !important;
+  transition: color 0.15s ease;
+}
+
+.ch-app-shell tbody .citizen-phone-link svg,
+.ch-app-shell tbody .leader-phone-pill svg {
+  color: var(--muted-foreground) !important;
+  transition: color 0.15s ease;
+}
+
+.ch-tbl-phone:hover,
+.ch-tbl-link:hover,
+.ch-app-shell tbody .citizen-phone-link:hover,
+.ch-app-shell tbody .citizen-phone-pill:hover,
+.ch-app-shell tbody .leader-phone-pill:hover,
+.ch-app-shell tbody .weather-source-link:hover,
+.ch-app-shell tbody .citizen-phone-link:hover svg,
+.ch-app-shell tbody .leader-phone-pill:hover svg {
+  color: var(--primary) !important;
+}
+
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .sos-badge,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .officer-status-badge,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .rescuer-status-badge,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .areas-status-pill,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .areas-level-tag,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .areas-assign-pill,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .ra-status-badge,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .ra-skill-tag,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .source-pill,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .pending-members-badge,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) tbody .vehicle-badge-pill {
+  font-size: var(--ch-tbl-badge-size) !important;
+  font-weight: 600 !important;
 }
 
 /* ==========================================================================
@@ -413,12 +542,13 @@
 /* ==========================================================================
    6. CHRONICLE BUTTONS & PAGINATION (DYNAMICALLY FOLLOWS 5 OKLCH PRESETS)
    ========================================================================== */
-.ch-app-shell .executive-btn-primary,
-.ch-app-shell .btn-primary-weather,
-.ch-app-shell .btn-create-weather,
-.ch-app-shell .ra-btn-primary,
-.ch-app-shell .coordination-action-btn.primary,
-.ch-app-shell .sos-btn--primary,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .executive-btn-primary,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .btn-primary-weather,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .btn-create-weather,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .ra-btn-primary,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .coordination-action-btn.primary,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .sos-btn-flat.primary,
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .sos-btn--primary,
 .sos-profile-btn-save,
 .sos-btn-verify-otp {
   background: var(--primary) !important;
@@ -429,12 +559,13 @@
   box-shadow: 0 1px 2px color-mix(in oklch, var(--primary) 26%, transparent) !important;
 }
 
-.ch-app-shell .executive-btn-primary:hover:not(:disabled),
-.ch-app-shell .btn-primary-weather:hover:not(:disabled),
-.ch-app-shell .btn-create-weather:hover:not(:disabled),
-.ch-app-shell .ra-btn-primary:hover:not(:disabled),
-.ch-app-shell .coordination-action-btn.primary:hover:not(:disabled),
-.ch-app-shell .sos-btn--primary:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .executive-btn-primary:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .btn-primary-weather:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .btn-create-weather:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .ra-btn-primary:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .coordination-action-btn.primary:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .sos-btn-flat.primary:hover:not(:disabled),
+:is(.ch-app-shell, [data-slot="sheet-content"], [role="dialog"]) .sos-btn--primary:hover:not(:disabled),
 .sos-profile-btn-save:hover:not(:disabled) {
   background: var(--primary-hover) !important;
   border-color: var(--primary-hover) !important;
@@ -444,7 +575,7 @@
 .ch-app-shell .btn-secondary-weather,
 .ch-app-shell .ra-btn-secondary,
 .ch-app-shell .ra-refresh-btn,
-.ch-app-shell .rpt-action-btn:not(.rpt-excel-btn),
+.ch-app-shell .rpt-action-btn,
 .ch-app-shell .sos-btn--outline,
 .ch-app-shell .sos-citizen-reset-btn {
   background: var(--card) !important;
@@ -459,7 +590,7 @@
 .ch-app-shell .btn-secondary-weather:hover:not(:disabled),
 .ch-app-shell .ra-btn-secondary:hover:not(:disabled),
 .ch-app-shell .ra-refresh-btn:hover:not(:disabled),
-.ch-app-shell .rpt-action-btn:not(.rpt-excel-btn):hover:not(:disabled),
+.ch-app-shell .rpt-action-btn:hover:not(:disabled),
 .ch-app-shell .sos-citizen-reset-btn:hover:not(:disabled) {
   background: var(--muted) !important;
   color: var(--foreground) !important;
@@ -524,6 +655,13 @@
 /* ==========================================================================
    8. UNIVERSAL OKLCH MODALS & DARK MODE COHESION ACROSS ALL FEATURES
    ========================================================================== */
+.ra-modal-backdrop,
+.sc-modal-overlay,
+.weather-modal-backdrop,
+.executive-modal-backdrop {
+  z-index: 10000;
+}
+
 .executive-modal-card,
 .sc-modal-card,
 .ra-modal-card,
@@ -584,7 +722,7 @@
 }
 
 /* ==========================================================================
-   9. UNIFIED EXCEL EXPORT BUTTON (IMAGE 2) & BULK SELECTION KIT (IMAGE 1)
+   9. UNIFIED EXCEL EXPORT BUTTON (CHRONICLE OUTLINE) & BULK SELECTION KIT
    ========================================================================== */
 .sos-excel-btn,
 .ch-app-shell .rpt-excel-btn {
@@ -594,29 +732,55 @@
   gap: 6px !important;
   height: 36px !important;
   padding: 0 13px !important;
-  border-radius: calc(var(--radius) * 0.8) !important;
-  background: var(--dm-green-bg) !important;
-  border: 1px solid var(--dm-green-border) !important;
-  color: var(--dm-green-text) !important;
+  border-radius: calc(var(--radius) * 0.85) !important;
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
   font-family: var(--font-sans) !important;
   font-size: 13px !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
   cursor: pointer !important;
-  box-shadow: none !important;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease !important;
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 5%, transparent) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease !important;
 }
 
 .sos-excel-btn:hover:not(:disabled),
 .ch-app-shell .rpt-excel-btn:hover:not(:disabled) {
-  background: var(--dm-green-bg-strong) !important;
-  border-color: var(--dm-green-text) !important;
+  background: var(--muted) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.dark .sos-excel-btn,
+[data-theme="dark"] .sos-excel-btn,
+.dark .ch-app-shell .rpt-excel-btn,
+[data-theme="dark"] .ch-app-shell .rpt-excel-btn {
+  background: color-mix(in oklch, var(--input) 30%, transparent) !important;
+  border-color: var(--input) !important;
+  color: var(--foreground) !important;
+}
+
+.dark .sos-excel-btn:hover:not(:disabled),
+[data-theme="dark"] .sos-excel-btn:hover:not(:disabled),
+.dark .ch-app-shell .rpt-excel-btn:hover:not(:disabled),
+[data-theme="dark"] .ch-app-shell .rpt-excel-btn:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--input) 50%, transparent) !important;
+  border-color: var(--input) !important;
+  color: var(--foreground) !important;
+}
+
+.sos-excel-btn:focus-visible,
+.ch-app-shell .rpt-excel-btn:focus-visible {
+  outline: none !important;
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 35%, transparent) !important;
 }
 
 .sos-excel-btn:disabled,
 .ch-app-shell .rpt-excel-btn:disabled {
-  opacity: 0.55 !important;
+  opacity: 0.5 !important;
   cursor: not-allowed !important;
 }
 
@@ -789,3 +953,194 @@
   background: var(--dm-blue-bg);
   color: var(--dm-blue-text);
 }
+
+/* ==========================================================================
+   Unified Chronicle DetailSheet Inner Content Harmonization
+   Removes duplicate scroll containers and outer padding from legacy drawer
+   bodies so DetailSheet provides a single clean shadcn Sheet experience across
+   all feature views (Light, Dark, and all 8 OKLCH color presets).
+   ========================================================================== */
+.ch-detail-sheet-body .sos-panel-body,
+.ch-detail-sheet-body .sc-drawer-body,
+.ch-detail-sheet-body .weather-modal-body,
+.ch-detail-sheet-body .auth-drawer-body,
+.ch-detail-sheet-body .ra-drawer-body,
+.ch-detail-sheet-body .team-drawer-body,
+.ch-detail-sheet-body .team-drawer-content,
+.ch-detail-sheet-body .rd-drawer-content {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  max-height: none !important;
+  flex: none !important;
+  background: transparent !important;
+}
+
+.ch-detail-sheet-body .sos-panel-card,
+.ch-detail-sheet-body .ra-hero-summary,
+.ch-detail-sheet-body .weather-detail-meta-box,
+.ch-detail-sheet-body .weather-detail-summary-box,
+.ch-detail-sheet-body .auth-drawer-kpi-card {
+  border-color: var(--border);
+}
+
+[data-slot="sheet-content"] .auth-drawer-tabs,
+[data-slot="sheet-content"] .team-drawer-tabs-bar {
+  border-bottom: none !important;
+  background: transparent !important;
+}
+
+[data-slot="sheet-footer"] .weather-modal-footer-left,
+[data-slot="sheet-footer"] .weather-modal-footer-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-slot="sheet-footer"] .auth-drawer-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   Branded Sync Logo Loader (3-layer pulsing logo + synchronized SVG stroke text)
+   ========================================================================== */
+.sync-loader-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--background, #f6f8fc);
+  transition: opacity 0.36s ease, visibility 0.36s ease;
+}
+
+.sync-loader {
+  --duration: 2.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px 16px;
+}
+
+.sync-loader .logo-loader {
+  position: relative;
+  width: 150px;
+  height: 110px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.sync-loader .logo-layer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sync-loader .layer-1 {
+  z-index: 3;
+  animation: corePulse var(--duration) infinite ease-in-out;
+}
+
+.sync-loader .layer-2 {
+  z-index: 2;
+  opacity: 0;
+  animation: flashLayer2 var(--duration) infinite ease-out;
+}
+
+.sync-loader .layer-3 {
+  z-index: 1;
+  opacity: 0;
+  animation: flashLayer3 var(--duration) infinite ease-out;
+}
+
+@keyframes corePulse {
+  0%, 100% { transform: scale(1); }
+  22% { transform: scale(1.06); }
+  55% { transform: scale(1.02); }
+}
+
+@keyframes flashLayer2 {
+  0%, 15% { opacity: 0; transform: scale(1.13); }
+  38% { opacity: 0.70; transform: scale(1.25); }
+  68%, 100% { opacity: 0; transform: scale(1.33); }
+}
+
+@keyframes flashLayer3 {
+  0%, 35% { opacity: 0; transform: scale(1.35); }
+  58% { opacity: 0.30; transform: scale(1.55); }
+  88%, 100% { opacity: 0; transform: scale(1.65); }
+}
+
+.sync-loader-message {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+/* Medium size for table / page body loading states */
+.sync-loader--md {
+  gap: 18px;
+  padding: 28px 16px;
+}
+
+.sync-loader--md .logo-loader {
+  width: 96px;
+  height: 70px;
+}
+
+.sync-loader--md .sync-loader-message {
+  font-size: 12.5px;
+}
+
+/* Compact size for drawers & chat panels */
+.sync-loader--sm {
+  gap: 14px;
+  padding: 18px 12px;
+}
+
+.sync-loader--sm .logo-loader {
+  width: 68px;
+  height: 50px;
+}
+
+.sync-loader--sm .sync-loader-message {
+  font-size: 12px;
+}
+
+/* Floating Unsaved Changes SaveBar smooth entrance animation */
+@keyframes chSaveBarPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ch-savebar-pop {
+  animation: chSaveBarPop 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-savebar-pop {
+    animation: none;
+  }
+}
+
+
