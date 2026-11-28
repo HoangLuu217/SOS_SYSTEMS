@@ -1,0 +1,23 @@
+---
+description: Enforce Chronicle Web Design System, auto-clone shadcnstore/shadcn-dashboard-landing-template reference, and guarantee uniform buttons, tables, drawers, modals, loading, and spacing across web/
+globs:
+  - "web/src/**/*"
+  - "web/index.html"
+alwaysApply: false
+---
+
+# Chronicle Web Design System Rule (`web/`)
+
+Before writing or modifying ANY UI in `web/`, read `web/AGENTS.md` in full and follow every rule strictly:
+
+1. **Auto-clone reference template into your own private folder (Step 0)**:
+   - Clone `https://github.com/shadcnstore/shadcn-dashboard-landing-template.git` (`--depth 1`) into your own private scratch or OS temp directory outside the repository (e.g. `%TEMP%\chronicle-template\shadcn-dashboard-landing-template` or `/tmp/chronicle-template/shadcn-dashboard-landing-template`) if not already present.
+   - Inspect matching Chronicle template components/layouts (`features/`, `kit/`, `components/ui/`, `components/chronicle/`) before coding. Never clone into the project repository.
+2. **Tokens & Dark/Light + 9 Presets**: Use OKLCH semantic tokens (`var(--primary)`, `var(--card)`, `var(--foreground)`, `var(--muted-foreground)`, `var(--border)`, `var(--dm-*)`). Never hardcode `#0284c7`, `#2563eb`, `#ffffff`, or `#0f172a`.
+3. **Buttons**: All Create/Primary CTAs MUST use `var(--primary)` (`.sos-btn--primary`, `.sos-btn-flat.primary`, `.coordination-action-btn.primary`, `<Button />`). All Excel export buttons MUST use `<ExcelExportButton />`.
+4. **Tables**: Sentence-case Vietnamese `thead th` (`12px/500`, never ALL-CAPS except `STT`/`CCCD`/`GPS`/`SOS`); cells MUST use `.ch-tbl-primary` (`13.5px/600`), `.ch-tbl-body` (`13px/400`), `.ch-tbl-meta` (`12px/400`), `.ch-tbl-mono` (`12.5px/600`), `.ch-tbl-phone`/`.ch-tbl-link` (`12.5px/500`, `--primary` on hover only), status badges (`11.5px/600`).
+5. **Spacing**: Wrap every view in `.sos-views-container` with `padding: 0` (outer margins belong to `.ch-page-body`). Never add `position: fixed` to `.ch-app-shell`.
+6. **Loading**: Always render the top frame/toolbar first and show `<SyncLogoLoader />` inside loading regions.
+7. **Detail & Inline Edit**: All record viewing and editing MUST use `<DetailSheet saveBar={...} />` with dirty-triggered `<SaveBar />` (never a separate Edit popup modal).
+8. **Modals & Z-Index**: Confirm dialogs MUST use `useGlobalModals()` (portaled at `99999`), photo previews `<PhotoLightboxModal />` (`20000`), and feature modals `z-index >= 10000` with `data-modal-layer="confirm"` so every confirm modal renders **in front of** `DetailSheet` (`1400`).
+9. **Verify**: Run `npx tsc -b` and `npx vite build` inside `web/`.
