@@ -45,6 +45,13 @@ const createSos = async (req, res, next) => {
   }
 };
 
+const buildMediaBaseUrl = (req) => {
+  const host = req.get('x-forwarded-host') || req.get('host');
+  if (!host) return '';
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+  return `${proto}://${host}`;
+};
+
 const getSosRequests = async (req, res, next) => {
   try {
     const query = { ...req.query };
@@ -62,6 +69,7 @@ const getSosRequests = async (req, res, next) => {
     if (query.areaId === 'ALL') {
       delete query.areaId;
     }
+    query._mediaBaseUrl = buildMediaBaseUrl(req);
     
     const list = await sosService.getSosRequests(query, req.user);
     res.status(200).json({ success: true, count: list.length, data: list });
@@ -72,8 +80,27 @@ const getSosRequests = async (req, res, next) => {
 
 const getSosById = async (req, res, next) => {
   try {
-    const sos = await sosService.getSosRequestById(req.params.id);
+    const sos = await sosService.getSosRequestById(req.params.id, {
+      mediaBaseUrl: buildMediaBaseUrl(req),
+    });
     res.status(200).json({ success: true, data: sos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getSosMedia = async (req, res, next) => {
+  try {
+    const media = await sosService.getSosMediaItem(req.params.id, req.params.index);
+    if (!media) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy ảnh SOS' });
+    }
+    if (media.redirectUrl) {
+      return res.redirect(302, media.redirectUrl);
+    }
+    res.set('Content-Type', media.mimeType || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.status(200).send(media.buffer);
   } catch (error) {
     next(error);
   }
@@ -470,6 +497,7 @@ module.exports = {
   createSos,
   getSosRequests,
   getSosById,
+  getSosMedia,
   updateSos,
   cancelSos,
   completeSos,

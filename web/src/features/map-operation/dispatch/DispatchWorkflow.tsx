@@ -98,6 +98,7 @@ export const DispatchWorkflow = ({
   // Phương án điều phối do AI đề xuất từ dữ liệu đội đã kiểm tra
   const [smartRecs, setSmartRecs] = useState<DispatchRecommendationsData | null>(null);
   const [isLoadingAdvisor, setIsLoadingAdvisor] = useState<boolean>(false);
+  const [advisorError, setAdvisorError] = useState<string | null>(null);
   const [dispatchTab, setDispatchTab] = useState<'AI' | 'TEAMS'>('AI');
   const [realtimeSyncTick, setRealtimeSyncTick] = useState(0);
   const advisorRequestRef = useRef(0);
@@ -115,12 +116,16 @@ export const DispatchWorkflow = ({
       if (!selectedSos?.id || selectedSos.id.startsWith('sos-') || ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos.status))) {
         isAdvisorInFlightRef.current = false;
         setSmartRecs(null);
+        setAdvisorError(null);
         setIsLoadingAdvisor(false);
         return;
       }
       if (withAi) {
         isAdvisorInFlightRef.current = true;
-        if (!silent) setIsLoadingAdvisor(true);
+        if (!silent) {
+          setIsLoadingAdvisor(true);
+          setAdvisorError(null);
+        }
       }
       try {
         const res = await fetchDispatchRecommendationsApi(selectedSos.id, {
@@ -130,10 +135,15 @@ export const DispatchWorkflow = ({
           forceRefresh,
         });
         if (res?.success && res.data && requestId === advisorRequestRef.current && requestedSosId === selectedSos?.id) {
+          setAdvisorError(null);
           setSmartRecs(res.data);
         }
       } catch (err) {
         console.warn('Smart dispatch recommendation warning:', err);
+        if (requestId === advisorRequestRef.current && requestedSosId === selectedSos?.id) {
+          const msg = err instanceof Error ? err.message : 'Không kết nối được máy chủ AI';
+          setAdvisorError(msg);
+        }
       } finally {
         if (requestId === advisorRequestRef.current) {
           if (withAi) isAdvisorInFlightRef.current = false;
@@ -147,18 +157,27 @@ export const DispatchWorkflow = ({
         }
       }
     },
-    [selectedSos?.id, selectedSos?.status, aiAnalyzedAt, isAdmin, activeOfficer?.jurisdictionAreaId, activeOfficer?.jurisdictionAreaName]
+    [selectedSos?.id, selectedSos?.status, isAdmin, activeOfficer?.jurisdictionAreaId, activeOfficer?.jurisdictionAreaName]
   );
 
   useEffect(() => {
     pendingOccupancyRefreshRef.current = false;
     setSmartRecs(null);
+    setAdvisorError(null);
     loadSmartRecommendations(true);
     return () => {
       advisorRequestRef.current += 1;
       isAdvisorInFlightRef.current = false;
     };
   }, [loadSmartRecommendations]);
+
+  const prevAiAnalyzedAtRef = useRef<unknown>(aiAnalyzedAt);
+  useEffect(() => {
+    if (prevAiAnalyzedAtRef.current === aiAnalyzedAt) return;
+    prevAiAnalyzedAtRef.current = aiAnalyzedAt;
+    if (!aiAnalyzedAt || isAdvisorInFlightRef.current) return;
+    loadSmartRecommendations(true, false, true);
+  }, [aiAnalyzedAt, loadSmartRecommendations]);
 
   // Chữ ký tổng hợp tình trạng bận của các đội trên tất cả ca SOS để recompute & refresh gợi ý realtime khi có đội hoàn thành/hủy/bàn giao
   const teamOccupancySignature = useMemo(() => {
@@ -774,13 +793,15 @@ export const DispatchWorkflow = ({
     isLoadingAdvisor && !aiAdvisor
       ? 'Đang phân tích ca SOS và trạng thái các đội trực chiến...'
       : cleanAiText(aiAdvisor?.summary) ||
-      (smartRecs?.aiAdvisorStatus === 'UNAVAILABLE'
-        ? 'AI chưa được cấu hình. Vui lòng chuyển sang tab Tất cả đội để chọn đội thủ công.'
-        : smartRecs?.aiAdvisorStatus === 'TRIAGE_PENDING'
-          ? 'AI đang phân loại SOS...'
-          : smartRecs?.aiAdvisorStatus === 'NO_ELIGIBLE_TEAMS'
-            ? 'Không có đội rảnh khả dụng tại thời điểm này.'
-            : 'Chưa có phương án tự động từ AI. Vui lòng xem và chọn đội ở tab Tất cả đội.');
+      (advisorError
+        ? `Không kết nối được máy chủ AI/Backend (${advisorError}). Vui lòng kiểm tra server backend (cổng 5000) hoặc chọn đội ở tab Tất cả đội.`
+        : smartRecs?.aiAdvisorStatus === 'UNAVAILABLE'
+          ? 'AI chưa được cấu hình. Vui lòng chuyển sang tab Tất cả đội để chọn đội thủ công.'
+          : smartRecs?.aiAdvisorStatus === 'TRIAGE_PENDING'
+            ? 'AI đang phân loại SOS...'
+            : smartRecs?.aiAdvisorStatus === 'NO_ELIGIBLE_TEAMS'
+              ? 'Không có đội rảnh khả dụng tại thời điểm này.'
+              : 'Chưa có phương án tự động từ AI. Vui lòng xem và chọn đội ở tab Tất cả đội.');
 
   const resolveSuggestedSupplyMeta = (s: DispatchSuggestedSupply) => {
     const matchedItem = areaSupplies.find(

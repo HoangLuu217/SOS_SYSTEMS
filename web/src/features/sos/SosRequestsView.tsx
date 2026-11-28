@@ -131,6 +131,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     title?: string;
   } | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
   const [showHotlineModal, setShowHotlineModal] = useState(false);
@@ -752,6 +754,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const completedCount = areaScopedSosList.filter((s) => s.status === 'COMPLETED').length;
   const cancelledCount = areaScopedSosList.filter((s) => s.status === 'CANCELLED').length;
   const totalCount = areaScopedSosList.length;
+  const activeVictims = activeSosList.reduce((acc, s) => acc + (s.people || 0), 0);
 
   const triageFilterOptions = [
     { key: 'ALL', label: 'Tất cả', selectLabel: 'Tất cả trạng thái', count: totalCount, btnClass: 'btn-all' },
@@ -816,6 +819,14 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredSosList.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedSosList = filteredSosList.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [triageFilter, progressFilter, searchQuery, adminAreaFilter]);
 
   const formatTimeAgo = (dateStr: string) => {
     if (!dateStr) return 'Vừa xong';
@@ -949,12 +960,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <thead>
               <tr>
                 <th style={{ width: '14%' }}>Mã sự cố</th>
-                <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
-                <th style={{ width: '20%' }}>Địa điểm hiện trường</th>
+                <th style={{ width: '21%' }}>Người dân &amp; Liên hệ</th>
+                <th style={{ width: '18%' }}>Địa điểm hiện trường</th>
                 <th style={{ width: '9%' }}>Nạn nhân</th>
                 <th style={{ width: '15%' }}>Đội phụ trách</th>
                 <th style={{ width: '13%', textAlign: 'center' }}>Tiến trình</th>
-                <th style={{ width: '11%', textAlign: 'center' }}>Thao tác</th>
+                <th style={{ width: '10%', textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -1009,7 +1020,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   </td>
                 </tr>
               ) : (
-                filteredSosList.map((sos) => {
+                paginatedSosList.map((sos) => {
                   const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? sos.citizenId : null;
                   const citizenName = citizenInfo?.fullName || 'Người dân';
                   const citizenPhone = citizenInfo?.phone;
@@ -1055,7 +1066,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 }}
                                 title={(sos.riskAssessment?.reasons || sos.aiAssessment?.reasons || []).join(' • ')}
                               >
-                                Cần phân loại
+                                {sos.aiAssessment?.status === 'PENDING' ? 'Đang phân tích' : 'Cần phân loại'}
                               </span>
                             )}
                           </div>
@@ -1294,6 +1305,79 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Thanh phân trang & tổng số người cần cứu ở chân bảng */}
+        <div className="sos-pagination">
+          <div className="sos-pagination-left">
+            <span>
+              Hiển thị{' '}
+              <strong>
+                {filteredSosList.length > 0 ? (safePage - 1) * pageSize + 1 : 0}
+              </strong>{' '}
+              -{' '}
+              <strong>
+                {Math.min(safePage * pageSize, filteredSosList.length)}
+              </strong>{' '}
+              trên tổng số <strong>{filteredSosList.length}</strong> yêu cầu · Tổng{' '}
+              <strong>{activeVictims}</strong> người cần cứu
+            </span>
+
+            <select
+              className="sos-page-size-select"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={10}>10 dòng / trang</option>
+              <option value={20}>20 dòng / trang</option>
+              <option value={50}>50 dòng / trang</option>
+            </select>
+          </div>
+
+          <div className="sos-pagination-nav">
+            <button
+              type="button"
+              className="sos-page-btn"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              title="Trang trước"
+            >
+              <ChevronLeft size={14} />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => {
+              if (
+                pg === 1 ||
+                pg === totalPages ||
+                (pg >= safePage - 1 && pg <= safePage + 1)
+              ) {
+                return (
+                  <button
+                    key={pg}
+                    type="button"
+                    className={'sos-page-btn ' + (pg === safePage ? 'active' : '')}
+                    onClick={() => setCurrentPage(pg)}
+                  >
+                    {pg}
+                  </button>
+                );
+              }
+              return null;
+            })}
+
+            <button
+              type="button"
+              className="sos-page-btn"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              title="Trang sau"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1629,12 +1713,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                   {/* SĐT dự phòng hoặc người thân */}
                   {selectedSosDetail.secondaryPhone && (
-                    <div className="sos-info-box relative-phone" style={{ gridColumn: 'span 2' }}>
-                      <span className="info-label" style={{ color: '#166534', fontWeight: 800 }}>SĐT dự phòng hoặc người thân</span>
+                    <div className="sos-info-box" style={{ gridColumn: 'span 2' }}>
+                      <span className="info-label">SĐT dự phòng hoặc người thân</span>
                       <span className="info-value">
                         <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: '#15803d' }}>
-                          <PhoneCall size={14} />
-                          <strong style={{ fontSize: 13.5 }}>{selectedSosDetail.secondaryPhone}</strong>
+                          <Phone size={13} />
+                          <span>{selectedSosDetail.secondaryPhone}</span>
                           <span className="badge-call" style={{ backgroundColor: '#16a34a' }}>Gọi số phụ</span>
                         </a>
                       </span>
@@ -1651,15 +1735,15 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                   {/* Người thân trong hồ sơ cá nhân */}
                   {typeof selectedSosDetail.citizenId === 'object' && (selectedSosDetail.citizenId as any)?.citizenProfile?.emergencyContact?.phone ? (
-                    <div className="sos-info-box relative-phone">
-                      <span className="info-label" style={{ color: '#166534' }}>Người thân trong hồ sơ cá nhân</span>
+                    <div className="sos-info-box">
+                      <span className="info-label">Người thân trong hồ sơ cá nhân</span>
                       <span className="info-value">
                         <a
                           href={`tel:${(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.phone}`}
                           className="phone-clickable"
                           style={{ color: '#15803d' }}
                         >
-                          <Phone size={12} />
+                          <Phone size={13} />
                           <span>
                             {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.name || 'Người thân'} (
                             {(selectedSosDetail.citizenId as any).citizenProfile.emergencyContact.relation || 'Liên hệ'}
@@ -1811,22 +1895,14 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 return (
                   <>
                     {/* BLOCK 7A: HÌNH ẢNH DO NGƯỜI DÂN GỬI LÚC BÁO SOS */}
-                    <div
-                      className="sos-panel-card"
-                      style={{
-                        background: citizenPhotos.length > 0 ? '#f0fdf4' : '#f8fafc',
-                        borderColor: citizenPhotos.length > 0 ? '#bbf7d0' : '#e2e8f0',
-                      }}
-                    >
-                      <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="sos-panel-card">
+                      <div className="sos-panel-card-title" style={{ justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Camera size={16} color={citizenPhotos.length > 0 ? '#16a34a' : '#64748b'} />
-                          <span style={{ color: citizenPhotos.length > 0 ? '#15803d' : '#475569', fontWeight: 800 }}>
-                            ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)
-                          </span>
+                          <Camera size={15} color="#0284c7" />
+                          <span>ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)</span>
                         </div>
                         {citizenPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 7px', borderRadius: 10, border: '1px solid #86efac' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '1px 7px', borderRadius: 10, border: '1px solid #bae6fd', textTransform: 'none' }}>
                             {citizenPhotos.length} ảnh
                           </span>
                         )}
@@ -1842,7 +1918,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 height: 64,
                                 borderRadius: 8,
                                 overflow: 'hidden',
-                                border: '1.5px solid #86efac',
+                                border: '1.5px solid #cbd5e1',
                                 cursor: 'pointer',
                                 flexShrink: 0,
                                 position: 'relative',

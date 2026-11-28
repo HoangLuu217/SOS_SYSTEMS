@@ -246,11 +246,16 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     if (!visible || !sosId) {
       if (!visible) {
         setShowFullMapModal(false);
+        setRouteData(null);
       }
       return;
     }
 
     if (initialSosData) {
+      const isDifferentSos = sos?._id && sos._id !== initialSosData._id;
+      if (isDifferentSos) {
+        setRouteData(null);
+      }
       setSos((prev: any) => (prev?._id === initialSosData._id ? { ...prev, ...initialSosData } : initialSosData));
       if (initialSosData.assignment) {
         setAssignment(initialSosData.assignment);
@@ -261,6 +266,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
       if (isDifferentSos) {
         setSos(null);
         setAssignment(null);
+        setRouteData(null);
       }
       loadData(isDifferentSos || !sos);
     }
@@ -285,21 +291,51 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     };
   }, [visible, sosId]);
 
-  // Tính toán tọa độ người dân & đội cứu hộ (dùng trước conditional return để đảm bảo đúng Rules of Hooks)
-  const victimLng = sos?.location?.coordinates?.[0] || 108.26054;
-  const victimLat = sos?.location?.coordinates?.[1] || 15.96836;
+  const extractValidCoords = (point: any): [number, number] | null => {
+    const coords = point?.coordinates;
+    if (!Array.isArray(coords) || coords.length !== 2) return null;
+    const lng = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+    if (lng === 0 && lat === 0) return null;
+    return [lng, lat];
+  };
+
+  // Tính toán tọa độ người dân & đội cứu hộ thực tế (không tạo tọa độ giả cố định)
+  const victimCoords = extractValidCoords(sos?.location);
+  const victimLng = victimCoords ? victimCoords[0] : 108.26054;
+  const victimLat = victimCoords ? victimCoords[1] : 15.96836;
+
+  const memberGpsCoords = (() => {
+    const members = assignment?.rescueTeamId?.members;
+    if (!Array.isArray(members)) return null;
+    for (const m of members) {
+      const c = extractValidCoords(m?.rescuerId?.currentLocation);
+      if (c) return c;
+    }
+    return null;
+  })();
+
   const teamRawCoords =
-    assignment?.teamLocation?.coordinates ||
-    assignment?.rescuerId?.location?.coordinates ||
-    assignment?.rescueTeamId?.currentLocation?.coordinates ||
-    assignment?.rescueTeamId?.baseLocation?.coordinates;
-  const rescuerLng =
-    Array.isArray(teamRawCoords) && teamRawCoords.length === 2 ? teamRawCoords[0] : victimLng - 0.0055;
-  const rescuerLat =
-    Array.isArray(teamRawCoords) && teamRawCoords.length === 2 ? teamRawCoords[1] : victimLat + 0.0072;
+    extractValidCoords(assignment?.teamLocation) ||
+    extractValidCoords(assignment?.rescuerId?.currentLocation) ||
+    extractValidCoords(assignment?.rescueTeamId?.leaderId?.currentLocation) ||
+    memberGpsCoords ||
+    extractValidCoords(assignment?.rescuerId?.location) ||
+    extractValidCoords(assignment?.location) ||
+    extractValidCoords(assignment?.rescueTeamId?.currentLocation) ||
+    extractValidCoords(assignment?.rescueTeamId?.baseLocation);
+
+  const hasRescuerLocation = Boolean(teamRawCoords);
+  const rescuerLng = teamRawCoords ? teamRawCoords[0] : victimLng;
+  const rescuerLat = teamRawCoords ? teamRawCoords[1] : victimLat;
 
   useEffect(() => {
     if (!visible || !victimLat || !victimLng) return;
+    if (!hasRescuerLocation) {
+      setRouteData(null);
+      return;
+    }
     const statusNow = sos?.status || 'PENDING';
     if (!assignment && !['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(statusNow) && !showFullMapModal) {
       return;
@@ -695,6 +731,9 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
         var vLng = ${victimLng};
         var rLat = ${rescuerLat};
         var rLng = ${rescuerLng};
+        var hasRescuer = ${hasRescuerLocation ? 'true' : 'false'};
+
+        map.setView([vLat, vLng], 15);
 
         // Icon Radar cứu hộ chuẩn phong cách app
         var victimRadarIcon = L.divIcon({
@@ -725,22 +764,30 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
         });
 
         var routeCoords = ${JSON.stringify(routeData?.coordinates || [])};
+        var activeRouteLayer = null;
 
-        ${assignment || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED' ? `
+        ${hasRescuerLocation ? `
           var markerRescuer = L.marker([rLat, rLng], { icon: rescuerIcon }).addTo(map)
             .bindPopup('<b>🚤 Đội Cứu Hộ Tiếp Ứng</b><br/>Đang di chuyển tiếp cận');
 
           var polylinePoints = (routeCoords && routeCoords.length > 1) ? routeCoords : [[rLat, rLng], [vLat, vLng]];
-          var polyline = L.polyline(polylinePoints, {
+          activeRouteLayer = L.polyline(polylinePoints, {
             color: '#2563EB',
             weight: 5,
             opacity: 0.92
           }).addTo(map);
+        ` : ''}
 
-          map.fitBounds(polyline.getBounds().pad(0.28));
-        ` : `
-          map.setView([vLat, vLng], 15);
-        `}
+        function syncMiniMapViewport() {
+          map.invalidateSize(false);
+          if (activeRouteLayer) {
+            map.fitBounds(activeRouteLayer.getBounds().pad(0.28), { maxZoom: 16, animate: false });
+          } else {
+            map.setView([vLat, vLng], 15, { animate: false });
+          }
+        }
+        setTimeout(syncMiniMapViewport, 120);
+        setTimeout(syncMiniMapViewport, 420);
       </script>
     </body>
     </html>
@@ -798,8 +845,17 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
         var vLng = ${victimLng};
         var rLat = ${rescuerLat};
         var rLng = ${rescuerLng};
+        var hasRescuer = ${hasRescuerLocation ? 'true' : 'false'};
+
+        map.setView([vLat, vLng], 15);
         var routeCoords = ${JSON.stringify(routeData?.coordinates || [])};
-        var etaLabel = ${JSON.stringify(routeData ? `${routeData.durationMin} • ${routeData.distanceKm}` : 'Đang định tuyến')};
+        var etaLabel = ${JSON.stringify(
+          !hasRescuerLocation
+            ? 'Đang chờ GPS đội'
+            : routeData
+              ? `${routeData.durationMin} • ${routeData.distanceKm}`
+              : 'Đang định tuyến'
+        )};
 
         var victimRadarIcon = L.divIcon({
           html: '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>',
@@ -811,26 +867,35 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
         L.circle([vLat, vLng], { color: '#DC2626', fillColor: '#EF4444', fillOpacity: 0.12, radius: 220, weight: 1.5 }).addTo(map);
         var markerVictim = L.marker([vLat, vLng], { icon: victimRadarIcon }).addTo(map);
 
-        var polylinePoints = (routeCoords && routeCoords.length > 1) ? routeCoords : [[rLat, rLng], [vLat, vLng]];
-        L.polyline(polylinePoints, { color: '#FFFFFF', weight: 9, opacity: 0.95 }).addTo(map);
-        var routeLine = L.polyline(polylinePoints, { color: '#2563EB', weight: 6, opacity: 1 }).addTo(map);
+        var routeLine = null;
+        if (hasRescuer) {
+          var polylinePoints = (routeCoords && routeCoords.length > 1) ? routeCoords : [[rLat, rLng], [vLat, vLng]];
+          L.polyline(polylinePoints, { color: '#FFFFFF', weight: 9, opacity: 0.95 }).addTo(map);
+          routeLine = L.polyline(polylinePoints, { color: '#2563EB', weight: 6, opacity: 1 }).addTo(map);
 
-        var rescuerNavIcon = L.divIcon({
-          html: '<div class="rescuer-nav-wrap"><div class="rescuer-nav-dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="#2563EB"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg></div><div class="rescuer-eta-pill">' + etaLabel + '</div></div>',
-          className: '',
-          iconSize: [140, 62],
-          iconAnchor: [70, 18]
-        });
-        var markerRescuer = L.marker([rLat, rLng], { icon: rescuerNavIcon, zIndexOffset: 1000 }).addTo(map);
+          var rescuerNavIcon = L.divIcon({
+            html: '<div class="rescuer-nav-wrap"><div class="rescuer-nav-dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="#2563EB"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg></div><div class="rescuer-eta-pill">' + etaLabel + '</div></div>',
+            className: '',
+            iconSize: [140, 62],
+            iconAnchor: [70, 18]
+          });
+          L.marker([rLat, rLng], { icon: rescuerNavIcon, zIndexOffset: 1000 }).addTo(map);
+        }
 
         window.fitRoute = function() {
-          map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [40, 120], paddingBottomRight: [40, 260], animate: true });
+          map.invalidateSize(false);
+          if (routeLine) {
+            map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [40, 120], paddingBottomRight: [40, 260], maxZoom: 16, animate: true });
+          } else {
+            map.setView([vLat, vLng], 16, { animate: true });
+          }
         };
         window.flyToVictim = function() {
           map.flyTo([vLat, vLng], 17, { animate: true, duration: 0.9 });
         };
 
         setTimeout(function() { window.fitRoute(); }, 120);
+        setTimeout(function() { window.fitRoute(); }, 420);
       </script>
     </body>
     </html>
@@ -952,7 +1017,11 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   <View style={styles.liveIndicator}>
                     <View style={styles.pulseDot} />
                     <Text style={styles.liveText}>
-                      {routeData ? `${routeData.durationMin} • ${routeData.distanceKm}` : 'Đang tính tuyến đường...'}
+                      {routeData
+                        ? `${routeData.durationMin} • ${routeData.distanceKm}`
+                        : hasRescuerLocation
+                          ? 'Đang tính tuyến đường...'
+                          : 'Chờ vị trí đội cứu hộ'}
                     </Text>
                   </View>
                 ) : (
@@ -1919,7 +1988,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 {hasAssignedTeam ? teamName : 'Đang chờ điều phối đội cứu hộ'}
               </Text>
               <Text style={{ fontSize: 13, color: '#475569', marginBottom: 4 }} numberOfLines={2}>
-                📍 {sos?.location?.address || 'Vị trí GPS hiện trường'}
+                📍 {sos?.address || sos?.location?.address || 'Vị trí GPS hiện trường'}
               </Text>
               <Text style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
                 {peopleCount} người cần cứu · {hasAssignedTeam ? `Chỉ huy: ${rescuerName} (${vehicleName})` : 'Đang kết nối lực lượng gần nhất'}
