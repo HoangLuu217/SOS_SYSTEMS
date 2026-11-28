@@ -4,6 +4,9 @@ const sosController = require('../controllers/sos.controller');
 const { authenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
 
+// GET /api/sos/:id/media/:index - Phục vụ ảnh đính kèm dạng data-URI qua HTTP để tránh tải JSON base64 nặng
+router.get('/:id/media/:index', sosController.getSosMedia);
+
 // Tất cả các route liên quan đến SOS đều yêu cầu xác thực
 router.use(authenticate);
 

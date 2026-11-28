@@ -14,6 +14,11 @@ const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
 const auditService = require('./audit.service');
 const rescueTeamService = require('./rescueTeam.service');
+const {
+  ASSIGNMENT_TEAM_POPULATE,
+  ASSIGNMENT_RESCUER_SELECT,
+  attachTeamLocations,
+} = require('../utils/assignmentLocation');
 
 async function reserveDispatchSupplies(supplies, authorityId) {
   if (!Array.isArray(supplies) || supplies.length === 0) return [];
@@ -707,21 +712,14 @@ class SosAssignmentService {
       $or: [{ sosRequestId: sosId }, { sosId: sosId }],
     })
       .populate('authorityOrganizationId', 'name code type phone')
-      .populate({
-        path: 'rescueTeamId',
-        select: 'name type leaderId',
-        populate: {
-          path: 'leaderId',
-          select: '_id fullName phone email avatarUrl rescuer',
-        },
-      })
-      .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
+      .populate(ASSIGNMENT_TEAM_POPULATE)
+      .populate('rescuerId', ASSIGNMENT_RESCUER_SELECT)
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')
       .sort({ createdAt: -1 })
       .lean();
 
-    return assignments;
+    return attachTeamLocations(assignments);
   }
 
   /**

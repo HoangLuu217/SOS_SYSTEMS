@@ -29,8 +29,9 @@ interface Props {
   onToggleCollapse?: () => void;
 }
 
-const SOS_PER_PAGE = 3;
-const CLOSED_STATUSES = new Set(['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED']);
+const DEFAULT_SOS_PER_PAGE = 5;
+const CANCELLED_STATUSES = new Set(['CANCELLED', 'REJECTED']);
+const COMPLETED_STATUSES = new Set(['COMPLETED', 'RESOLVED']);
 const DEPLOYED_STATUSES = new Set([
   'ASSIGNED',
   'ACCEPTED',
@@ -114,8 +115,9 @@ export const IncidentFeed = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE' | 'COMPLETED'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_SOS_PER_PAGE);
   const lastSyncedSelectedIdRef = useRef<string | null>(selectedSos?.id ?? null);
   const [processingSupplyIds, setProcessingSupplyIds] = useState<Set<string>>(new Set());
   const [confirmRejectSosId, setConfirmRejectSosId] = useState<string | null>(null);
@@ -189,26 +191,35 @@ export const IncidentFeed = ({
   const tabCounts = useMemo(() => {
     let unassigned = 0;
     let active = 0;
+    let completed = 0;
 
     scopedIncidents.forEach((s) => {
-      if (CLOSED_STATUSES.has(String(s.status || '').toUpperCase())) return;
-      if (resolveIsAssigned(s)) active++;
-      else unassigned++;
+      const st = String(s.status || '').toUpperCase();
+      if (CANCELLED_STATUSES.has(st)) return;
+      if (COMPLETED_STATUSES.has(st)) {
+        completed++;
+      } else if (resolveIsAssigned(s)) {
+        active++;
+      } else {
+        unassigned++;
+      }
     });
 
     return {
-      all: unassigned + active,
+      all: unassigned + active + completed,
       unassigned,
       active,
+      completed,
     };
   }, [scopedIncidents]);
 
-  // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
+  // Filter incidents based on search query & selected status tab
   // Sắp xếp ca SOS mới tạo lên đầu danh sách (trang 1) để cán bộ thấy ngay khi phát sinh.
   const filteredIncidents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = scopedIncidents.filter((s) => {
-      if (CLOSED_STATUSES.has(String(s.status || '').toUpperCase())) return false;
+      const st = String(s.status || '').toUpperCase();
+      if (CANCELLED_STATUSES.has(st)) return false;
 
       if (q) {
         const matchSearch =
@@ -220,9 +231,10 @@ export const IncidentFeed = ({
         if (!matchSearch) return false;
       }
 
-      const assigned = resolveIsAssigned(s);
-      if (statusFilter === 'UNASSIGNED') return !assigned;
-      if (statusFilter === 'ACTIVE') return assigned;
+      const isCompleted = COMPLETED_STATUSES.has(st);
+      if (statusFilter === 'COMPLETED') return isCompleted;
+      if (statusFilter === 'UNASSIGNED') return !isCompleted && !resolveIsAssigned(s);
+      if (statusFilter === 'ACTIVE') return !isCompleted && resolveIsAssigned(s);
       return true;
     });
 
@@ -231,12 +243,12 @@ export const IncidentFeed = ({
     );
   }, [scopedIncidents, searchQuery, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredIncidents.length / SOS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredIncidents.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, adminDistrictFilter, statusFilter, activeOfficer?.jurisdictionAreaId]);
+  }, [searchQuery, adminDistrictFilter, statusFilter, activeOfficer?.jurisdictionAreaId, pageSize]);
 
   useEffect(() => {
     const nextId = selectedSos?.id ?? null;
@@ -247,14 +259,14 @@ export const IncidentFeed = ({
     lastSyncedSelectedIdRef.current = nextId;
     const idx = filteredIncidents.findIndex((item) => item.id === nextId);
     if (idx >= 0) {
-      setCurrentPage(Math.floor(idx / SOS_PER_PAGE) + 1);
+      setCurrentPage(Math.floor(idx / pageSize) + 1);
     }
-  }, [selectedSos?.id, filteredIncidents]);
+  }, [selectedSos?.id, filteredIncidents, pageSize]);
 
   const paginatedIncidents = useMemo(() => {
-    const start = (safePage - 1) * SOS_PER_PAGE;
-    return filteredIncidents.slice(start, start + SOS_PER_PAGE);
-  }, [filteredIncidents, safePage]);
+    const start = (safePage - 1) * pageSize;
+    return filteredIncidents.slice(start, start + pageSize);
+  }, [filteredIncidents, safePage, pageSize]);
 
   const districtOptions = useMemo(() => {
     const list: { id: string; name: string }[] = [
@@ -276,7 +288,6 @@ export const IncidentFeed = ({
       <div className="feed-header-section">
         <div className="feed-title-row">
           <div className="feed-title-left">
-            <span className="live-radar-dot" />
             <h2
               className="feed-title"
               title={isAdmin ? 'SOS Toàn TP' : `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}`}
@@ -354,6 +365,7 @@ export const IncidentFeed = ({
               tone: 'warning',
             },
             { id: 'ACTIVE', label: lang === 'vi' ? 'Đang cứu' : 'Active', count: tabCounts.active, tone: 'primary' },
+            { id: 'COMPLETED', label: lang === 'vi' ? 'Đã xong' : 'Done', count: tabCounts.completed, tone: 'success' },
           ].map((tab) => {
             const isActive = statusFilter === tab.id;
             return (
@@ -408,7 +420,6 @@ export const IncidentFeed = ({
               {/* Card Top: Code + Priority Badge + Time */}
               <div className="compact-card-top">
                 <div className="code-beacon-wrapper">
-                  <span className="beacon-dot pulse-red" />
                   <span className="card-code-mono">{sos.sosCode}</span>
                   {sos.senderRole === 'RESCUER' && (
                     <span
@@ -441,7 +452,13 @@ export const IncidentFeed = ({
                       {sos.aiAssessment?.status === 'PENDING' ? 'AI đang phân tích' : 'Cần phân loại'}
                     </span>
                   )}
-                  <span className={`sos-badge ${badgeSemanticClass} compact-priority-pill`}>{priorityLabel}</span>
+                  {COMPLETED_STATUSES.has(String(sos.status || '').toUpperCase()) ? (
+                    <span className="sos-badge verified compact-priority-pill">
+                      {lang === 'vi' ? 'Đã xong' : 'Done'}
+                    </span>
+                  ) : (
+                    <span className={`sos-badge ${badgeSemanticClass} compact-priority-pill`}>{priorityLabel}</span>
+                  )}
                   <span className="compact-time-ago">{sos.timeAgo}</span>
                 </div>
               </div>
@@ -555,7 +572,7 @@ export const IncidentFeed = ({
                 );
               })()}
 
-              {/* Card Middle: Request Type + Priority Targets + Side Thumbnail */}
+              {/* Card Middle: Request Type + Priority Targets + Location + Side Thumbnail */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
                   <h3 className="compact-card-title" title={emergencyTypeLabel}>
@@ -569,6 +586,10 @@ export const IncidentFeed = ({
                       <span className="compact-priority-groups-val">{priorityList.join(', ')}</span>
                     </div>
                   )}
+                  <div className="compact-card-location" title={sos.locationName}>
+                    <MapPin size={12} className="compact-pin-icon" />
+                    <span className="compact-location-text">{sos.locationName}</span>
+                  </div>
                 </div>
 
                 {sos.imageUrl && (
@@ -576,12 +597,6 @@ export const IncidentFeed = ({
                     <img src={sos.imageUrl} alt="Hiện trường" />
                   </div>
                 )}
-              </div>
-
-              {/* Location */}
-              <div className="compact-card-location" title={sos.locationName}>
-                <MapPin size={12} className="compact-pin-icon" />
-                <span className="compact-location-text">{sos.locationName}</span>
               </div>
 
               {/* Card Footer */}
@@ -611,6 +626,10 @@ export const IncidentFeed = ({
                 ? lang === 'vi'
                   ? 'Không tìm thấy sự cố'
                   : 'No results found'
+                : statusFilter === 'COMPLETED'
+                ? lang === 'vi'
+                  ? 'Chưa có ca cứu hộ nào hoàn thành'
+                  : 'No completed rescue operations'
                 : statusFilter === 'ACTIVE'
                 ? lang === 'vi'
                   ? 'Chưa có ca cứu nạn đang tác chiến'
@@ -628,6 +647,10 @@ export const IncidentFeed = ({
                 ? lang === 'vi'
                   ? `Không có yêu cầu SOS nào khớp với "${searchQuery}".`
                   : `No incidents match "${searchQuery}".`
+                : statusFilter === 'COMPLETED'
+                ? lang === 'vi'
+                  ? 'Hiện chưa có ca SOS nào hoàn tất cứu hộ trên địa bàn này.'
+                  : 'No completed SOS incidents in this area yet.'
                 : statusFilter === 'ACTIVE'
                 ? tabCounts.unassigned > 0
                   ? lang === 'vi'
@@ -660,40 +683,73 @@ export const IncidentFeed = ({
         )}
       </div>
 
-      {/* 5. Footer + Pagination (3 SOS / trang) */}
+      {/* 5. Phân trang trong bảng (5 hoặc 10 request / trang, đồng bộ tab Request) */}
       <div className="feed-footer-summary">
-        <div className="feed-footer-right">
-          {totalPages > 1 ? (
-            <div className="feed-pagination" aria-label="Phân trang danh sách SOS">
-              <button
-                type="button"
-                className="sos-btn sos-btn--outline sos-btn--xs feed-page-btn"
-                disabled={safePage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                title={lang === 'vi' ? 'Trang trước' : 'Previous page'}
-                aria-label={lang === 'vi' ? 'Trang trước' : 'Previous page'}
-              >
-                <ChevronLeft size={13} />
-              </button>
-              <span className="feed-page-indicator">
-                {safePage}/{totalPages}
-              </span>
-              <button
-                type="button"
-                className="sos-btn sos-btn--outline sos-btn--xs feed-page-btn"
-                disabled={safePage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                title={lang === 'vi' ? 'Trang sau' : 'Next page'}
-                aria-label={lang === 'vi' ? 'Trang sau' : 'Next page'}
-              >
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          ) : null}
-
-          <span className="feed-footer-count">
-            {filteredIncidents.length} {lang === 'vi' ? 'sự cố' : 'incidents'}
+        <div className="feed-footer-left">
+          <span>
+            {lang === 'vi' ? 'Trang' : 'Page'}{' '}
+            <strong>{safePage}</strong>/<strong>{totalPages}</strong>
           </span>
+
+          <select
+            className="feed-page-size-select"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            aria-label={lang === 'vi' ? 'Số yêu cầu mỗi trang' : 'Requests per page'}
+          >
+            <option value={5}>{lang === 'vi' ? '5 / trang' : '5 / page'}</option>
+            <option value={10}>{lang === 'vi' ? '10 / trang' : '10 / page'}</option>
+          </select>
+        </div>
+
+        <div className="feed-pagination" aria-label="Phân trang danh sách SOS">
+          <button
+            type="button"
+            className="feed-page-btn"
+            disabled={safePage <= 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            title={lang === 'vi' ? 'Trang trước' : 'Previous page'}
+            aria-label={lang === 'vi' ? 'Trang trước' : 'Previous page'}
+          >
+            <ChevronLeft size={13} />
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => {
+            if (pg === 1 || pg === totalPages || (pg >= safePage - 1 && pg <= safePage + 1)) {
+              return (
+                <button
+                  key={pg}
+                  type="button"
+                  className={`feed-page-btn ${pg === safePage ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(pg)}
+                >
+                  {pg}
+                </button>
+              );
+            }
+            if (pg === safePage - 2 || pg === safePage + 2) {
+              return (
+                <span key={pg} className="feed-page-ellipsis">
+                  …
+                </span>
+              );
+            }
+            return null;
+          })}
+
+          <button
+            type="button"
+            className="feed-page-btn"
+            disabled={safePage >= totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            title={lang === 'vi' ? 'Trang sau' : 'Next page'}
+            aria-label={lang === 'vi' ? 'Trang sau' : 'Next page'}
+          >
+            <ChevronRight size={13} />
+          </button>
         </div>
       </div>
     </div>

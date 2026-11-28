@@ -4,6 +4,89 @@ const ApiError = require('../utils/apiError');
 const sosTriageService = require('./sosTriage.service');
 const geminiService = require('./gemini.service');
 const rescueTeamService = require('./rescueTeam.service');
+const cloudinary = require('../config/cloudinary');
+const {
+  ASSIGNMENT_TEAM_POPULATE,
+  ASSIGNMENT_RESCUER_SELECT,
+  attachTeamLocations,
+} = require('../utils/assignmentLocation');
+
+const uploadInlineImagesIfConfigured = async (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  if (!cloudinary.isConfigured()) return items;
+  return Promise.all(
+    items.map(async (item) => {
+      if (typeof item !== 'string' || !item.startsWith('data:image/')) return item;
+      try {
+        const res = await cloudinary.uploader.upload(item, {
+          folder: 'sos_systems',
+          resource_type: 'image',
+        });
+        return res?.secure_url || item;
+      } catch (_) {
+        return item;
+      }
+    })
+  );
+};
+
+const fetchLightImagesMap = async (sosIds = [], mediaBaseUrl = '') => {
+  if (!Array.isArray(sosIds) || sosIds.length === 0) return new Map();
+  const rows = await SosRequest.aggregate([
+    { $match: { _id: { $in: sosIds } } },
+    {
+      $project: {
+        images: {
+          $map: {
+            input: { $ifNull: ['$images', []] },
+            as: 'img',
+            in: {
+              $cond: [
+                { $regexMatch: { input: { $ifNull: ['$$img', ''] }, regex: '^data:' } },
+                '__INLINE__',
+                '$$img',
+              ],
+            },
+          },
+        },
+      },
+    },
+  ]);
+
+  const map = new Map();
+  for (const row of rows) {
+    const idStr = String(row._id);
+    const urls = (row.images || [])
+      .map((item, idx) =>
+        item === '__INLINE__' ? `${mediaBaseUrl}/api/sos/${idStr}/media/${idx}` : item
+      )
+      .filter(Boolean);
+    map.set(idStr, urls);
+  }
+  return map;
+};
+
+const getSosMediaItem = async (id, rawIndex) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  const idx = Math.max(0, parseInt(rawIndex, 10) || 0);
+  const doc = await SosRequest.findById(id)
+    .select({ images: { $slice: [idx, 1] }, imageUrl: 1 })
+    .lean();
+  if (!doc) return null;
+
+  const entry = Array.isArray(doc.images) && doc.images.length > 0 ? doc.images[0] : (idx === 0 ? doc.imageUrl : null);
+  if (!entry || typeof entry !== 'string') return null;
+
+  if (!entry.startsWith('data:')) {
+    return { redirectUrl: entry };
+  }
+  const match = entry.match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) return null;
+  return {
+    mimeType: match[1] || 'image/jpeg',
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+};
 
 // Cache ngắn danh sách đơn vị hành chính đang hoạt động để giảm truy vấn lặp khi dashboard poll
 let activeAreasCache = { data: null, expiresAt: 0 };
@@ -147,11 +230,13 @@ const createSosRequest = async (citizenId, sosData) => {
     : (emergencyType ? [emergencyType] : ['FLOOD']);
   const primaryEmergencyType = normalizedEmergencyTypes[0] || emergencyType || 'FLOOD';
 
-  const normalizedImages = Array.isArray(images)
-    ? images
-    : imageUrl
-    ? [imageUrl]
-    : [];
+  const normalizedImages = await uploadInlineImagesIfConfigured(
+    Array.isArray(images)
+      ? images
+      : imageUrl
+      ? [imageUrl]
+      : []
+  );
 
   // 1. Kiểm tra toàn bộ các ca SOS đang hoạt động (ACTIVE) của tài khoản này
   const activeStatuses = ['PENDING', 'VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'];
@@ -462,14 +547,16 @@ const getSosRequests = async (query = {}, user = null) => {
     sosQuery = sosQuery.limit(parsedLimit);
   }
   const sosList = await sosQuery
+    .select('-images')
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code parentId')
     .lean();
 
   if (sosList.length > 0) {
     const sosIds = sosList.map(s => s._id);
+    const mediaBaseUrl = query._mediaBaseUrl || '';
     const recentCancelCutoff = new Date(Date.now() - 10 * 60 * 1000);
-    const [assignments, recentCancelledAssignments] = await Promise.all([
+    const [assignments, recentCancelledAssignments, lightImagesMap] = await Promise.all([
       SosAssignment.find({
         $or: [
           { sosRequestId: { $in: sosIds } },
@@ -477,11 +564,12 @@ const getSosRequests = async (query = {}, user = null) => {
         ],
         status: { $nin: ['CANCELLED', 'REJECTED'] },
       })
-        .populate('rescueTeamId', 'name type areaId status')
-        .populate('rescuerId', 'fullName phone roles')
+        .populate(ASSIGNMENT_TEAM_POPULATE)
+        .populate('rescuerId', ASSIGNMENT_RESCUER_SELECT)
         .populate('vehicleId', 'plateNumber type capacity')
         .populate('authorityOrganizationId', 'name code')
-        .lean(),
+        .lean()
+        .then(attachTeamLocations),
       SosAssignment.find({
         $or: [
           { sosRequestId: { $in: sosIds } },
@@ -494,6 +582,7 @@ const getSosRequests = async (query = {}, user = null) => {
         .populate('rescueTeamId', 'name type areaId status')
         .populate('rescuerId', 'fullName phone roles')
         .lean(),
+      fetchLightImagesMap(sosIds, mediaBaseUrl),
     ]);
 
     const assignmentMap = new Map();
@@ -538,6 +627,13 @@ const getSosRequests = async (query = {}, user = null) => {
 
     sosList.forEach(s => {
       const sId = s._id.toString();
+      const lightImgs = lightImagesMap.get(sId);
+      if (lightImgs) {
+        s.images = lightImgs;
+      }
+      if (typeof s.imageUrl === 'string' && s.imageUrl.startsWith('data:')) {
+        s.imageUrl = (lightImgs && lightImgs[0]) || `${mediaBaseUrl}/api/sos/${sId}/media/0`;
+      }
       const a = assignmentMap.get(sId);
       const aList = assignmentsListMap.get(sId) || [];
       if (a) {
@@ -571,8 +667,10 @@ const getSosRequests = async (query = {}, user = null) => {
   return sosList;
 };
 
-const getSosRequestById = async (id) => {
+const getSosRequestById = async (id, options = {}) => {
+  const mediaBaseUrl = options.mediaBaseUrl || '';
   const sos = await SosRequest.findById(id)
+    .select('-images')
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code parentId')
     .lean();
@@ -581,16 +679,29 @@ const getSosRequestById = async (id) => {
     throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
   }
 
-  const allAssignments = await SosAssignment.find({
-    $or: [{ sosRequestId: id }, { sosId: id }],
-    status: { $nin: ['CANCELLED', 'REJECTED'] },
-  })
-    .sort({ createdAt: -1 })
-    .populate('rescueTeamId', 'name type areaId status')
-    .populate('rescuerId', 'fullName phone roles')
-    .populate('vehicleId', 'plateNumber type capacity')
-    .populate('authorityOrganizationId', 'name code')
-    .lean();
+  const [allAssignmentsRaw, lightImagesMap] = await Promise.all([
+    SosAssignment.find({
+      $or: [{ sosRequestId: id }, { sosId: id }],
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    })
+      .sort({ createdAt: -1 })
+      .populate(ASSIGNMENT_TEAM_POPULATE)
+      .populate('rescuerId', ASSIGNMENT_RESCUER_SELECT)
+      .populate('vehicleId', 'plateNumber type capacity')
+      .populate('authorityOrganizationId', 'name code')
+      .lean(),
+    fetchLightImagesMap([sos._id], mediaBaseUrl),
+  ]);
+
+  const lightImgs = lightImagesMap.get(String(sos._id));
+  if (lightImgs) {
+    sos.images = lightImgs;
+  }
+  if (typeof sos.imageUrl === 'string' && sos.imageUrl.startsWith('data:')) {
+    sos.imageUrl = (lightImgs && lightImgs[0]) || `${mediaBaseUrl}/api/sos/${sos._id}/media/0`;
+  }
+
+  const allAssignments = attachTeamLocations(allAssignmentsRaw);
 
   const primaryAssignment =
     allAssignments.find((a) => a.missionType !== 'SHORE_HANDOFF') || allAssignments[0] || null;
@@ -1529,6 +1640,7 @@ module.exports = {
   createSosRequest,
   getSosRequests,
   getSosRequestById,
+  getSosMediaItem,
   updateSosRequest,
   changeStatus,
   getSosHistory,

@@ -14,9 +14,10 @@
 
 .sos-views-container.warm-executive-theme {
   flex: 1;
+  height: 100%;
   min-height: 0;
-  gap: 10px;
-  margin: 0 -6px -12px;
+  gap: 12px;
+  margin: 0;
 }
 
 /* 1. CONTAINER TỔNG QUAN TÌNH HÌNH */
@@ -439,8 +440,8 @@
   background: var(--sos-surface);
   border: 1px solid var(--sos-border);
   border-radius: 12px;
-  padding: 10px 14px 6px;
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+  padding: 12px 16px 0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .executive-table-toolbar {
@@ -937,13 +938,14 @@
 .citizen-phone-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 3px 4px;
   color: #0284c7;
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
-  white-space: nowrap;
+  max-width: 100%;
 }
 
 .citizen-phone-link svg {
@@ -2368,4 +2370,94 @@
   background-color: rgba(220, 38, 38, 0.14);
   border-color: rgba(220, 38, 38, 0.32);
   color: #fca5a5;
+}
+
+.sos-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 10px -16px 0;
+  padding: 10px 18px;
+  background: #fafbfd;
+  border-top: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.sos-pagination-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sos-page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.sos-pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sos-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sos-page-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.sos-page-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.sos-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .sos-pagination {
+  background: var(--sos-surface-muted);
+  border-top-color: var(--sos-control-border);
+  color: var(--sos-text-secondary);
+}
+
+[data-theme="dark"] .sos-page-size-select,
+[data-theme="dark"] .sos-page-btn {
+  background: var(--sos-surface);
+  border-color: var(--sos-control-border);
+  color: var(--sos-text-primary);
+}
+
+[data-theme="dark"] .sos-page-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
 }
